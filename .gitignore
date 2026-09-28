@@ -1,0 +1,16 @@
+# ESP-IDF : sdkconfig est regenere depuis sdkconfig.defaults
+build/
+sdkconfig
+sdkconfig.old
+managed_components/
+
+# Outils et systeme
+__pycache__/
+.vscode/
+.DS_Store
+logs/
+
+# Cles du reseau Bluetooth Mesh : jamais dans le depot (il est public)
+*.cles
+cles*.json
+outils/*.local.*
