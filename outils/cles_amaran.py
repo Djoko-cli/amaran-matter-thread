@@ -22,7 +22,7 @@ import sqlite3
 import sys
 import time
 
-from serie import masquer, ouvrir_port
+from serie import ErreurSerie, masquer, ouvrir_port
 
 MOTIFS_BASE = (
     "~/Library/Containers/com.sidus.amaran-desktop/Data/Library/Application Support/amaran Desktop/*/amaran.db",
@@ -46,6 +46,7 @@ def trouver_base(motifs=MOTIFS_BASE):
 
 def lire_reseau(chemin):
     """Cles et lampes de la base, ouverte en lecture seule."""
+    import re as _re
     try:
         con = sqlite3.connect("file:%s?mode=ro" % chemin, uri=True)
         try:
@@ -62,7 +63,7 @@ def lire_reseau(chemin):
         raise ErreurCles("%d reseaux dans la base, 1 attendu" % len(reseaux))
     try:
         reseau, application = bytes.fromhex(reseaux[0][0]), bytes.fromhex(reseaux[0][1])
-    except ValueError:
+    except (ValueError, TypeError):
         raise ErreurCles("cle illisible dans la base")
     if len(reseau) != 16 or len(application) != 16:
         raise ErreurCles("cle de longueur inattendue")
@@ -70,7 +71,23 @@ def lire_reseau(chemin):
         raise ErreurCles("aucune lampe dans la base")
     if len(lignes) > LAMPES_MAX:
         raise ErreurCles("%d lampes, le pont en gere %d" % (len(lignes), LAMPES_MAX))
-    lampes = [{"adresse": a, "mac": m.upper(), "nom": n} for a, m, n in lignes]
+    lampes = []
+    for adresse, mac, nom in lignes:
+        try:
+            # Valider l'adresse : int, 1..0x7FFF
+            if not isinstance(adresse, int) or adresse < 1 or adresse > 0x7FFF:
+                raise ErreurCles("lampe illisible dans la base (adresse %r)" % (adresse,))
+            # Valider la MAC : format XX:XX:XX:XX:XX:XX
+            if mac is None or not _re.fullmatch(r"[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){5}", mac):
+                raise ErreurCles("lampe illisible dans la base (adresse %r)" % (adresse,))
+            # Valider le nom : non-vide, pas de caractere < 0x20
+            if not isinstance(nom, str) or not nom or any(ord(c) < 0x20 for c in nom):
+                raise ErreurCles("lampe illisible dans la base (adresse %r)" % (adresse,))
+        except ErreurCles:
+            raise
+        except (AttributeError, TypeError):
+            raise ErreurCles("lampe illisible dans la base (adresse %r)" % (adresse,))
+        lampes.append({"adresse": adresse, "mac": mac.upper(), "nom": nom})
     return {"reseau": reseau, "application": application, "lampes": lampes}
 
 
@@ -137,8 +154,8 @@ def main(argv=None, sortie=print):
         finally:
             port.close()
         return 0
-    except ErreurCles as e:
-        sortie("erreur : %s" % e)
+    except (ErreurCles, ErreurSerie, OSError) as e:
+        sortie("erreur : %s" % masquer(str(e)))
         return 1
 
 

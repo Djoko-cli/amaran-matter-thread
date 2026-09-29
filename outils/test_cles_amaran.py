@@ -16,13 +16,13 @@ APP = "ffeeddccbbaa99887766554433221100"
 LAMPES = ((4, "70:3e:97:00:00:02", "Lampe B"), (2, "70:3E:97:00:00:01", "Lampe A"))
 
 
-def base_factice(dossier, lampes=LAMPES, reseaux=1):
+def base_factice(dossier, lampes=LAMPES, reseaux=1, net=NET.upper()):
     chemin = os.path.join(dossier, "amaran.db")
     con = sqlite3.connect(chemin)
     con.execute("create table mesh (uuid text, net_key varchar(32), app_key varchar(32), state integer)")
     con.execute("create table fixtures (uuid text, mac_address text, name text, node_address integer, device_key text)")
     for i in range(reseaux):
-        con.execute("insert into mesh values (?, ?, ?, 3)", ("m%d" % i, NET.upper(), APP.upper()))
+        con.execute("insert into mesh values (?, ?, ?, 3)", ("m%d" % i, net, APP.upper()))
     for adresse, mac, nom in lampes:
         con.execute("insert into fixtures values (?, ?, ?, ?, ?)", ("f%d" % adresse, mac, nom, adresse, "00" * 16))
     con.commit()
@@ -129,6 +129,84 @@ class TestEnvoi(unittest.TestCase):
     def test_silence_du_pont(self):
         with self.assertRaises(ca.ErreurCles):
             ca.envoyer(PortFactice([]), ["mesh cles X Y"], attente=0.2, sortie=lambda t: None)
+
+    def test_masque_une_cle_dans_une_erreur(self):
+        port = PortFactice(["erreur : cle refusee " + NET.upper()])
+        capture = []
+        with self.assertRaises(ca.ErreurCles):
+            ca.envoyer(port, ["mesh cles X Y"], attente=1, sortie=capture.append)
+        texte = "\n".join(capture)
+        self.assertNotIn(NET.lower(), texte.lower())
+        self.assertNotIn(APP.lower(), texte.lower())
+
+    def test_masque_une_cle_dans_un_ok(self):
+        port = PortFactice(["ok cles " + APP.upper()])
+        capture = []
+        ca.envoyer(port, ["mesh cles X Y"], attente=1, sortie=capture.append)
+        texte = "\n".join(capture)
+        self.assertNotIn(NET.lower(), texte.lower())
+        self.assertNotIn(APP.lower(), texte.lower())
+
+    def test_masque_la_commande_en_cas_de_silence(self):
+        port = PortFactice([])
+        with self.assertRaises(ca.ErreurCles) as cm:
+            ca.envoyer(port, ["mesh cles %s %s" % (NET.upper(), APP.upper())], attente=0.2, sortie=lambda t: None)
+        texte = str(cm.exception)
+        self.assertNotIn(NET.lower(), texte.lower())
+        self.assertNotIn(APP.lower(), texte.lower())
+
+
+class TestValidationLampes(unittest.TestCase):
+    def setUp(self):
+        self.dossier = tempfile.mkdtemp()
+
+    def test_refuse_mac_nulle(self):
+        chemin = os.path.join(self.dossier, "amaran.db")
+        con = sqlite3.connect(chemin)
+        con.execute("create table mesh (uuid text, net_key varchar(32), app_key varchar(32), state integer)")
+        con.execute("create table fixtures (uuid text, mac_address text, name text, node_address integer, device_key text)")
+        con.execute("insert into mesh values (?, ?, ?, 3)", ("m0", NET.upper(), APP.upper()))
+        con.execute("insert into fixtures values (?, ?, ?, ?, ?)", ("f1", None, "Lampe", 1, "00" * 16))
+        con.commit()
+        con.close()
+        with self.assertRaises(ca.ErreurCles):
+            ca.lire_reseau(chemin)
+
+    def test_refuse_cle_blob(self):
+        chemin = os.path.join(self.dossier, "amaran.db")
+        con = sqlite3.connect(chemin)
+        con.execute("create table mesh (uuid text, net_key varchar(32), app_key varchar(32), state integer)")
+        con.execute("create table fixtures (uuid text, mac_address text, name text, node_address integer, device_key text)")
+        con.execute("insert into mesh values (?, ?, ?, 3)", ("m0", bytes.fromhex(NET), APP.upper()))
+        con.execute("insert into fixtures values (?, ?, ?, ?, ?)", ("f1", "70:3E:97:00:00:01", "Lampe", 1, "00" * 16))
+        con.commit()
+        con.close()
+        with self.assertRaises(ca.ErreurCles):
+            ca.lire_reseau(chemin)
+
+    def test_refuse_nom_avec_retour_ligne(self):
+        chemin = os.path.join(self.dossier, "amaran.db")
+        con = sqlite3.connect(chemin)
+        con.execute("create table mesh (uuid text, net_key varchar(32), app_key varchar(32), state integer)")
+        con.execute("create table fixtures (uuid text, mac_address text, name text, node_address integer, device_key text)")
+        con.execute("insert into mesh values (?, ?, ?, 3)", ("m0", NET.upper(), APP.upper()))
+        con.execute("insert into fixtures values (?, ?, ?, ?, ?)", ("f1", "70:3E:97:00:00:01", "a\r\nredemarre", 1, "00" * 16))
+        con.commit()
+        con.close()
+        with self.assertRaises(ca.ErreurCles):
+            ca.lire_reseau(chemin)
+
+
+class TestErreurs(unittest.TestCase):
+    def setUp(self):
+        self.dossier = tempfile.mkdtemp()
+
+    def test_port_inaccessible_rend_1(self):
+        capture = []
+        base = base_factice(self.dossier)
+        code = ca.main(["--db", base, "--port", "/dev/amaran-port-inexistant"], sortie=capture.append)
+        self.assertEqual(code, 1)
+        self.assertTrue(capture[-1].startswith("erreur : "))
 
 
 if __name__ == "__main__":

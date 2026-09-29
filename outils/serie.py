@@ -10,13 +10,21 @@ import time
 HEXA_CLE = re.compile(r"[0-9A-Fa-f]{32}")
 
 
+class ErreurSerie(Exception):
+    """Port serie inaccessible, ou pyserial absent."""
+    pass
+
+
 def masquer(texte):
     """Remplace toute suite de 32 chiffres hexa (une cle) par <cle masquee>."""
     return HEXA_CLE.sub("<cle masquee>", texte)
 
 
 def ouvrir_port(nom, debit=115200, delai=0.2):
-    import serial  # pyserial
+    try:
+        import serial  # pyserial
+    except ImportError:
+        raise ErreurSerie("pyserial absent : lancer avec le Python d'ESP-IDF")
 
     port = serial.Serial()
     port.port = nom
@@ -25,7 +33,10 @@ def ouvrir_port(nom, debit=115200, delai=0.2):
     # Jamais RTS=1/DTR=0 : cette combinaison redemarre le C6 (lecon du Halo).
     port.dtr = False
     port.rts = False
-    port.open()
+    try:
+        port.open()
+    except OSError as e:
+        raise ErreurSerie("port %s inaccessible (%s)" % (nom, e))
     return port
 
 
