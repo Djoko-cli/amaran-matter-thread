@@ -16,4 +16,6 @@ compiler_et_lancer() {
 }
 
 compiler_et_lancer test_telink components/telink/telink.c tests/hote/test_telink.c
+compiler_et_lancer test_texte components/mesh/texte.c tests/hote/test_texte.c
+compiler_et_lancer test_crochet_tri components/telink/telink.c components/mesh/texte.c components/mesh/crochet_tri.c tests/hote/test_crochet_tri.c
 echo "tests hote : tout est vert"
