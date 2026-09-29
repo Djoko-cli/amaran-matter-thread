@@ -1,0 +1,47 @@
+# Firmware de reconnaissance (phase 0) : ESP32-C6, Bluetooth Mesh sur NimBLE,
+# sans Matter. Chaque symbole est verifie par outils/check_sdkconfig.sh.
+
+CONFIG_IDF_TARGET="esp32c6"
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y
+
+# Console et journaux sur l'USB natif : la C6 SuperMini n'a pas de pont USB-serie.
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+
+# Bluetooth : NimBLE, comme l'exigera Matter sur Thread en phase 1.
+CONFIG_BT_ENABLED=y
+CONFIG_BT_NIMBLE_ENABLED=y
+# Annonces 4.2 seulement (les lampes ne font pas de 5.0). Doublons filtres par
+# adresse ET donnees, sinon le controleur jette des messages Mesh.
+CONFIG_BT_LE_SCAN_DUPL_TYPE_DATA_DEVICE=y
+CONFIG_BT_LE_50_FEATURE_SUPPORT=n
+CONFIG_BT_NIMBLE_50_FEATURE_SUPPORT=n
+
+# Bluetooth Mesh : noeud qui entre seul dans le reseau des lampes (spec 5.1).
+CONFIG_BLE_MESH=y
+CONFIG_BLE_MESH_NODE=y
+CONFIG_BLE_MESH_PB_ADV=y
+CONFIG_BLE_MESH_PB_GATT=n
+CONFIG_BLE_MESH_GATT_PROXY_SERVER=n
+CONFIG_BLE_MESH_RELAY=n
+CONFIG_BLE_MESH_FRIEND=n
+CONFIG_BLE_MESH_LOW_POWER=n
+# La pile ne persiste rien : on rentre dans le reseau a chaque demarrage depuis
+# la NVS "amaran", et le plancher de sequence est tenu par notre code.
+CONFIG_BLE_MESH_SETTINGS=n
+CONFIG_BLE_MESH_SUBNET_COUNT=1
+CONFIG_BLE_MESH_APP_KEY_COUNT=2
+CONFIG_BLE_MESH_MODEL_KEY_COUNT=2
+CONFIG_BLE_MESH_MODEL_GROUP_COUNT=4
+CONFIG_BLE_MESH_CRPL=20
+# Chaque emission garde un tampon pendant ses 3 copies : les 60 par defaut ne
+# suffisent pas (amaran-bridge : "Out of network buffers").
+CONFIG_BLE_MESH_ADV_BUF_COUNT=120
+# Accepte l'IV Index +1 annonce sans drapeau de mise a jour (recuperation).
+CONFIG_BLE_MESH_IVU_RECOVERY_IVI=y
+
+# AES logiciel : l'AES materiel fait une allocation DMA par bloc, et la pile
+# Mesh finit par s'arreter (amaran-bridge : "Encrypt failed").
+CONFIG_MBEDTLS_HARDWARE_AES=n
+
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=4096
