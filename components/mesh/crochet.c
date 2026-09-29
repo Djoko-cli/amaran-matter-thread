@@ -1,17 +1,50 @@
-// Crochet de reception : file d'evenements et compteurs. Le dechiffrement et
-// l'interception arrivent a la tache 8.
+// Crochet de reception (spec 5.5). Les lampes adressent leurs etats a 0x0001
+// (amaran Desktop), et la pile jette ces messages. On intercepte ses deux
+// points d'entree par l'editeur de liens (-Wl,--wrap, voir CMakeLists.txt) :
+// la pile traite le message comme d'habitude, puis on dechiffre une COPIE a
+// cote. Ne jamais rappeler bt_mesh_net_decode() : il inscrit le message dans
+// le cache anti-doublon, et la pile rejetterait l'original.
 #include "crochet.h"
 
 #include <string.h>
 
+#include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
+
+#include "access.h"  // bt_mesh_rx_netkey_*, bt_mesh_rx_appkey_*
+#include "crypto.h"  // bt_mesh_net_obfuscate, bt_mesh_net_decrypt, bt_mesh_app_decrypt
+#include "mesh/buf.h"
+#include "net.h"
+
+#include "crochet_tri.h"
+
 #define FILE_EVENEMENTS 32
+#define PDU_MAX 32
+#define BALISE_MAX 24
+#define ECHANTILLONS 4
+#define MIC_ACCES 4
 
 static QueueHandle_t s_file;
-static mesh_stats_t s_st;
+static uint16_t s_lampes[AMARAN_LAMPES_MAX];
 static volatile bool s_detail;
+static mesh_stats_t s_st;
+static uint32_t s_iv_connu;
+
+// Messages de notre reseau au NetMIC faux : matiere de `mesh iv cherche`.
+static struct {
+  uint8_t pdu[PDU_MAX];
+  size_t len;
+} s_echantillons[ECHANTILLONS];
+static int s_echantillon_suivant;
+
+static void publier(const mesh_evenement_t *ev) {
+  if (xQueueSend(s_file, ev, 0) != pdTRUE) s_st.file_pleine++;
+}
 
 esp_err_t crochet_demarrer(const amaran_config_t *cfg) {
-  (void)cfg;
+  for (int i = 0; i < AMARAN_LAMPES_MAX; i++) s_lampes[i] = cfg->lampes[i].adresse;
+  s_iv_connu = cfg->iv;
   s_file = xQueueCreate(FILE_EVENEMENTS, sizeof(mesh_evenement_t));
   return s_file ? ESP_OK : ESP_ERR_NO_MEM;
 }
@@ -21,3 +54,159 @@ QueueHandle_t crochet_file(void) { return s_file; }
 void crochet_lire_stats(mesh_stats_t *stats) { memcpy(stats, &s_st, sizeof(*stats)); }
 
 void crochet_ecoute_detaillee(bool oui) { s_detail = oui; }
+
+int crochet_dechiffrer_reseau(const uint8_t enc[16], const uint8_t privacy[16], uint32_t iv, uint8_t *pdu,
+                              size_t *len) {
+  struct net_buf_simple buf;
+  if (bt_mesh_net_obfuscate(pdu, iv, privacy)) return -1;
+  net_buf_simple_init_with_data(&buf, pdu, *len);
+  if (bt_mesh_net_decrypt(enc, &buf, iv, false, false)) return -2;
+  *len = buf.len;
+  return 0;
+}
+
+int crochet_dechiffrer_acces(const uint8_t appkey[16], const uint8_t *clair, size_t len, uint32_t iv,
+                             const uint8_t *ad, uint8_t *acces, size_t *acces_len) {
+  tri_entete_t e = {0};
+  if (!tri_lire_entete(clair, len, &e) || len < TRI_ENTETE_RESEAU + 1 + 1 + MIC_ACCES) return -1;
+  const size_t n = len - TRI_ENTETE_RESEAU - 1 - MIC_ACCES;
+  if (n > *acces_len) return -1;
+  // La pile lit le TransMIC juste apres les n octets chiffres.
+  struct net_buf_simple in, out;
+  net_buf_simple_init_with_data(&in, (void *)(clair + TRI_ENTETE_RESEAU + 1), n);
+  net_buf_simple_init_with_data(&out, acces, *acces_len);
+  out.len = 0;
+  if (bt_mesh_app_decrypt(appkey, false, 0, &in, &out, ad, e.src, e.dst, e.seq, iv)) return -2;
+  *acces_len = out.len;
+  return 0;
+}
+
+static uint32_t iv_du_message(uint8_t ivi) {
+  const uint32_t iv = bt_mesh.iv_index;
+  return (ivi != (iv & 0x01)) ? iv - 1 : iv;
+}
+
+static void garder_echantillon(const uint8_t *pdu, size_t len) {
+  memcpy(s_echantillons[s_echantillon_suivant].pdu, pdu, len);
+  s_echantillons[s_echantillon_suivant].len = len;
+  s_echantillon_suivant = (s_echantillon_suivant + 1) % ECHANTILLONS;
+}
+
+static void traiter_acces(const tri_entete_t *e, const uint8_t *acces, size_t n) {
+  s_st.acces_dechiffres++;
+  mesh_evenement_t ev = {
+      .type = MESH_EV_ACCES,
+      .quand_us = esp_timer_get_time(),
+      .src = e->src,
+      .dst = e->dst,
+      .lampe = -1,
+      .len = (uint8_t)n,
+  };
+  memcpy(ev.acces, acces, n);
+  uint8_t trame[TELINK_TAILLE];
+  const int l = tri_etat_lampe(e->src, acces, n, s_lampes, AMARAN_LAMPES_MAX, trame);
+  if (l >= 0) {
+    ev.type = MESH_EV_ETAT_LAMPE;
+    ev.lampe = (int8_t)l;
+    s_st.etats_lampes++;
+    s_st.derniere_reponse_us[l] = ev.quand_us;
+    publier(&ev);
+  } else if (s_detail) {
+    publier(&ev);
+  }
+}
+
+static void traiter(const uint8_t *pdu, size_t len) {
+  s_st.annonces++;
+  const uint8_t nid = pdu[0] & 0x7F;
+  const uint32_t iv = iv_du_message(pdu[0] >> 7);
+  bool reconnu = false;
+  for (size_t i = 0; i < bt_mesh_rx_netkey_size(); i++) {
+    struct bt_mesh_subnet *sub = bt_mesh_rx_netkey_get(i);
+    if (!sub || sub->net_idx == BLE_MESH_KEY_UNUSED) continue;
+    for (int k = 0; k < 2; k++) {
+      if (k == 1 && sub->kr_phase == BLE_MESH_KR_NORMAL) break;
+      if (sub->keys[k].nid != nid) continue;
+      if (!reconnu) {
+        reconnu = true;
+        s_st.nid_reconnu++;
+      }
+      uint8_t clair[PDU_MAX];
+      size_t n = len;
+      memcpy(clair, pdu, len);
+      if (crochet_dechiffrer_reseau(sub->keys[k].enc, sub->keys[k].privacy, iv, clair, &n)) {
+        s_st.netmic_faux++;
+        garder_echantillon(pdu, len);
+        continue;
+      }
+      tri_entete_t e = {0};
+      if (!tri_lire_entete(clair, n, &e) || e.ctl || n <= TRI_ENTETE_RESEAU) return;
+      tri_transport_t t;
+      tri_lire_transport(clair[TRI_ENTETE_RESEAU], &t);
+      if (t.segmente || !t.akf) return;
+      for (size_t j = 0; j < bt_mesh_rx_appkey_size(); j++) {
+        struct bt_mesh_app_key *cle = bt_mesh_rx_appkey_get(j);
+        if (!cle || cle->net_idx != sub->net_idx) continue;
+        const struct bt_mesh_app_keys *ak = (k == 1 && cle->updated) ? &cle->keys[1] : &cle->keys[0];
+        if (ak->id != t.aid) continue;
+        uint8_t acces[16];
+        size_t na = sizeof(acces);
+        if (crochet_dechiffrer_acces(ak->val, clair, n, iv, NULL, acces, &na) == 0) {
+          traiter_acces(&e, acces, na);
+          return;
+        }
+      }
+      return;
+    }
+  }
+  if (!reconnu) s_st.nid_inconnu++;
+}
+
+void __real_bt_mesh_generic_net_recv(struct net_buf_simple *data, struct bt_mesh_net_rx *rx,
+                                     enum bt_mesh_net_if net_if);
+
+void __wrap_bt_mesh_generic_net_recv(struct net_buf_simple *data, struct bt_mesh_net_rx *rx,
+                                     enum bt_mesh_net_if net_if) {
+  uint8_t copie[PDU_MAX];
+  const size_t n = data->len;
+  const bool garder = s_file && net_if == BLE_MESH_NET_IF_ADV && n >= TRI_ENTETE_RESEAU + 1 + MIC_ACCES &&
+                      n <= sizeof(copie);
+  if (garder) memcpy(copie, data->data, n);
+  __real_bt_mesh_generic_net_recv(data, rx, net_if);
+  if (garder) traiter(copie, n);
+}
+
+void __real_bt_mesh_beacon_recv(struct net_buf_simple *buf, int8_t rssi);
+
+void __wrap_bt_mesh_beacon_recv(struct net_buf_simple *buf, int8_t rssi) {
+  uint8_t copie[BALISE_MAX];
+  const size_t n = buf->len;
+  const bool garder = s_file && n <= sizeof(copie);
+  if (garder) memcpy(copie, buf->data, n);
+  __real_bt_mesh_beacon_recv(buf, rssi);
+  if (!garder) return;
+  tri_balise_t b;
+  if (tri_lire_balise(copie, n, &b)) {
+    struct bt_mesh_subnet *sub = bt_mesh_rx_netkey_size() ? bt_mesh_rx_netkey_get(0) : NULL;
+    if (sub && sub->net_idx != BLE_MESH_KEY_UNUSED && memcmp(sub->keys[0].net_id, b.net_id, sizeof(b.net_id)) == 0) {
+      s_st.balises_notres++;
+      s_st.derniere_balise_us = esp_timer_get_time();
+      s_st.derniere_balise_iv = b.iv_index;
+      s_st.derniere_balise_flags = b.flags;
+      if (s_detail) {
+        mesh_evenement_t ev = {
+            .type = MESH_EV_BALISE, .quand_us = s_st.derniere_balise_us, .lampe = -1, .iv = b.iv_index,
+            .flags = b.flags,
+        };
+        publier(&ev);
+      }
+    } else {
+      s_st.balises_autres++;
+    }
+  }
+  if (bt_mesh.iv_index != s_iv_connu) {
+    s_iv_connu = bt_mesh.iv_index;
+    mesh_evenement_t ev = {.type = MESH_EV_IV_CHANGE, .quand_us = esp_timer_get_time(), .lampe = -1, .iv = s_iv_connu};
+    publier(&ev);
+  }
+}

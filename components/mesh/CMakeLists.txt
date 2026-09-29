@@ -10,3 +10,9 @@ idf_component_register(
         "${IDF_PATH}/components/bt/esp_ble_mesh/common/include"
     REQUIRES telink
     PRIV_REQUIRES nvs_flash mbedtls bt esp_timer)
+
+# Crochet de reception (spec 5.5) : la pile appelle nos enveloppes a la place
+# de ses propres fonctions, sans que rien ne soit modifie dans ESP-IDF.
+target_link_libraries(${COMPONENT_LIB} INTERFACE
+    "-Wl,--wrap=bt_mesh_generic_net_recv"
+    "-Wl,--wrap=bt_mesh_beacon_recv")
