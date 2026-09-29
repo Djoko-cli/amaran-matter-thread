@@ -96,9 +96,11 @@ esp_err_t config_sauver_adresse(uint16_t adresse) {
   nvs_handle_t h;
   esp_err_t err = ouvrir(&h);
   if (err != ESP_OK) return err;
+  uint16_t ancienne_adresse;
+  const bool adresse_change = nvs_get_u16(h, "adresse", &ancienne_adresse) != ESP_OK || ancienne_adresse != adresse;
   err = nvs_set_u16(h, "adresse", adresse);
   // Nouvelle adresse source : les lampes n'en connaissent aucun compteur.
-  if (err == ESP_OK) err = nvs_set_u32(h, "plancher", 0);
+  if (err == ESP_OK && adresse_change) err = nvs_set_u32(h, "plancher", 0);
   return fermer(h, err);
 }
 

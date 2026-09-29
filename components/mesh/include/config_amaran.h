@@ -35,7 +35,7 @@ esp_err_t config_charger(amaran_config_t *c);
 esp_err_t config_sauver_cles(const uint8_t netkey[16], const uint8_t appkey[16]);
 esp_err_t config_sauver_lampe(uint8_t index, const amaran_lampe_t *lampe);
 esp_err_t config_sauver_iv(uint32_t iv);
-// Nouvelle adresse source : le plancher de sequence repart de 0.
+// Nouvelle adresse source : le plancher de sequence repart de 0 si l'adresse change.
 esp_err_t config_sauver_adresse(uint16_t adresse);
 esp_err_t config_sauver_plancher(uint32_t plancher);
 // Efface les cles et les lampes ; garde adresse, plancher et IV Index.
