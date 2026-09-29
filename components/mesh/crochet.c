@@ -26,6 +26,7 @@
 #define BALISE_MAX 24
 #define ECHANTILLONS 4
 #define MIC_ACCES 4
+#define IV_CHERCHE_MAX 0xFFFFFF  // plage documentee de crochet_chercher_iv (crochet.h)
 
 static QueueHandle_t s_file;
 static uint16_t s_lampes[AMARAN_LAMPES_MAX];
@@ -248,15 +249,19 @@ void __wrap_bt_mesh_beacon_recv(struct net_buf_simple *buf, int8_t rssi) {
 int crochet_chercher_iv(uint32_t max, uint32_t *trouve) {
   struct bt_mesh_subnet *sub = bt_mesh_rx_netkey_size() ? bt_mesh_rx_netkey_get(0) : NULL;
   if (!sub || sub->net_idx == BLE_MESH_KEY_UNUSED) return -1;
+  if (max > IV_CHERCHE_MAX) max = IV_CHERCHE_MAX;  // plus haut, iv += 2 finirait par reboucler
+  int cherches = 0;     // emplacements pleins essayes
+  uint32_t essais = 0;  // candidats essayes, tous emplacements confondus
   for (int e = 0; e < ECHANTILLONS; e++) {
     // La tache Bluetooth remplace les echantillons pendant cette recherche, qui
-    // dure des secondes : elle travaille sur une copie prise une fois pour toutes
-    // (sinon copie dechiree, ou parite de l'IVI changee en route).
+    // dure des secondes : chaque emplacement est copie d'un seul tenant quand
+    // vient son tour, et tout le travail se fait sur cette copie (sinon copie
+    // dechiree, ou parite de l'IVI changee en route).
     uint8_t garde[PDU_MAX];
     const size_t len = copier_echantillon(e, garde);
     if (len == 0) continue;
+    cherches++;
     const uint8_t ivi = garde[0] >> 7;
-    uint32_t essais = 0;
     for (uint32_t iv = ivi; iv <= max; iv += 2) {  // meme parite que le bit IVI
       uint8_t essai[PDU_MAX];  // le dechiffrement travaille en place
       size_t n = len;
@@ -267,7 +272,6 @@ int crochet_chercher_iv(uint32_t max, uint32_t *trouve) {
       }
       if (++essais % 1024 == 0) vTaskDelay(1);  // laisser tourner les autres taches
     }
-    return 1;
   }
-  return 2;
+  return cherches ? 1 : 2;
 }

@@ -28,7 +28,9 @@ int crochet_dechiffrer_reseau(const uint8_t enc[16], const uint8_t privacy[16], 
 int crochet_dechiffrer_acces(const uint8_t appkey[16], const uint8_t *clair, size_t len, uint32_t iv,
                              const uint8_t *ad, uint8_t *acces, size_t *acces_len);
 
-// Cherche l'IV Index de 0 a max (max <= 0xFFFFFF) sur les messages au NetMIC
-// faux gardes par le crochet. 0 : trouve ; 1 : hors de la plage ; 2 : aucun
-// message garde ; -1 : pas de cle reseau.
+// Cherche l'IV Index de 0 a max (borne a 0xFFFFFF) sur les messages au NetMIC
+// faux gardes par le crochet : chacun est essaye tour a tour, du premier au
+// dernier emplacement, et la recherche s'arrete au premier IV qui en dechiffre
+// un. 0 : trouve ; 1 : aucun message garde ne se dechiffre avec un IV de 0 a
+// max ; 2 : aucun message garde ; -1 : pas de cle reseau.
 int crochet_chercher_iv(uint32_t max, uint32_t *trouve);
