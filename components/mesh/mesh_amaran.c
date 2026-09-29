@@ -150,18 +150,23 @@ static esp_err_t changer_d_adresse(uint32_t seq) {
 // Met la sequence en etat avant d'emettre a_consommer messages (un numero
 // chacun). Faux : l'envoi est abandonne, faute d'avoir pu sauver la NVS.
 static bool preparer_sequence(uint32_t a_consommer) {
-  // La pile remet la sequence a 0 lors d'une reprise d'IV Index (net.c) : on ne
-  // la laisse jamais redescendre, sinon (IV, sequence) resservirait apres un
-  // redemarrage et les lampes rejetteraient nos messages comme des rejeux.
-  if (bt_mesh.seq < s_seq_min) bt_mesh.seq = s_seq_min;
-  if (bt_mesh.seq + a_consommer > SEQ_LIMITE) {
-    if (changer_d_adresse(bt_mesh.seq) != ESP_OK) return false;
+  // La pile remet la sequence a 0 lors d'une reprise d'IV Index (net.c), a tout
+  // moment : on la lit une seule fois, et on ne la laisse jamais redescendre
+  // sous s_seq_min, sinon (IV, sequence) resservirait apres un redemarrage et
+  // les lampes rejetteraient nos messages comme des rejeux.
+  uint32_t seq = bt_mesh.seq;
+  if (seq < s_seq_min) {
+    seq = s_seq_min;
+    bt_mesh.seq = seq;
+  }
+  if (seq + a_consommer > SEQ_LIMITE) {
+    if (changer_d_adresse(seq) != ESP_OK) return false;
     esp_restart();
   }
   // Le plancher en NVS devance toujours la sequence : il est releve, et sauve,
   // avant que les numeros correspondants partent.
-  if (bt_mesh.seq + a_consommer >= s_plancher_sauve) {
-    const uint32_t nouveau = bt_mesh.seq + a_consommer + BLOC_SEQ;
+  if (seq + a_consommer >= s_plancher_sauve) {
+    const uint32_t nouveau = seq + a_consommer + BLOC_SEQ;
     const esp_err_t err = config_sauver_plancher(nouveau);
     if (err != ESP_OK) {
       ESP_LOGE(TAG, "plancher de sequence non sauve : %s", esp_err_to_name(err));
@@ -183,7 +188,6 @@ static void tache_tx(void *arg) {
       vTaskDelay(pdMS_TO_TICKS(ECART_MS));
       continue;
     }
-    const uint32_t seq_depart = bt_mesh.seq;
     esp_ble_mesh_msg_ctx_t ctx = {
         .net_idx = NET_IDX,
         .app_idx = APP_IDX,
@@ -192,12 +196,15 @@ static void tache_tx(void *arg) {
     };
     esp_err_t err = ESP_OK;
     for (uint8_t r = 0; r < m.repetitions; r++) {
+      // La pile peut remettre la sequence a 0 a tout moment (reprise d'IV) : on
+      // la remonte avant chaque envoi, et s_seq_min ne fait que monter.
+      if (bt_mesh.seq < s_seq_min) bt_mesh.seq = s_seq_min;
+      const uint32_t seq_envoi = bt_mesh.seq;
       err = esp_ble_mesh_server_model_send_msg(&s_vendeur[0], &ctx, TELINK_OPCODE, TELINK_TAILLE, m.trame);
       if (err != ESP_OK) break;
+      if (seq_envoi + 1 > s_seq_min) s_seq_min = seq_envoi + 1;
       if (r + 1 < m.repetitions) vTaskDelay(pdMS_TO_TICKS(ECART_MS));
     }
-    // Chaque envoi consomme un numero, comptes d'office meme en cas d'echec.
-    s_seq_min = seq_depart + m.repetitions;
     if (err == ESP_OK) {
       s_emis++;
     } else {
