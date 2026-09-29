@@ -14,7 +14,11 @@ void crochet_lire_stats(mesh_stats_t *stats);
 void crochet_ecoute_detaillee(bool oui);
 
 // Dechiffrement a cles explicites, partage avec l'autotest (tache 9).
-// Reseau : en place ; *len perd le NetMIC. Rend 0 si le NetMIC est bon.
+// Reseau : en place ; *len perd le NetMIC. Rend 0 si le NetMIC est bon, -1 si
+// *len n'est pas entre 18 et 32 (18 = le plus court message reseau que la pile
+// accepte, net.c), -2 si le NetMIC est faux. Ne journalise jamais, meme en cas
+// d'echec : la tache Bluetooth l'appelle a chaque message, et la recherche de
+// l'IV Index, une fois par candidat.
 int crochet_dechiffrer_reseau(const uint8_t enc[16], const uint8_t privacy[16], uint32_t iv, uint8_t *pdu,
                               size_t *len);
 // Acces (message non segmente) d'un message reseau en clair ; ad = Label UUID

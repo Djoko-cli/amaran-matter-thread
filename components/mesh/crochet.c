@@ -20,6 +20,7 @@
 #include "crochet_tri.h"
 
 #define FILE_EVENEMENTS 32
+#define PDU_MIN 18  // plancher de la pile (net.c) : le plus court message reseau qu'elle accepte
 #define PDU_MAX 32
 #define BALISE_MAX 24
 #define ECHANTILLONS 4
@@ -38,8 +39,11 @@ static struct {
 } s_echantillons[ECHANTILLONS];
 static int s_echantillon_suivant;
 
-static void publier(const mesh_evenement_t *ev) {
-  if (xQueueSend(s_file, ev, 0) != pdTRUE) s_st.file_pleine++;
+// Faux si l'evenement est perdu (file pleine).
+static bool publier(const mesh_evenement_t *ev) {
+  if (xQueueSend(s_file, ev, 0) == pdTRUE) return true;
+  s_st.file_pleine++;
+  return false;
 }
 
 esp_err_t crochet_demarrer(const amaran_config_t *cfg) {
@@ -57,11 +61,21 @@ void crochet_ecoute_detaillee(bool oui) { s_detail = oui; }
 
 int crochet_dechiffrer_reseau(const uint8_t enc[16], const uint8_t privacy[16], uint32_t iv, uint8_t *pdu,
                               size_t *len) {
-  struct net_buf_simple buf;
+  if (*len < PDU_MIN || *len > PDU_MAX) return -1;
   if (bt_mesh_net_obfuscate(pdu, iv, privacy)) return -1;
-  net_buf_simple_init_with_data(&buf, pdu, *len);
-  if (bt_mesh_net_decrypt(enc, &buf, iv, false, false)) return -2;
-  *len = buf.len;
+  // Ce que fait bt_mesh_net_decrypt(), sans lui : il journalise (BT_ERR) chaque
+  // NetMIC faux, et ce chemin tourne dans la tache Bluetooth, une fois par copie
+  // de message, ou une fois par IV candidat de la recherche.
+  const size_t mic = (pdu[1] & 0x80) ? 8 : 4;  // CTL : NetMIC de 64 bits
+  uint8_t nonce[13] = {0};                     // type reseau 0x00, deux octets de remplissage a 0
+  memcpy(&nonce[1], &pdu[1], 6);               // CTL/TTL, SEQ (3), SRC (2), deja en clair
+  nonce[9] = (uint8_t)(iv >> 24);
+  nonce[10] = (uint8_t)(iv >> 16);
+  nonce[11] = (uint8_t)(iv >> 8);
+  nonce[12] = (uint8_t)iv;
+  // DST et PDU de transport (des l'octet 7), NetMIC juste apres.
+  if (bt_mesh_ccm_decrypt_raw_key(enc, nonce, &pdu[7], *len - mic - 7, NULL, 0, &pdu[7], mic)) return -2;
+  *len -= mic;
   return 0;
 }
 
@@ -169,8 +183,7 @@ void __wrap_bt_mesh_generic_net_recv(struct net_buf_simple *data, struct bt_mesh
                                      enum bt_mesh_net_if net_if) {
   uint8_t copie[PDU_MAX];
   const size_t n = data->len;
-  const bool garder = s_file && net_if == BLE_MESH_NET_IF_ADV && n >= TRI_ENTETE_RESEAU + 1 + MIC_ACCES &&
-                      n <= sizeof(copie);
+  const bool garder = s_file && net_if == BLE_MESH_NET_IF_ADV && n >= PDU_MIN && n <= sizeof(copie);
   if (garder) memcpy(copie, data->data, n);
   __real_bt_mesh_generic_net_recv(data, rx, net_if);
   if (garder) traiter(copie, n);
@@ -204,9 +217,14 @@ void __wrap_bt_mesh_beacon_recv(struct net_buf_simple *buf, int8_t rssi) {
       s_st.balises_autres++;
     }
   }
-  if (bt_mesh.iv_index != s_iv_connu) {
-    s_iv_connu = bt_mesh.iv_index;
-    mesh_evenement_t ev = {.type = MESH_EV_IV_CHANGE, .quand_us = esp_timer_get_time(), .lampe = -1, .iv = s_iv_connu};
-    publier(&ev);
+  // La pile refuse tout IV Index plus bas que le sien (net.c) : apres l'adhesion il
+  // ne fait que monter. Ne publier que ce qui depasse ce que la console connait
+  // deja evite l'IV Index 0 d'avant l'adhesion (bt_mesh_provision le pose apres
+  // le demarrage du scan), et s_iv_connu n'avance qu'une fois l'evenement parti :
+  // file pleine, la balise suivante retente.
+  const uint32_t iv = bt_mesh.iv_index;
+  if (iv > s_iv_connu) {
+    mesh_evenement_t ev = {.type = MESH_EV_IV_CHANGE, .quand_us = esp_timer_get_time(), .lampe = -1, .iv = iv};
+    if (publier(&ev)) s_iv_connu = iv;
   }
 }
