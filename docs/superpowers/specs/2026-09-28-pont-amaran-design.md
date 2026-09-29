@@ -276,11 +276,13 @@ changent pas.
   de toucher au compteur :
   - après un effacement de la flash (`mesh adresse suivante`), faute de quoi
     les lampes rejetteraient nos messages ;
-  - automatiquement quand le compteur dépasse `0xF00000`. Cela évite la mise à
-    jour d'IV, qui engagerait tout le réseau, amaran Desktop compris.
+  - automatiquement quand le compteur dépasse `0x700000`, sous le seuil de
+    8 000 000 où la pile d'ESP-IDF lance d'elle-même une mise à jour d'IV. Cela
+    évite la mise à jour d'IV, qui engagerait tout le réseau, amaran Desktop
+    compris.
 - Budget : une relecture de groupe toutes les 5 s fait environ 6 millions de
   messages par an, et le double avec une demande par lampe (5.7). Une adresse
-  tient donc entre ~1,3 et ~2,5 ans, ordres compris à la marge.
+  tient donc entre ~7 et ~14 mois, ordres compris à la marge.
 
 ### 5.5 Crochet de réception
 

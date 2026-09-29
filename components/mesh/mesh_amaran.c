@@ -37,7 +37,9 @@ static const char *TAG = "mesh";
 #define ECART_MS 70          // entre deux messages et entre deux repetitions
 #define FILE_TX 16
 #define BLOC_SEQ 256         // le plancher sauve devance toujours la sequence
-#define SEQ_LIMITE 0xF00000  // au-dela : adresse suivante (spec 5.4)
+// Sous le seuil ou la pile lance seule une mise a jour d'IV (IV_UPDATE_SEQ_LIMIT
+// = 8000000 dans net.c) ; au-dela : adresse suivante (spec 5.4).
+#define SEQ_LIMITE 0x700000
 
 typedef struct {
   uint16_t dst;
@@ -49,6 +51,7 @@ static amaran_config_t s_cfg;
 static QueueHandle_t s_tx;
 static volatile bool s_pret;
 static uint32_t s_plancher_sauve;
+static uint32_t s_seq_min;  // tout ce qui est en dessous est deja parti : la sequence n'y redescend jamais
 static uint32_t s_emis;
 static uint32_t s_echecs;
 
@@ -103,10 +106,12 @@ static void fin_adhesion(void) {
     ESP_LOGE(TAG, "liaison de l'AppKey refusee (%d)", rc);
     return;
   }
-  // La sequence repart au-dessus de tout ce qui a pu partir avant (5.4).
-  bt_mesh.seq = s_cfg.plancher_seq;
-  s_plancher_sauve = s_cfg.plancher_seq + BLOC_SEQ;
-  config_sauver_plancher(s_plancher_sauve);
+  // La sequence repart au-dessus de tout ce qui a pu partir avant (5.4). La NVS
+  // garde deja plancher_seq : la tache d'emission sauve le bloc suivant avant
+  // le premier envoi, et un echec de sauvegarde y bloque l'envoi.
+  s_seq_min = s_cfg.plancher_seq;
+  bt_mesh.seq = s_seq_min;
+  s_plancher_sauve = s_cfg.plancher_seq;
   s_pret = true;
   ESP_LOGI(TAG, "pret : adresse 0x%04x, IV 0x%08" PRIx32 ", sequence 0x%06" PRIx32, s_cfg.adresse,
            (uint32_t)bt_mesh.iv_index, (uint32_t)bt_mesh.seq);
@@ -131,11 +136,40 @@ static void rappel_modele(esp_ble_mesh_model_cb_event_t ev, esp_ble_mesh_model_c
 
 // --- Emission
 
-static void verifier_plancher(uint32_t a_consommer) {
-  if (bt_mesh.seq + a_consommer >= s_plancher_sauve) {
-    s_plancher_sauve = bt_mesh.seq + a_consommer + BLOC_SEQ;
-    config_sauver_plancher(s_plancher_sauve);
+// Sequence bientot epuisee : l'adresse source suivante repart de zero (5.4).
+// Sur ESP_OK l'appelant redemarre ; sinon rien n'a change.
+static esp_err_t changer_d_adresse(uint32_t seq) {
+  const uint16_t suivante =
+      s_cfg.adresse >= AMARAN_ADRESSE_MAX ? AMARAN_ADRESSE_MIN : (uint16_t)(s_cfg.adresse + 1);
+  ESP_LOGW(TAG, "sequence 0x%06" PRIx32 " presque epuisee : adresse 0x%04x", seq, suivante);
+  const esp_err_t err = config_sauver_adresse(suivante);
+  if (err != ESP_OK) ESP_LOGE(TAG, "adresse 0x%04x non sauvee : %s", suivante, esp_err_to_name(err));
+  return err;
+}
+
+// Met la sequence en etat avant d'emettre a_consommer messages (un numero
+// chacun). Faux : l'envoi est abandonne, faute d'avoir pu sauver la NVS.
+static bool preparer_sequence(uint32_t a_consommer) {
+  // La pile remet la sequence a 0 lors d'une reprise d'IV Index (net.c) : on ne
+  // la laisse jamais redescendre, sinon (IV, sequence) resservirait apres un
+  // redemarrage et les lampes rejetteraient nos messages comme des rejeux.
+  if (bt_mesh.seq < s_seq_min) bt_mesh.seq = s_seq_min;
+  if (bt_mesh.seq + a_consommer > SEQ_LIMITE) {
+    if (changer_d_adresse(bt_mesh.seq) != ESP_OK) return false;
+    esp_restart();
   }
+  // Le plancher en NVS devance toujours la sequence : il est releve, et sauve,
+  // avant que les numeros correspondants partent.
+  if (bt_mesh.seq + a_consommer >= s_plancher_sauve) {
+    const uint32_t nouveau = bt_mesh.seq + a_consommer + BLOC_SEQ;
+    const esp_err_t err = config_sauver_plancher(nouveau);
+    if (err != ESP_OK) {
+      ESP_LOGE(TAG, "plancher de sequence non sauve : %s", esp_err_to_name(err));
+      return false;
+    }
+    s_plancher_sauve = nouveau;
+  }
+  return true;
 }
 
 static void tache_tx(void *arg) {
@@ -144,7 +178,12 @@ static void tache_tx(void *arg) {
   for (;;) {
     if (xQueueReceive(s_tx, &m, portMAX_DELAY) != pdTRUE) continue;
     while (!s_pret) vTaskDelay(pdMS_TO_TICKS(100));
-    verifier_plancher(m.repetitions);
+    if (!preparer_sequence(m.repetitions)) {
+      s_echecs++;
+      vTaskDelay(pdMS_TO_TICKS(ECART_MS));
+      continue;
+    }
+    const uint32_t seq_depart = bt_mesh.seq;
     esp_ble_mesh_msg_ctx_t ctx = {
         .net_idx = NET_IDX,
         .app_idx = APP_IDX,
@@ -157,6 +196,8 @@ static void tache_tx(void *arg) {
       if (err != ESP_OK) break;
       if (r + 1 < m.repetitions) vTaskDelay(pdMS_TO_TICKS(ECART_MS));
     }
+    // Chaque envoi consomme un numero, comptes d'office meme en cas d'echec.
+    s_seq_min = seq_depart + m.repetitions;
     if (err == ESP_OK) {
       s_emis++;
     } else {
@@ -173,10 +214,8 @@ esp_err_t mesh_demarrer(const amaran_config_t *cfg) {
   if (!cfg->cles_presentes) return ESP_ERR_INVALID_STATE;
   s_cfg = *cfg;
   if (s_cfg.plancher_seq > SEQ_LIMITE) {
-    const uint16_t suivante =
-        s_cfg.adresse >= AMARAN_ADRESSE_MAX ? AMARAN_ADRESSE_MIN : (uint16_t)(s_cfg.adresse + 1);
-    ESP_LOGW(TAG, "sequence 0x%06" PRIx32 " presque epuisee : adresse 0x%04x", s_cfg.plancher_seq, suivante);
-    config_sauver_adresse(suivante);
+    // Si la NVS refuse l'adresse, pas de redemarrage : il bouclerait.
+    if (changer_d_adresse(s_cfg.plancher_seq) != ESP_OK) return ESP_FAIL;
     esp_restart();
   }
   s_tx = xQueueCreate(FILE_TX, sizeof(message_tx_t));
