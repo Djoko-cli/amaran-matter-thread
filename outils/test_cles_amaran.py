@@ -133,11 +133,13 @@ class TestEnvoi(unittest.TestCase):
     def test_masque_une_cle_dans_une_erreur(self):
         port = PortFactice(["erreur : cle refusee " + NET.upper()])
         capture = []
-        with self.assertRaises(ca.ErreurCles):
+        with self.assertRaises(ca.ErreurCles) as cm:
             ca.envoyer(port, ["mesh cles X Y"], attente=1, sortie=capture.append)
         texte = "\n".join(capture)
         self.assertNotIn(NET.lower(), texte.lower())
         self.assertNotIn(APP.lower(), texte.lower())
+        self.assertNotIn(NET.lower(), str(cm.exception).lower())
+        self.assertNotIn(APP.lower(), str(cm.exception).lower())
 
     def test_masque_une_cle_dans_un_ok(self):
         port = PortFactice(["ok cles " + APP.upper()])
