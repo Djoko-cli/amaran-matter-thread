@@ -26,9 +26,8 @@ static void redemarrer(void) {
   esp_restart();
 }
 
-static long long age_s(int64_t quand_us) {
-  return quand_us ? (long long)((esp_timer_get_time() - quand_us) / 1000000) : -1;
-}
+// Age en secondes d'un instant capte. L'appelant traite d'abord le cas "jamais" (instant a 0).
+static long long age_s(int64_t quand_us) { return (long long)((esp_timer_get_time() - quand_us) / 1000000); }
 
 static void afficher_etat(void) {
   mesh_stats_t st;
@@ -49,16 +48,24 @@ static void afficher_etat(void) {
   for (int i = 0; i < AMARAN_LAMPES_MAX; i++) {
     const amaran_lampe_t *l = &s_cfg->lampes[i];
     if (!l->adresse) continue;
-    printf("lampe %d : 0x%04x %s, derniere reponse il y a %lld s\n", i + 1, l->adresse, l->nom,
-           age_s(st.derniere_reponse_us[i]));
+    if (st.derniere_reponse_us[i]) {
+      printf("lampe %d : 0x%04x %s, derniere reponse il y a %lld s\n", i + 1, l->adresse, l->nom,
+             age_s(st.derniere_reponse_us[i]));
+    } else {
+      printf("lampe %d : 0x%04x %s, derniere reponse : jamais\n", i + 1, l->adresse, l->nom);
+    }
   }
   printf("messages vus %" PRIu32 " (NID reconnu %" PRIu32 ", inconnu %" PRIu32 ", NetMIC faux %" PRIu32
          "), acces dechiffres %" PRIu32 ", etats de lampes %" PRIu32 "\n",
          st.annonces, st.nid_reconnu, st.nid_inconnu, st.netmic_faux, st.acces_dechiffres, st.etats_lampes);
-  printf("balises : notres %" PRIu32 " (derniere IV 0x%08" PRIx32 ", drapeaux 0x%02x, il y a %lld s), autres %" PRIu32
-         "\n",
-         st.balises_notres, st.derniere_balise_iv, (unsigned)st.derniere_balise_flags, age_s(st.derniere_balise_us),
-         st.balises_autres);
+  if (st.balises_notres) {
+    printf("balises : notres %" PRIu32 " (derniere IV 0x%08" PRIx32 ", drapeaux 0x%02x, il y a %lld s), autres %" PRIu32
+           "\n",
+           st.balises_notres, st.derniere_balise_iv, (unsigned)st.derniere_balise_flags, age_s(st.derniere_balise_us),
+           st.balises_autres);
+  } else {
+    printf("balises : notres 0 (aucune), autres %" PRIu32 "\n", st.balises_autres);
+  }
   printf("emission : %" PRIu32 " messages, %" PRIu32 " refus ; evenements perdus %" PRIu32 "\n", st.emis,
          st.echecs_emission, st.file_pleine);
   if (st.netmic_faux > 0 && st.acces_dechiffres == 0) {
@@ -124,7 +131,7 @@ static int mesh_lampe(int argc, char **argv) {
     printf("erreur : ecriture NVS\n");
     return 1;
   }
-  printf("ok lampe %" PRIu32 " 0x%04x %s\n", n, l.adresse, l.nom);
+  printf("ok lampe %" PRIu32 " 0x%04x %s (redemarrer pour l'appliquer)\n", n, l.adresse, l.nom);
   return 0;
 }
 
@@ -313,10 +320,17 @@ static void tache_journal(void *arg) {
       case MESH_EV_BALISE:
         printf("[%lld ms] balise : IV Index 0x%08" PRIx32 ", drapeaux 0x%02x\n", ms, ev.iv, (unsigned)ev.flags);
         break;
-      case MESH_EV_IV_CHANGE:
-        if (config_sauver_iv(ev.iv) == ESP_OK) s_cfg->iv = ev.iv;
-        printf("[%lld ms] IV Index 0x%08" PRIx32 " adopte et sauve\n", ms, ev.iv);
+      case MESH_EV_IV_CHANGE: {
+        const esp_err_t err = config_sauver_iv(ev.iv);
+        if (err == ESP_OK) {
+          s_cfg->iv = ev.iv;
+          printf("[%lld ms] IV Index 0x%08" PRIx32 " adopte et sauve\n", ms, ev.iv);
+        } else {
+          printf("[%lld ms] IV Index 0x%08" PRIx32 " adopte, mais non sauve (NVS : %s)\n", ms, ev.iv,
+                 esp_err_to_name(err));
+        }
         break;
+      }
     }
   }
 }
