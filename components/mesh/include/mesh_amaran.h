@@ -63,3 +63,7 @@ void mesh_ecoute_detaillee(bool oui);
 void mesh_lire_stats(mesh_stats_t *stats);
 uint32_t mesh_iv_courant(void);
 uint32_t mesh_sequence(void);
+// Cherche l'IV Index du reseau de 0 a max (max <= 0xFFFFFF), voir crochet.h.
+int mesh_iv_chercher(uint32_t max, uint32_t *trouve);
+// Passe les exemples chiffres de la specification Mesh ; rend le nombre d'echecs.
+int mesh_autotest(void);

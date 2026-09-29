@@ -274,3 +274,5 @@ void mesh_lire_stats(mesh_stats_t *stats) {
 uint32_t mesh_iv_courant(void) { return bt_mesh.iv_index; }
 
 uint32_t mesh_sequence(void) { return bt_mesh.seq; }
+
+int mesh_iv_chercher(uint32_t max, uint32_t *trouve) { return crochet_chercher_iv(max, trouve); }

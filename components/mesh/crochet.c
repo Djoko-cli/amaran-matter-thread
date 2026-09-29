@@ -11,9 +11,10 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
+#include "freertos/task.h"
 
 #include "access.h"  // bt_mesh_rx_netkey_*, bt_mesh_rx_appkey_*
-#include "crypto.h"  // bt_mesh_net_obfuscate, bt_mesh_net_decrypt, bt_mesh_app_decrypt
+#include "crypto.h"  // bt_mesh_net_obfuscate, bt_mesh_ccm_decrypt_raw_key, bt_mesh_app_decrypt
 #include "mesh/buf.h"
 #include "net.h"
 
@@ -32,12 +33,15 @@ static volatile bool s_detail;
 static mesh_stats_t s_st;
 static uint32_t s_iv_connu;
 
-// Messages de notre reseau au NetMIC faux : matiere de `mesh iv cherche`.
+// Messages de notre reseau au NetMIC faux : matiere de `mesh iv cherche`. La
+// tache Bluetooth les remplace (garder_echantillon), la tache de la console les
+// copie (crochet_chercher_iv) : toujours sous s_verrou.
 static struct {
   uint8_t pdu[PDU_MAX];
   size_t len;
 } s_echantillons[ECHANTILLONS];
 static int s_echantillon_suivant;
+static portMUX_TYPE s_verrou = portMUX_INITIALIZER_UNLOCKED;
 
 // Faux si l'evenement est perdu (file pleine).
 static bool publier(const mesh_evenement_t *ev) {
@@ -101,9 +105,21 @@ static uint32_t iv_du_message(uint8_t ivi) {
 }
 
 static void garder_echantillon(const uint8_t *pdu, size_t len) {
+  portENTER_CRITICAL(&s_verrou);
   memcpy(s_echantillons[s_echantillon_suivant].pdu, pdu, len);
   s_echantillons[s_echantillon_suivant].len = len;
   s_echantillon_suivant = (s_echantillon_suivant + 1) % ECHANTILLONS;
+  portEXIT_CRITICAL(&s_verrou);
+}
+
+// Copie l'echantillon e d'un seul tenant et rend sa longueur (0 : emplacement
+// vide). Rien d'autre dans la section critique : ni chiffrement, ni attente.
+static size_t copier_echantillon(int e, uint8_t copie[PDU_MAX]) {
+  portENTER_CRITICAL(&s_verrou);
+  const size_t len = s_echantillons[e].len;
+  memcpy(copie, s_echantillons[e].pdu, len);
+  portEXIT_CRITICAL(&s_verrou);
+  return len;
 }
 
 static void traiter_acces(const tri_entete_t *e, const uint8_t *acces, size_t n) {
@@ -227,4 +243,31 @@ void __wrap_bt_mesh_beacon_recv(struct net_buf_simple *buf, int8_t rssi) {
     mesh_evenement_t ev = {.type = MESH_EV_IV_CHANGE, .quand_us = esp_timer_get_time(), .lampe = -1, .iv = iv};
     if (publier(&ev)) s_iv_connu = iv;
   }
+}
+
+int crochet_chercher_iv(uint32_t max, uint32_t *trouve) {
+  struct bt_mesh_subnet *sub = bt_mesh_rx_netkey_size() ? bt_mesh_rx_netkey_get(0) : NULL;
+  if (!sub || sub->net_idx == BLE_MESH_KEY_UNUSED) return -1;
+  for (int e = 0; e < ECHANTILLONS; e++) {
+    // La tache Bluetooth remplace les echantillons pendant cette recherche, qui
+    // dure des secondes : elle travaille sur une copie prise une fois pour toutes
+    // (sinon copie dechiree, ou parite de l'IVI changee en route).
+    uint8_t garde[PDU_MAX];
+    const size_t len = copier_echantillon(e, garde);
+    if (len == 0) continue;
+    const uint8_t ivi = garde[0] >> 7;
+    uint32_t essais = 0;
+    for (uint32_t iv = ivi; iv <= max; iv += 2) {  // meme parite que le bit IVI
+      uint8_t essai[PDU_MAX];  // le dechiffrement travaille en place
+      size_t n = len;
+      memcpy(essai, garde, len);
+      if (crochet_dechiffrer_reseau(sub->keys[0].enc, sub->keys[0].privacy, iv, essai, &n) == 0) {
+        *trouve = iv;
+        return 0;
+      }
+      if (++essais % 1024 == 0) vTaskDelay(1);  // laisser tourner les autres taches
+    }
+    return 1;
+  }
+  return 2;
 }
