@@ -88,6 +88,7 @@ Maison ─Thread─► pont_matter ─ordres─► tâche lampes (lampes.c) ─t
 |---|---|---|
 | `components/lampes/{CMakeLists.txt,include/lampes.h,lampes.c}` | le cœur : consignes, ordres, relectures, joignabilité (C pur) | 1 |
 | `tests/hote/test_lampes.c` | ses tests (72 vérifications) | 1 |
+| `tests/hote/test_telink.c` | les trames réelles du banc (états, `0x0A`, `0x00`) | 1 |
 | `components/mesh/{plancher.h,plancher.c}`, `tests/hote/test_plancher.c` | compteur de séquence et plancher (C pur) | 2 |
 | `components/mesh/{include/mesh_amaran.h,mesh_amaran.c}` | adhésion sans balise, émissions retenues, compteurs | 2, 3 |
 | `components/mesh/{include/hote_ble.h,hote_ble.c}` | l'hôte NimBLE, en-tête public | 2 |
@@ -120,7 +121,7 @@ Les Tasks 5, 8 et 11 se passent au banc, avec Djoko : Claude les mène lui-même
 **Files:**
 - Create: `components/lampes/CMakeLists.txt`, `components/lampes/include/lampes.h`, `components/lampes/lampes.c`
 - Create: `tests/hote/test_lampes.c`
-- Modify: `tests/hote/lancer.sh`
+- Modify: `tests/hote/lancer.sh`, `tests/hote/test_telink.c`
 
 **Interfaces:**
 - Consumes : `telink.h` (Task 1 du plan 1) : `telink_demande_etat`, `telink_marche`, `telink_intensite`, `telink_lire_etat`, `telink_somme`, `TELINK_*`.
@@ -1033,10 +1034,54 @@ void lampes_tic(lampes_t *l, uint32_t maintenant_ms) {
 Run: `sh tests/hote/lancer.sh`
 Expected : `lampes : 72 verifications, 0 echecs`, puis `tests hote : tout est vert`.
 
-- [ ] **Step 5 : commit.**
+- [ ] **Step 5 : les trames du banc dans les tests de `telink`.**
+
+La revue finale du plan 1 l'a demandé : `lampes` repose sur `telink_lire_etat()`, et les vraies trames du banc (`docs/PROTOCOLE.md`) doivent y rester vraies. Ces tests passent d'emblée : ils fixent le comportement.
+
+Dans `tests/hote/test_telink.c`, juste avant `int main(void) {`, ajouter :
+
+```c
+// Trames relevees au banc du 30/09/2026 (docs/PROTOCOLE.md).
+static void test_trames_du_banc(void) {
+  static const struct {
+    uint8_t t[TELINK_TAILLE];
+    bool marche;
+    uint16_t intensite;
+  } etats[] = {
+      {{0xCE, 0x00, 0x00, 0x00, 0x00, 0x40, 0x01, 0xA3, 0xE8, 0x02}, false, 930},  // lampe 1
+      {{0x4D, 0x01, 0x00, 0x00, 0x00, 0x40, 0x01, 0xA3, 0x66, 0x02}, true, 410},   // lampe 1
+      {{0x75, 0x00, 0x00, 0x00, 0x00, 0x40, 0x01, 0x23, 0x0F, 0x02}, false, 60},   // lampe 2
+      {{0xB2, 0x01, 0x00, 0x00, 0x00, 0x40, 0x01, 0x23, 0x4B, 0x02}, true, 300},   // lampe 2
+  };
+  for (size_t i = 0; i < sizeof(etats) / sizeof(etats[0]); i++) {
+    telink_etat_t e;
+    VERIFIE(telink_lire_etat(etats[i].t, &e) && e.mode == TELINK_MODE_CCT, "etat du banc %u lisible", (unsigned)i);
+    VERIFIE(e.marche == etats[i].marche && e.intensite == etats[i].intensite, "etat du banc %u : %d, %u", (unsigned)i,
+            e.marche, (unsigned)e.intensite);
+  }
+  // Alimentation (0x0A) et produit (0x00) : sommes justes, mais pas des etats.
+  const uint8_t alimentation[TELINK_TAILLE] = {0x86, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x31, 0x4B, 0x0A};
+  const uint8_t produit[TELINK_TAILLE] = {0xB4, 0x03, 0x80, 0xA3, 0x7C, 0x08, 0x6E, 0x00, 0x9C, 0x00};
+  telink_etat_t e;
+  VERIFIE(telink_somme(alimentation) == alimentation[0] && !telink_lire_etat(alimentation, &e), "0x0A : pas un etat");
+  VERIFIE(telink_somme(produit) == produit[0] && !telink_lire_etat(produit, &e), "0x00 : pas un etat");
+  // Ordre d'intensite 700, capte a l'emission, du pont comme de l'app.
+  const uint8_t v700[TELINK_TAILLE] = {0x3E, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xAF, 0x8F};
+  uint8_t t[TELINK_TAILLE];
+  telink_intensite(700, t);
+  VERIFIE(memcmp(t, v700, TELINK_TAILLE) == 0, "intensite 700 du banc");
+}
+```
+
+et, dans `main()`, après `test_lire_etat();`, ajouter `test_trames_du_banc();`.
+
+Run: `sh tests/hote/lancer.sh`
+Expected : `telink : 25 verifications, 0 echecs`, et tout le reste vert.
+
+- [ ] **Step 6 : commit.**
 
 ```bash
-git add components/lampes tests/hote/test_lampes.c tests/hote/lancer.sh
+git add components/lampes tests/hote/test_lampes.c tests/hote/test_telink.c tests/hote/lancer.sh
 git commit -m "$(printf "Ajouter le coeur du pont : consignes, confirmation, abandon et joignabilite des lampes\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>")"
 ```
 
@@ -4184,8 +4229,9 @@ Expected : l'outil reconnaît le pont (la commande `mesh` est partagée), imprim
 
 - [ ] **Step 5 : l'état avant l'appairage.**
 
-Run: `python3 outils/console.py --port <port> "mesh" "matter" "lampes" "taches"`
+Run: `python3 outils/console.py --port <port> "mesh autotest" "mesh" "matter" "lampes" "taches"`
 Expected :
+- `autotest : 0 echec(s)`, après 11 lignes `ok` : les fonctions de chiffrement du Mesh marchent aussi dans le firmware du pont (même moteur que l'écoute : `CONFIG_BLE_MESH_USE_UNIFIED_CRYPTO`) ;
 - `mesh pret : non` : normal, le Mesh attend l'appairage (amendement 3) ; les empreintes du Step 4 ; `lampe 1 : 0x0002 ...` et `lampe 2 : 0x0004 ...` ;
 - l'adresse tirée. Si c'est `0x7f38`, l'adresse des bancs R (les lampes gardent son compteur de séquence) : `mesh adresse suivante`, et la carte redémarre ;
 - `matter` : `mise en service : EN ATTENTE`, un code manuel et un QR code, `identite : Djoko-CLI, Pont amaran, n/s AMARAN-...`, `version : 0.1.0-<commit>`, `EP2 : amaran COB 60d #1`, `EP3 : amaran COB 60d #2` ;
@@ -5333,6 +5379,12 @@ Sur l'USB, en français (`python3 outils/console.py --port <port> "<commande>"`,
 - `mesh` : réseau, empreintes des clés, compteurs ; `mesh releve <s>`, `mesh ecoute on|off`, `mesh autotest`, etc. ;
 - `matter` : mise en service, Thread, abonnements, codes, identité ;
 - `led [test|stop]`, `cause`, `taches`, `decommission`, `redemarre`.
+
+## À savoir
+
+- Une lampe éteinte depuis Maison, ou depuis amaran Desktop, ignore sa molette et le bouton de sa molette. Pour la rallumer à la main : couper puis remettre son alimentation ; elle revient allumée vers 40 %.
+- Maison suit la molette et amaran Desktop en 5 s environ : les lampes ne signalent rien d'elles-mêmes, et le pont les relit toutes les 5 s.
+- amaran Desktop, lui, ne suit pas les ordres venus de Maison.
 ````
 
 4. dans `## Crédits`, avant la dernière phrase, ajouter :
