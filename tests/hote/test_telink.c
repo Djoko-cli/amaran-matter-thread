@@ -62,10 +62,42 @@ static void test_lire_etat(void) {
   VERIFIE(telink_lire_etat(arret, &e) && !e.marche && e.intensite == 930, "arret, intensite gardee");
 }
 
+// Trames relevees au banc du 30/09/2026 (docs/PROTOCOLE.md).
+static void test_trames_du_banc(void) {
+  static const struct {
+    uint8_t t[TELINK_TAILLE];
+    bool marche;
+    uint16_t intensite;
+  } etats[] = {
+      {{0xCE, 0x00, 0x00, 0x00, 0x00, 0x40, 0x01, 0xA3, 0xE8, 0x02}, false, 930},  // lampe 1
+      {{0x4D, 0x01, 0x00, 0x00, 0x00, 0x40, 0x01, 0xA3, 0x66, 0x02}, true, 410},   // lampe 1
+      {{0x75, 0x00, 0x00, 0x00, 0x00, 0x40, 0x01, 0x23, 0x0F, 0x02}, false, 60},   // lampe 2
+      {{0xB2, 0x01, 0x00, 0x00, 0x00, 0x40, 0x01, 0x23, 0x4B, 0x02}, true, 300},   // lampe 2
+  };
+  for (size_t i = 0; i < sizeof(etats) / sizeof(etats[0]); i++) {
+    telink_etat_t e;
+    VERIFIE(telink_lire_etat(etats[i].t, &e) && e.mode == TELINK_MODE_CCT, "etat du banc %u lisible", (unsigned)i);
+    VERIFIE(e.marche == etats[i].marche && e.intensite == etats[i].intensite, "etat du banc %u : %d, %u", (unsigned)i,
+            e.marche, (unsigned)e.intensite);
+  }
+  // Alimentation (0x0A) et produit (0x00) : sommes justes, mais pas des etats.
+  const uint8_t alimentation[TELINK_TAILLE] = {0x86, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x31, 0x4B, 0x0A};
+  const uint8_t produit[TELINK_TAILLE] = {0xB4, 0x03, 0x80, 0xA3, 0x7C, 0x08, 0x6E, 0x00, 0x9C, 0x00};
+  telink_etat_t e;
+  VERIFIE(telink_somme(alimentation) == alimentation[0] && !telink_lire_etat(alimentation, &e), "0x0A : pas un etat");
+  VERIFIE(telink_somme(produit) == produit[0] && !telink_lire_etat(produit, &e), "0x00 : pas un etat");
+  // Ordre d'intensite 700, capte a l'emission, du pont comme de l'app.
+  const uint8_t v700[TELINK_TAILLE] = {0x3E, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xAF, 0x8F};
+  uint8_t t[TELINK_TAILLE];
+  telink_intensite(700, t);
+  VERIFIE(memcmp(t, v700, TELINK_TAILLE) == 0, "intensite 700 du banc");
+}
+
 int main(void) {
   test_demande_etat();
   test_marche();
   test_intensite();
   test_lire_etat();
+  test_trames_du_banc();
   return bilan("telink");
 }
