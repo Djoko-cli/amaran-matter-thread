@@ -223,6 +223,13 @@ class TestChargement(unittest.TestCase):
         self.assertEqual(port.ecrit, ["mesh\r\n"])  # seule la commande de controle est partie
         self.assert_aucune_cle("".join(port.ecrit), str(cm.exception))
 
+    def test_un_simple_echo_de_mesh_ne_suffit_pas(self):
+        # Une console qui renvoie ce qu'on tape, puis refuse la commande.
+        port = PortFactice(["mesh", "Unrecognized command"])
+        with self.assertRaises(ca.ErreurCles):
+            self.charger(port, attente=0.3)
+        self.assertEqual(port.ecrit, ["mesh\r\n"])
+
     def test_port_muet_ne_recoit_pas_les_cles(self):
         port = PortFactice([])
         with self.assertRaises(ca.ErreurCles):

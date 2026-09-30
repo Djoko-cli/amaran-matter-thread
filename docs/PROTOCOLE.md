@@ -3,7 +3,7 @@
 Relevé le 30/09/2026 (bancs R1 à R6, [BANC.md](BANC.md)), avec le firmware `ecoute`, sur les deux 60d de 1re génération. amaran Desktop 1.1.03 était ouvert. Ce document complète la spec, section 3.2.
 
 **Confirmé par le banc (spec 3.3) :**
-- **Les ordres d'amaran Desktop sont visibles, sauf ceux de sa lampe proxy.** Pendant les deux sessions `mesh ecoute on` (environ 3 min), l'app a envoyé 17 messages à la lampe 1 (`0x0002`) et 15 au groupe « All » (`0xC000`), aucun à la lampe 2 (`0x0004`). Pourtant la lampe 2 répond, comme la lampe 1, aux sondages par lampe de l'app (état `0x0E`, alimentation `0x0A`) : ses réponses arrivent, sans que la demande correspondante ait été captée. L'app passait donc très probablement par la lampe 2 comme proxy GATT : ce qu'elle lui envoie ne sort pas en radio, alors que ce qu'elle envoie à la lampe 1 et au groupe passe par le proxy, qui le réémet.
+- **Les ordres d'amaran Desktop sont visibles, sauf ceux de sa lampe proxy.** Pendant les deux sessions `mesh ecoute on` (environ 3 min), on a capté de l'app 17 messages distincts pour la lampe 1 (`0x0002`), 9 pour le groupe « All » (`0xC000`, 15 copies captées), aucun pour la lampe 2 (`0x0004`). Pourtant la lampe 2 répond, comme la lampe 1, aux sondages par lampe de l'app (état `0x0E`, alimentation `0x0A`) : ses réponses arrivent, sans que la demande correspondante ait été captée. L'app passait donc très probablement par la lampe 2 comme proxy GATT : ce qu'elle lui envoie ne sort pas en radio, alors que ce qu'elle envoie à la lampe 1 et au groupe passe par le proxy, qui le réémet.
 
 **Écarts avec la spec (3.2 et 3.3) :**
 - **Aucun accusé.** Les lampes ne répondent jamais à un ordre (`0x8C`, `0x8F`), ni au nôtre ni à celui de l'app. Seule une demande d'état (`0x0E`) obtient une réponse.
@@ -65,7 +65,7 @@ L'app envoie au groupe l'opcode `0x33` avec l'octet `07`. Chaque lampe répond �
   3. `0x0E` (état) ;
   4. `0x0A` (alimentation).
 
-  Puis, lampe par lampe, seuls `0x0E` et `0x0A` sont vus (les quatre étapes vont au groupe), et seulement pour la lampe 1 : rien n'est capté pour la lampe 2, le proxy de l'app.
+  Puis, lampe par lampe, seuls `0x0E` et `0x0A` sont vus (les quatre étapes vont au groupe), et seulement pour la lampe 1 : rien n'est capté pour la lampe 2, très probablement le proxy de l'app.
 - **Curseur d'intensité.** Chaque mouvement du curseur envoie un ordre `0x8F`, sans répétition ni accusé : 11 ordres en 4 s au banc.
 - **Il ne suit pas le pont (R6).** Nos ordres, même suivis d'une relecture dont la réponse lui est adressée, ne changent pas son affichage.
 

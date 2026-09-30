@@ -10,12 +10,14 @@
 #
 # Matplotlib License (fondee sur la licence PSF)
 # Copyright (c) 2012- Matplotlib Development Team; All Rights Reserved
-# https://matplotlib.org/stable/project/license.html
+# Texte complet de la licence : outils/LICENCE-matplotlib.txt
+# (https://matplotlib.org/stable/project/license.html)
 #
 # Resume des changements par rapport a matplotlib (la licence le demande) : code
 # reecrit en Python autonome, sans matplotlib ni FreeType ; les proprietes sont
-# lues dans les tables name, OS/2 et head du fichier TrueType ; ps_font_info
-# (Type 1) et les avertissements sont retires ; le resultat est le cache
+# lues dans les tables name, OS/2 et head du fichier TrueType ; la branche
+# ps_font_info (Type 1) et le refus des polices non vectorielles
+# (NotImplementedError) ne sont pas repris ; le resultat est le cache
 # fontlist-v390.json.
 """Repare amaran Desktop sur macOS 27 : pose le cache de polices de matplotlib.
 

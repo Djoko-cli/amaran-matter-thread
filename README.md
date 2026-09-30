@@ -85,6 +85,7 @@ de [matplotlib](https://matplotlib.org) 3.10.8 (`font_manager.py`) la fonction
 `ttfFontProperty` et la table `_weight_regexes`, sous la
 [licence de matplotlib](https://matplotlib.org/stable/project/license.html)
 (Copyright (c) 2012- Matplotlib Development Team). Sa mention est en tête du
-script.
+script, et le texte de la licence dans
+[outils/LICENCE-matplotlib.txt](outils/LICENCE-matplotlib.txt).
 
 Projet personnel, sans lien avec Aputure. Il n'ouvre ni ne modifie les lampes.

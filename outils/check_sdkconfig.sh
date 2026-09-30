@@ -42,7 +42,7 @@ for f in "$ICI"/ecoute/sdkconfig.defaults* "$ICI"/firmware/sdkconfig.defaults*; 
 done
 
 # Valeur epinglee, lue dans ecoute/sdkconfig (genere, ignore par git) : au-dessus
-# de WARNING la pile Mesh imprime les cles (voir components/mesh/mesh_amaran.c).
+# d'ERROR la pile Mesh imprime des cles (voir components/mesh/mesh_amaran.c).
 # sdkconfig.defaults ne pese que sur les symboles absents de sdkconfig : une
 # valeur plus ancienne, ou posee par menuconfig, l'emporterait en silence.
 SDKCONFIG="$ICI/ecoute/sdkconfig"
@@ -56,11 +56,11 @@ else
   if [ -z "$niveau" ]; then
     echo "   x CONFIG_BLE_MESH_STACK_TRACE_LEVEL : introuvable dans ecoute/sdkconfig"
     rc=1
-  elif [ "$niveau" -gt 2 ]; then
-    echo "   x CONFIG_BLE_MESH_STACK_TRACE_LEVEL=$niveau : au-dessus de WARNING (2), la pile imprime les cles"
+  elif [ "$niveau" -gt 1 ]; then
+    echo "   x CONFIG_BLE_MESH_STACK_TRACE_LEVEL=$niveau : au-dessus d'ERROR (1), la pile imprime des cles"
     rc=1
   else
-    echo "   ok : niveau $niveau (0 NONE, 1 ERROR, 2 WARNING) : la pile n'imprime aucune cle"
+    echo "   ok : niveau $niveau (0 NONE, 1 ERROR) : la pile n'imprime aucune cle"
   fi
 fi
 exit $rc

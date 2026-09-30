@@ -55,13 +55,14 @@
 #include "crochet.h"
 #include "hote_ble.h"
 
-// Garde-fou : au-dessus de WARNING, la pile Mesh imprime les cles (BT_INFO NetKey
-// et DevKey dans core/main.c, BT_DBG dans core/crypto.c). Le niveau est epingle
-// dans ecoute/sdkconfig.defaults. Pas de BLE_MESH_NO_LOG : la spec 5.3 veut
-// garder l'erreur "IVIndex out of sync". Symbole d'ESP-IDF (Kconfig.in) :
+// Garde-fou : au-dessus d'ERROR, la pile Mesh imprime des cles (BT_WARN
+// AppKeyValExist et NetKeyValExist dans core/local.c, BT_INFO NetKey et DevKey
+// dans core/main.c, BT_DBG dans core/crypto.c). Le niveau est epingle dans
+// ecoute/sdkconfig.defaults. Pas de BLE_MESH_NO_LOG : la spec 5.3 veut garder
+// l'erreur "IVIndex out of sync" (BT_ERR). Symbole d'ESP-IDF (Kconfig.in) :
 // 0 NONE, 1 ERROR, 2 WARNING, 3 INFO, 4 DEBUG, 5 VERBOSE.
-#if defined(CONFIG_BLE_MESH_STACK_TRACE_LEVEL) && CONFIG_BLE_MESH_STACK_TRACE_LEVEL > 2
-#error "Niveau de trace Bluetooth Mesh au-dessus de WARNING : la pile imprimerait les cles du reseau. Choisir CONFIG_BLE_MESH_TRACE_LEVEL_WARNING (idf.py menuconfig, ou supprimer ecoute/sdkconfig pour le regenerer depuis sdkconfig.defaults)."
+#if defined(CONFIG_BLE_MESH_STACK_TRACE_LEVEL) && CONFIG_BLE_MESH_STACK_TRACE_LEVEL > 1
+#error "Niveau de trace Bluetooth Mesh au-dessus d'ERROR : la pile imprimerait des cles du reseau. Choisir CONFIG_BLE_MESH_TRACE_LEVEL_ERROR (idf.py menuconfig, ou supprimer ecoute/sdkconfig pour le regenerer depuis sdkconfig.defaults)."
 #endif
 
 static const char *TAG = "mesh";
@@ -270,9 +271,9 @@ esp_err_t mesh_demarrer(const amaran_config_t *cfg) {
   if (err != ESP_OK) return err;
   esp_read_mac(s_uuid, ESP_MAC_BT);
   // Erreurs seules : le relais coupe ferait avertir la pile a chaque message qu'elle
-  // ne relaie pas, et certains avertissements impriment une cle (BT_WARN
-  // "AppKeyValExist %s" dans local.c, compile au niveau WARNING que le garde-fou
-  // ci-dessus laisse passer).
+  // ne relaie pas. Seconde barriere pour les cles : les avertissements qui en
+  // impriment (AppKeyValExist, NetKeyValExist dans local.c) ne sont deja plus
+  // compiles au niveau ERROR que le garde-fou ci-dessus impose.
   esp_log_level_set("BLE_MESH", ESP_LOG_ERROR);
   esp_ble_mesh_register_prov_callback(rappel_prov);
   esp_ble_mesh_register_config_server_callback(rappel_cfg_srv);
