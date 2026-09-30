@@ -14,6 +14,7 @@
 #include "mesh_amaran.h"
 #include "mesh_console.h"
 #include "pont_matter.h"
+#include "socle.h"
 
 #define TIC_MS 50
 #define FILE_ORDRES 16
@@ -67,7 +68,7 @@ static void traiter(const message_t *m) {
                m->depuis_matter, maintenant_ms());
 }
 
-// Bluetooth Mesh inoperant (spec 7.3) : message a la console.
+// Bluetooth Mesh inoperant (spec 7.3) : message a la console, rouge fixe au voyant.
 static void diagnostiquer(uint32_t t) {
   mesh_stats_t st;
   mesh_lire_stats(&st);
@@ -78,6 +79,7 @@ static void diagnostiquer(uint32_t t) {
   } else {
     printf("!! Bluetooth Mesh inoperant : %s\n", diagnostic_texte(s_diag.etat));
   }
+  socle_panne_mesh(s_diag.etat != DIAG_OK);
 }
 
 static void tache(void *arg) {

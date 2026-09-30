@@ -1,6 +1,6 @@
 // Cote Matter du pont (spec 6) : noeud (EP0), agregateur (EP1) et une lampe
 // pontee par emplacement (EP2, EP3), ordres des controleurs, etat des lampes
-// publie sans echo, abonnements plafonnes. Ecrit en C++ (esp-matter),
+// publie sans echo, abonnements plafonnes, identite. Ecrit en C++ (esp-matter),
 // appele depuis le C.
 #pragma once
 
@@ -40,6 +40,8 @@ void pont_afficher(void);
 // Retire toutes les fabriques Matter, puis la pile redemarre la carte. Les
 // reglages "amaran" (cles, lampes) restent (spec 7.7).
 void pont_desappairer(void);
+// Un controleur demande l'identification (IdentifyTime ou un effet en cours).
+bool pont_identifie(void);
 
 #ifdef __cplusplus
 }

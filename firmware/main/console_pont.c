@@ -13,6 +13,7 @@
 #include "mesh_amaran.h"
 #include "mesh_console.h"
 #include "pont_matter.h"
+#include "socle.h"
 #include "tache_lampes.h"
 #include "telink.h"
 #include "texte.h"
@@ -145,8 +146,8 @@ static int cmd_redemarre(int argc, char **argv) {
   return 0;
 }
 
-static const char *const TACHES[] = {"lampes", "amaran_tx", "nimble_host", "mesh_adv_task", "CHIP", "ot_task",
-                                     "console_repl"};
+static const char *const TACHES[] = {"lampes", "socle", "amaran_tx", "nimble_host", "mesh_adv_task", "CHIP",
+                                     "ot_task", "console_repl"};
 
 void console_pont_demarrer(amaran_config_t *cfg) {
   s_cfg = cfg;
@@ -166,6 +167,8 @@ void console_pont_demarrer(amaran_config_t *cfg) {
       {.command = "matter", .help = "mise en service, Thread, abonnements, codes, identite", .func = cmd_matter},
       {.command = "decommission", .help = "retire toutes les fabriques Matter (cles gardees)", .func = cmd_decommission},
       {.command = "redemarre", .help = "redemarre la carte", .func = cmd_redemarre},
+      {.command = "led", .help = "led [test|stop] : motif du voyant ; test = chaque motif a tour de role", .func = socle_commande_led},
+      {.command = "cause", .help = "pourquoi la carte a redemarre la derniere fois", .func = socle_commande_cause},
       {.command = "taches", .help = "marges de pile des taches et du tas (octets)", .func = mesh_console_taches},
   };
   for (size_t i = 0; i < sizeof(cmds) / sizeof(cmds[0]); i++) ESP_ERROR_CHECK(esp_console_cmd_register(&cmds[i]));

@@ -26,6 +26,7 @@
 #include <setup_payload/OnboardingCodesUtil.h>
 
 #include "mesh_amaran.h"
+#include "status_led.h"
 
 using namespace esp_matter;
 using namespace chip::app::Clusters;
@@ -42,6 +43,10 @@ static volatile int s_role = OT_DEVICE_ROLE_DISABLED;
 // le verrou de la pile depuis nos taches (spec 4.3).
 static volatile uint8_t s_fabriques;
 static volatile uint32_t s_abo_demandes, s_abo_plafonnes, s_abo_etablis, s_abo_termines;
+// Identify : endpoints en IdentifyTime (bits), et fin d'effet par endpoint (ms,
+// 0 = aucun) : la pile n'envoie jamais de STOP apres un effet (lecon du Halo).
+static volatile uint32_t s_identifie;
+static volatile uint32_t s_effet_fin[LAMPES_MAX + 2];
 
 // --- Abonnements : intervalle maximal plafonne (lecon du Halo : apres un
 // redemarrage du noeud, Apple ne se reabonne que quand cet intervalle expire).
@@ -94,6 +99,27 @@ static esp_err_t rappel_attribut(attribute::callback_type_t type, uint16_t ep, u
     if (niveau < 1 || niveau > 254) return ESP_OK;  // nul (0xFF) ou hors plage
     const uint16_t intensite = lampes_niveau_vers_intensite(niveau);
     s_ordre(lampe, NULL, &intensite);
+  }
+  return ESP_OK;
+}
+
+// Identify reste sans effet sur la lampe (Maison ne le propose pas, spec 6.1) :
+// seul le voyant fait l'arc-en-ciel, pour un autre controleur.
+static esp_err_t rappel_identification(identification::callback_type_t type, uint16_t ep, uint8_t effet,
+                                       uint8_t variante, void *priv) {
+  (void)variante;
+  (void)priv;
+  if (ep >= LAMPES_MAX + 2) return ESP_OK;
+  switch (type) {
+    case identification::callback_type_t::START:
+      s_identifie = s_identifie | (1u << ep);
+      break;
+    case identification::callback_type_t::STOP:
+      s_identifie = s_identifie & ~(1u << ep);
+      break;
+    case identification::callback_type_t::EFFECT:
+      s_effet_fin[ep] = statusled::effectEnd(s_effet_fin[ep], effet, (uint32_t)(esp_timer_get_time() / 1000));
+      break;
   }
   return ESP_OK;
 }
@@ -167,7 +193,7 @@ esp_err_t pont_demarrer(const amaran_config_t *cfg, pont_ordre_cb_t ordre) {
   snprintf(cfg_noeud.root_node.basic_information.node_label,
            sizeof(cfg_noeud.root_node.basic_information.node_label), "%s", "Pont amaran");
   // Identify reste sans effet sur la lampe (Maison ne le propose pas, spec 6.1).
-  node_t *noeud = node::create(&cfg_noeud, rappel_attribut, NULL);
+  node_t *noeud = node::create(&cfg_noeud, rappel_attribut, rappel_identification);
   if (!noeud) return ESP_FAIL;
   // SerialNumber est facultatif : cree vide, la pile le lit dans chip-factory.
   cluster_t *infos = cluster::get(endpoint::get(noeud, 0), BasicInformation::Id);
@@ -277,6 +303,15 @@ void pont_desappairer(void) {
     return;
   }
   esp_matter::factory_reset();
+}
+
+bool pont_identifie(void) {
+  if (s_identifie) return true;
+  const uint32_t t = (uint32_t)(esp_timer_get_time() / 1000);
+  for (int ep = 0; ep < LAMPES_MAX + 2; ep++) {
+    if (statusled::effectPending(s_effet_fin[ep], t)) return true;
+  }
+  return false;
 }
 
 void pont_afficher(void) {

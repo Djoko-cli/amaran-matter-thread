@@ -9,6 +9,7 @@
 #include "console_pont.h"
 #include "mesh_amaran.h"
 #include "pont_matter.h"
+#include "socle.h"
 #include "tache_lampes.h"
 
 static const char *TAG = "pont";
@@ -38,6 +39,9 @@ extern "C" void app_main(void) {
     ESP_LOGE(TAG, "reglages illisibles (%s) : sans Bluetooth Mesh", esp_err_to_name(err));
     cfg.cles_presentes = false;
   }
+  // Le socle d'abord : la garde du bouton BOOT passe ainsi en dernier avant tout
+  // reset, et le voyant montre l'etat des le demarrage.
+  if (socle_demarrer() != ESP_OK) ESP_LOGE(TAG, "socle (voyant, bouton) non demarre");
   console_pont_demarrer(&cfg);
   ESP_ERROR_CHECK(tache_lampes_demarrer(&cfg));
   err = pont_demarrer(&cfg, ordre_matter);
