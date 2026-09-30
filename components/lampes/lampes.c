@@ -117,6 +117,19 @@ void lampes_mesh_pret(lampes_t *l, bool pret, uint32_t maintenant_ms) {
   }
 }
 
+// Une lampe ne garde que le pour cent entier de l'intensite (banc C : une 60d
+// relit 430 apres 433 comme apres 437). La consigne est donc arrondie au pour cent
+// le plus proche, demi vers le haut, avant d'etre envoyee et comparee a l'etat
+// relu ; sans cela, tout ordre qui n'est pas un multiple de 10 serait abandonne
+// apres 3 essais alors que la lampe a obei. Au moins 1 % si elle n'est pas nulle
+// (le niveau 1 de Matter, 4, ne doit pas tomber a 0), et 1000 au plus.
+static uint16_t arrondir_pour_cent(uint16_t v) {
+  if (v > TELINK_INTENSITE_MAX) v = TELINK_INTENSITE_MAX;
+  uint16_t r = (uint16_t)((v + LAMPES_PAS_INTENSITE / 2) / LAMPES_PAS_INTENSITE * LAMPES_PAS_INTENSITE);
+  if (v != 0 && r < LAMPES_PAS_INTENSITE) r = LAMPES_PAS_INTENSITE;
+  return r;
+}
+
 void lampes_ordre(lampes_t *l, int lampe, const bool *marche, const uint16_t *intensite, bool depuis_matter,
                   uint32_t maintenant_ms) {
   if (lampe < 0 || lampe >= l->n || (!marche && !intensite)) return;
@@ -130,7 +143,7 @@ void lampes_ordre(lampes_t *l, int lampe, const bool *marche, const uint16_t *in
   }
   if (intensite) {
     p->veut_intensite = true;
-    p->consigne.intensite = *intensite > TELINK_INTENSITE_MAX ? TELINK_INTENSITE_MAX : *intensite;
+    p->consigne.intensite = arrondir_pour_cent(*intensite);
   }
   if (!l->mesh_pret) {
     finir(l, lampe, LAMPES_SIGNAL_ABANDON, maintenant_ms);

@@ -27,6 +27,7 @@ extern "C" {
 #define LAMPES_RELEVES_MUETTE 3u           // relectures sans reponse -> muette (spec 7.2)
 #define LAMPES_REPETITIONS_ORDRE 2u
 #define LAMPES_REPETITIONS_ETAT 1u
+#define LAMPES_PAS_INTENSITE 10            // une 60d ne garde que le pour cent entier (banc C : 433 relu 430)
 
 typedef struct {
   bool marche;
@@ -97,7 +98,9 @@ void lampes_mesh_pret(lampes_t *l, bool pret, uint32_t maintenant_ms);
 // Periode de relecture, bornee a [LAMPES_RELEVE_MIN_MS, LAMPES_RELEVE_MAX_MS].
 void lampes_regler_releve(lampes_t *l, uint32_t periode_ms);
 // Ordre pour une lampe : marche et/ou intensite (NULL : inchange). depuis_matter :
-// le controleur a deja mis ces valeurs dans ses attributs.
+// le controleur a deja mis ces valeurs dans ses attributs. L'intensite est arrondie
+// au pour cent le plus proche (au moins 1 % si elle n'est pas nulle) : la lampe ne
+// garde pas mieux, et c'est cette valeur que l'etat relu doit egaler.
 void lampes_ordre(lampes_t *l, int lampe, const bool *marche, const uint16_t *intensite, bool depuis_matter,
                   uint32_t maintenant_ms);
 // Trame 0x26 recue d'une adresse (crochet de reception).

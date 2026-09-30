@@ -123,6 +123,21 @@ static int compter(uint16_t dst, uint8_t cmd) {
 
 static uint16_t intensite_envoyee(const envoi_t *e) { return (uint16_t)(((unsigned)e->t[8] << 2) | (e->t[7] >> 6)); }
 
+// Repart de zero : la lampe 1 est relue eteinte a 500, puis un ordre d'intensite
+// `demande` arrive. Rend l'intensite de la trame partie apres le regroupement, ou
+// -1 si aucune trame d'intensite n'est partie.
+static int intensite_partie_pour(uint16_t demande, bool depuis_matter) {
+  demarrer(0, true);
+  recevoir(0x0002, false, 500);
+  oublier_sorties();
+  lampes_ordre(&L, 0, NULL, &demande, depuis_matter, T);
+  avancer(100);  // 80 ms de regroupement : les trames sont parties
+  for (int i = 0; i < g_nb_envois; i++) {
+    if (g_envois[i].dst == 0x0002 && g_envois[i].t[9] == TELINK_CMD_INTENSITE) return intensite_envoyee(&g_envois[i]);
+  }
+  return -1;
+}
+
 // --- Tests
 
 static void test_conversion(void) {
@@ -467,6 +482,45 @@ static void test_delai_depuis_le_dernier_ordre(void) {
           "delai compte depuis la derniere valeur (%u ms)", (unsigned)L.delai_max_ms);
 }
 
+// Une 60d ne garde que le pour cent entier de l'intensite (banc C : 433 relu 430,
+// 437 relu 430). La consigne est donc arrondie au pour cent le plus proche avant
+// d'etre envoyee et comparee a l'etat relu ; sans cela, toute consigne qui n'est
+// pas un multiple de 10 serait abandonnee apres 3 essais alors que la lampe a obei.
+static void test_intensite_au_pour_cent(void) {
+  demarrer(0, true);
+  recevoir(0x0002, false, 500);
+  oublier_sorties();
+  const uint16_t v = 433;  // niveau 110 de Maison
+  ordre_matter(0, NULL, &v);
+  avancer(100);
+  VERIFIE(g_nb_envois == 1 && g_envois[0].t[9] == TELINK_CMD_INTENSITE, "une trame d'intensite (%d envois)",
+          g_nb_envois);
+  VERIFIE(intensite_envoyee(&g_envois[0]) == 430, "433 part a 430 (%u)", (unsigned)intensite_envoyee(&g_envois[0]));
+  avancer(200);
+  VERIFIE(compter(0x0002, TELINK_CMD_ETAT) == 1, "demande d'etat 200 ms apres la trame");
+  recevoir(0x0002, false, 430);  // la lampe a obei : elle relit 430
+  VERIFIE(g_nb_sigs == 1 && g_sigs[0].s == LAMPES_SIGNAL_CONFIRME, "ordre confirme par l'etat relu a 430 (%d signaux)",
+          g_nb_sigs);
+  VERIFIE(L.confirmes == 1 && L.abandons == 0 && L.lampes[0].phase == LAMPE_REPOS, "confirme, sans abandon");
+
+  VERIFIE(intensite_partie_pour(437, true) == 440, "437 part a 440 : le pour cent le plus proche");
+  VERIFIE(intensite_partie_pour(435, true) == 440, "435 part a 440 : demi vers le haut");
+  VERIFIE(intensite_partie_pour(4, true) == 10, "4 part a 10 : au moins un pour cent (niveau 1 de Matter)");
+  VERIFIE(intensite_partie_pour(0, false) == 0, "0 reste 0 (ordre de la console)");
+  VERIFIE(intensite_partie_pour(995, true) == 1000, "995 part a 1000");
+  VERIFIE(intensite_partie_pour(65535, true) == 1000, "au-dela du maximum : borne a 1000");
+
+  // Lampe relue a 430 : un ordre a 433 est deja tenu, egal apres l'arrondi.
+  demarrer(0, true);
+  recevoir(0x0002, false, 430);
+  oublier_sorties();
+  ordre_matter(0, NULL, &v);
+  avancer(1500);
+  VERIFIE(compter(0x0002, TELINK_CMD_INTENSITE) == 0, "433 egale 430 relu : aucune trame d'intensite");
+  VERIFIE(compter(0x0002, TELINK_CMD_ETAT) == 0, "aucune demande d'etat pour cet ordre");
+  VERIFIE(g_nb_sigs == 0, "ni confirmation ni abandon");
+}
+
 int main(void) {
   test_conversion();
   test_demarrage_relit_aussitot();
@@ -489,5 +543,6 @@ int main(void) {
   test_file_refusee();
   test_mesures_du_banc_c();
   test_delai_depuis_le_dernier_ordre();
+  test_intensite_au_pour_cent();
   return bilan("lampes");
 }
