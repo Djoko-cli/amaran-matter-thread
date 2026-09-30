@@ -21,4 +21,10 @@ compiler_et_lancer test_crochet_tri components/telink/telink.c components/mesh/t
 compiler_et_lancer test_plancher components/mesh/plancher.c tests/hote/test_plancher.c
 compiler_et_lancer test_lampes components/telink/telink.c components/lampes/lampes.c tests/hote/test_lampes.c
 compiler_et_lancer test_diagnostic components/mesh/diagnostic.c tests/hote/test_diagnostic.c
+
+# Socle repris du Halo : C++17, comme ses tests d'origine.
+"${CXX:-clang++}" -std=c++17 -Wall -Wextra -Werror -Icomponents/socle/include components/socle/status_led.cpp \
+  components/socle/boot_button.cpp tests/hote/test_socle.cpp -o "$SORTIE/test_socle"
+"$SORTIE/test_socle"
+
 echo "tests hote : tout est vert"
