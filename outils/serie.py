@@ -68,8 +68,30 @@ class PortSerie:
         termios.tcflush(self.fd, termios.TCIFLUSH)
         self._tampon = b""
 
+    def flush(self, delai=1.0):
+        """Attend que la file de sortie soit vide, au plus delai secondes.
+
+        Pas tcdrain() : il attendrait sans fin une carte qui ne lit plus.
+        Rend faux si la file ne s'est pas videe a temps.
+        """
+        fin = time.monotonic() + delai
+        while True:
+            reste = struct.unpack("i", fcntl.ioctl(self.fd, termios.TIOCOUTQ, struct.pack("i", 0)))[0]
+            if reste == 0:
+                time.sleep(0.05)  # le pilote USB envoie encore son dernier paquet
+                return True
+            if time.monotonic() >= fin:
+                return False
+            time.sleep(0.01)
+
     def close(self):
+        # Sans vidange, la fermeture d'un port non bloquant jette ce qui attend
+        # encore : le `redemarre` final de cles_amaran.py se perdait.
         if self.fd is not None:
+            try:
+                self.flush()
+            except OSError:
+                pass
             os.close(self.fd)
             self.fd = None
 

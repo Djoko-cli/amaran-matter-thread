@@ -3,6 +3,7 @@ import contextlib
 import io
 import os
 import tempfile
+import time
 import unittest
 
 import console
@@ -82,6 +83,26 @@ class TestPortSerie(unittest.TestCase):
     def test_close_deux_fois_sans_erreur(self):
         self.port.close()
         self.port.close()
+
+    def test_flush_rend_vrai_quand_tout_est_parti(self):
+        self.port.write(b"redemarre\r\n")
+        self.assertEqual(os.read(self.maitre, 100), b"redemarre\r\n")  # l'autre cote a tout lu
+        self.assertTrue(self.port.flush(delai=0.5))
+
+    def test_flush_n_attend_pas_sans_fin(self):
+        # Personne ne lit de l'autre cote : la file ne se vide pas.
+        self.port.write(b"x" * 64)
+        debut = time.monotonic()
+        self.assertFalse(self.port.flush(delai=0.2))
+        self.assertLess(time.monotonic() - debut, 1.0)
+
+    def test_close_vide_la_sortie_avant_de_fermer(self):
+        appels = []
+        vrai_flush = self.port.flush
+        self.port.flush = lambda: appels.append("flush") or vrai_flush(delai=0.2)
+        self.port.close()
+        self.assertEqual(appels, ["flush"])
+        self.assertIsNone(self.port.fd)
 
     def test_port_inexistant_leve_erreur_serie(self):
         with self.assertRaises(serie.ErreurSerie):
