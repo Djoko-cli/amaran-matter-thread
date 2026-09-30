@@ -26,7 +26,7 @@ Hors périmètre (v1) :
 - app compagnon, mode JSON, mise à jour à distance (OTA) ;
 - relais par le Mac (API WebSocket d'amaran Desktop) ;
 - la réparation d'amaran Desktop sur macOS 27 : tâche à part (8.1) ;
-- publication du dépôt et traduction anglaise.
+- traduction anglaise (le dépôt, lui, est publié : voir 10).
 
 ## 2. Décisions
 
@@ -51,7 +51,8 @@ Hors périmètre (v1) :
    sur le Halo.
 8. **Luminosité linéaire, sans gamma** : 50 % dans Maison = 50,0 % dans
    amaran Desktop. C'est l'inverse du Halo (gamma 2), assumé pour le miroir.
-9. **Dépôt `~/Dev/amaran`, hors iCloud** ; git local, doc en français.
+9. **Dépôt `~/Dev/amaran`, hors iCloud**, public sur GitHub
+   (`Djoko-cli/amaran-60d-matter`) ; doc en français.
 
 ## 3. Faits établis
 
@@ -65,7 +66,6 @@ en 12.
 |---|---|---|
 | nom dans amaran Desktop | amaran COB 60d #1 | amaran COB 60d #2 |
 | adresse Mesh | `0x0002` | `0x0004` |
-| fin de MAC | `4B:17:2E` | `9D:62:A8` |
 | versions | contrôle 1.4, BLE 1.69 | idem |
 
 - Groupe « All » : `0xC000`.
@@ -608,7 +608,8 @@ Sur la carte :
   n'ouvrent jamais de port série.
 
 **Dépôt**
-- `~/Dev/amaran`, git local sans remote, commits et doc en français.
+- `~/Dev/amaran`, dépôt public sur GitHub (`Djoko-cli/amaran-60d-matter`, remote
+  `origin`), commits et doc en français.
 - `telink` est repris d'amaran-bridge (MIT) : en-tête de licence conservé,
   mention dans le README.
 - `.gitignore` : `build/`, `sdkconfig`, `managed_components/`, journaux, tout

@@ -2,7 +2,8 @@
 
 Règles :
 - Djoko est présent dès qu'on émet vers les lampes (`lampe …`, `groupe …`).
-- Le port série est toujours donné explicitement : les écrans LG apparaissent eux aussi en `usbmodem`. La C6 est celle marquée `303A:1001` dans `python -m serial.tools.list_ports -v`.
+- Le port série est toujours donné explicitement : les écrans LG apparaissent eux aussi en `usbmodem`.
+- `303A:1001` n'identifie pas la carte : deux C6 branchées sur le banc l'avaient. On reconnaît la C6 à son numéro de série USB (le champ `SER=` de la ligne `hwid` de `python -m serial.tools.list_ports -v`, à lancer dans l'environnement ESP-IDF, qui fournit pyserial). Ce numéro n'est écrit nulle part dans le dépôt.
 - Les sous-agents ne flashent pas et n'ouvrent pas de port série.
 - Sessions : `python3 outils/console.py --port <port> …` (le Python du système suffit : les outils n'utilisent plus pyserial). Le journal part dans `logs/`, ignoré par git.
 - Ouvrir le port ne redémarre pas la carte : les outils baissent DTR et RTS en un seul appel. Un journal de démarrage à l'ouverture trahirait une régression.
@@ -89,15 +90,15 @@ Carte : ESP32-C6 dédiée, firmware `ecoute` (commit fc18fae), adresse Mesh `0x7
 | essai | date | résultat | remarques |
 |---|---|---|---|
 | R1 | 30/09/2026 | réussi | IV Index **0** : les balises des lampes l'annoncent (drapeaux 0), la pile l'avait déjà. Autotest 0 échec sur la carte, empreintes identiques. `lampe 1 releve` → `etat lampe 1 (0x0002 -> 0x0001) : arret, intensite 930 (93,0 %), mode CCT`, et la lampe était bien éteinte. Contrôle de la recherche : IV forcé à 2 → `NetMIC faux` et indice à la console → `mesh iv cherche` rend 0 → remis à 0. |
-| R2 | 30/09/2026 | réussi | 20 demandes sur 20 (10 par lampe). Chaque réponse arrive 1 à 3 fois : ce sont les copies réseau de la lampe. |
+| R2 | 30/09/2026 | réussi | 20 demandes sur 20 (10 par lampe). Chaque réponse arrive 1 ou 2 fois (16 fois deux copies, 4 fois une), à 5 à 58 ms d'écart : très probablement les copies réseau de la lampe (le numéro de séquence n'est pas journalisé, donc non vérifié). |
 | R3 | 30/09/2026 | réussi | Séquence vue par Djoko, conforme aux états relus. Boucle de 10 cycles `on`/`niveau`/`off` : 31 ordres sur 31 confirmés par lampe. `niveau` sur une lampe éteinte : retenu, sans l'allumer ; `on` rallume **directement** au niveau retenu (30 %). |
-| R4 | 30/09/2026 | fait | **Aucun message spontané** : ni la molette, ni son bouton, ni une coupure. Lampe éteinte par l'app : molette et bouton (+20 %) **sans effet**. Coupée puis remise au bouton d'alimentation, la lampe revient **allumée vers 40 %** (41 % et 40 %), quel que soit le niveau d'avant. amaran Desktop redécouvre alors la lampe (voir PROTOCOLE.md). |
+| R4 | 30/09/2026 | fait | **Aucun message spontané** : ni la molette, ni son bouton, ni une coupure. Lampe éteinte par l'app : molette et bouton (+20 %) **sans effet**. Coupée puis remise au bouton d'alimentation, la lampe revient **allumée vers 40 %** (41 % et 40 %). Deux cas seulement, une fois par lampe, chacune éteinte avant la coupure (à 93 % et à 6 % de niveau retenu) : une lampe allumée avant la coupure n'a pas été essayée. amaran Desktop redécouvre alors la lampe (voir PROTOCOLE.md). |
 | R5 | 30/09/2026 | réussi | 10 demandes sur 10 au groupe « All » : les deux lampes répondent à chaque fois, à `0x0001`. |
-| R6 | 30/09/2026 | fait | App → pont : chaque ordre d'amaran Desktop (`0x8C`, `0x8F`) est capté à l'émission ; la lampe n'y répond pas. Pont → app : l'affichage d'amaran Desktop **ne suit pas** nos ordres, même relus. L'app a fonctionné normalement. |
+| R6 | 30/09/2026 | fait | App → pont : les ordres d'amaran Desktop (`0x8C`, `0x8F`) sont captés à l'émission ; la lampe n'y répond pas. Ceux qu'on capte sont ceux adressés à la lampe 1 : la lampe 2 servait de proxy à l'app, et rien n'est passé en radio à son adresse (voir PROTOCOLE.md). Pont → app : l'affichage d'amaran Desktop **ne suit pas** nos ordres, même relus. L'app a fonctionné normalement. |
 
 Marges (`taches`, après tous les essais) : pile libre au plus bas `mesh_adv_task` 1 052 o, `amaran_tx` 1 924 o, `console_repl` 2 092 o, `journal` 2 168 o, `nimble_host` 2 460 o ; tas libre au plus bas 330 Ko. Aucune tâche sous 512 o.
 
-Compteurs en fin de banc : 750 messages vus, 750 déchiffrés, 0 NetMIC faux ; 190 messages émis, 0 refusé ; 0 événement perdu. Le plancher de séquence en NVS est toujours resté devant la séquence.
+Compteurs en fin de banc : 750 messages vus, 750 déchiffrés, 0 NetMIC faux ; 190 messages émis, 0 refusé ; 0 événement perdu. Le plancher de séquence en NVS n'est jamais resté derrière la séquence (il lui est égal juste après un démarrage).
 
 Incidents du banc, corrigés :
 - ouvrir le port redémarrait la carte (pyserial baissait DTR puis RTS), et la première commande se perdait : commit d6fad12 ;

@@ -17,7 +17,7 @@ et lit leur état.** Le design complet est dans
 
 | Phase | Contenu | État |
 |---|---|---|
-| P0 | Reconnaissance. Un firmware d'écoute rejoint le réseau des lampes et vérifie : IV Index, réponses captées, ordres, molette, groupe, cohabitation avec amaran Desktop | faite (30/09/2026) : 62 ordres sur 62 confirmés par relecture, toutes les demandes d'état ont reçu leur réponse ; les lampes n'envoient jamais rien d'elles-mêmes |
+| P0 | Reconnaissance. Un firmware d'écoute rejoint le réseau des lampes et vérifie : IV Index, réponses captées, ordres, molette, groupe, cohabitation avec amaran Desktop | faite (30/09/2026) : 62 ordres sur 62 confirmés par relecture, toutes les demandes d'état ont reçu leur réponse ; aucun état spontané (ni molette, ni bouton, ni coupure) |
 | P1 | Matter sur la même carte, et banc de la radio partagée entre Thread et Bluetooth : une ou deux C6 | à faire |
 | P2 | Produit : voyant, bouton, console, fiche produit ; bancs, puis endurance 24 h | à faire |
 
@@ -69,11 +69,22 @@ Pour annuler, supprimer le fichier que le script indique.
 ## Crédits
 
 Le protocole des lampes a été décodé par deux projets libres, sous licence
-MIT. Ce pont reprend leur code d'encodage des trames, avec leur mention de
-licence :
+MIT :
 - [amaran-bridge](https://github.com/kevinschaich/amaran-bridge), de Kevin
-  Schaich ;
+  Schaich. Ce pont en reprend du code : l'encodage des trames Telink
+  (`components/telink/telink.c`) et la séquence d'adhésion au réseau
+  (`components/mesh/mesh_amaran.c`). Chacun de ces fichiers garde, en tête, la
+  mention de licence MIT de l'auteur ;
 - [amaran-BLE-control](https://github.com/wesbos/amaran-BLE-control), de Wes
-  Bos.
+  Bos. Ce pont lui doit la connaissance du protocole (l'opcode `0x26`), mais
+  n'en reprend aucun code.
+
+Le script de réparation d'amaran Desktop
+([outils/polices_amaran_desktop.py](outils/polices_amaran_desktop.py)) reprend
+de [matplotlib](https://matplotlib.org) 3.10.8 (`font_manager.py`) la fonction
+`ttfFontProperty` et la table `_weight_regexes`, sous la
+[licence de matplotlib](https://matplotlib.org/stable/project/license.html)
+(Copyright (c) 2012- Matplotlib Development Team). Sa mention est en tête du
+script.
 
 Projet personnel, sans lien avec Aputure. Il n'ouvre ni ne modifie les lampes.

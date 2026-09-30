@@ -1721,6 +1721,8 @@ git commit -m "$(printf 'Ranger les reglages du pont en NVS, cles sous empreinte
 
 ### Task 7: Adhésion au réseau et file d'émission
 
+> **Note (30/09/2026) : le code du dépôt fait foi.** Les blocs de code des tâches 7 à 10 ont été dépassés par les revues. Par exemple `SEQ_LIMITE` vaut `0x700000` dans `components/mesh/mesh_amaran.c`, et non `0xF00000` comme dans le bloc ci-dessous. Ces blocs restent la trace de la démarche, pas la référence.
+
 **Files:**
 - Create: `components/mesh/include/mesh_amaran.h`, `components/mesh/mesh_amaran.c`
 - Create: `components/mesh/hote_ble.h`, `components/mesh/hote_ble.c`
@@ -2233,6 +2235,8 @@ git commit -m "$(printf 'Entrer dans le reseau des lampes et emettre au bon ryth
 
 ### Task 8: Crochet de réception (`--wrap`) et déchiffrement
 
+> Voir la note de la tâche 7 : le code du dépôt fait foi, pas les blocs de cette tâche.
+
 **Files:**
 - Modify: `components/mesh/crochet.h`, `components/mesh/CMakeLists.txt`
 - Replace: `components/mesh/crochet.c`
@@ -2519,6 +2523,8 @@ git commit -m "$(printf "Capter les etats des lampes par un crochet --wrap sans 
 
 ### Task 9: Recherche d'IV Index et autotest
 
+> Voir la note de la tâche 7 : le code du dépôt fait foi, pas les blocs de cette tâche.
+
 **Files:**
 - Create: `components/mesh/autotest.c`
 - Modify: `components/mesh/crochet.h`, `components/mesh/crochet.c`, `components/mesh/include/mesh_amaran.h`, `components/mesh/mesh_amaran.c`, `components/mesh/CMakeLists.txt`
@@ -2677,6 +2683,8 @@ git commit -m "$(printf "Chercher l'IV Index et verifier le dechiffrement sur le
 ---
 
 ### Task 10: Console et journal du firmware `ecoute`
+
+> Voir la note de la tâche 7 : le code du dépôt fait foi, pas les blocs de cette tâche.
 
 **Files:**
 - Create: `ecoute/main/console_ecoute.h`, `ecoute/main/console_ecoute.c`

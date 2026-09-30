@@ -1,4 +1,22 @@
 #!/usr/bin/env python3
+#
+# Derive de matplotlib 3.10.8 (lib/matplotlib/font_manager.py) :
+#   - propriete() reproduit ttfFontProperty() ;
+#   - WEIGHT_REGEXES est la table _weight_regexes ;
+#   - le controle de relecture de main() (FontEntry, decode) reprend la forme de
+#     FontEntry et de _json_decode.
+# Le lecteur TrueType minimal (lire_tables, lire_noms, nom), qui remplace FreeType
+# (FT2Font), et le reste du script sont ecrits pour ce projet.
+#
+# Matplotlib License (fondee sur la licence PSF)
+# Copyright (c) 2012- Matplotlib Development Team; All Rights Reserved
+# https://matplotlib.org/stable/project/license.html
+#
+# Resume des changements par rapport a matplotlib (la licence le demande) : code
+# reecrit en Python autonome, sans matplotlib ni FreeType ; les proprietes sont
+# lues dans les tables name, OS/2 et head du fichier TrueType ; ps_font_info
+# (Type 1) et les avertissements sont retires ; le resultat est le cache
+# fontlist-v390.json.
 """Repare amaran Desktop sur macOS 27 : pose le cache de polices de matplotlib.
 
 Au demarrage, amaran Desktop (matplotlib 3.10.8, embarque par Nuitka) construit
