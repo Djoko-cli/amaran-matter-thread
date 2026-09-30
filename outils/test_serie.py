@@ -2,9 +2,14 @@
 import contextlib
 import io
 import os
+import struct
 import tempfile
+import termios
+import threading
 import time
+import types
 import unittest
+from unittest import mock
 
 import console
 import serie
@@ -34,6 +39,17 @@ class TestConsole(unittest.TestCase):
         console.executer(PortFactice(), ["mesh cles " + "AB" * 16 + " " + "CD" * 16], lignes.append,
                          apres_commande=0, avant=0)
         self.assertEqual(lignes, ["> mesh cles <cle masquee> <cle masquee>"])
+
+    def test_executer_masque_une_ligne_recue(self):
+        # L'echo d'une ligne `mesh cles ...` revient de la carte : lire_pendant
+        # doit la masquer avant qu'elle n'atteigne l'ecran et le journal.
+        lignes = []
+        recu = "amaran> mesh cles " + "AB" * 16 + " " + "CD" * 16
+        console.executer(PortFactice([recu]), ["@0.1"], lignes.append, apres_commande=0, avant=0)
+        texte = "\n".join(lignes)
+        self.assertNotIn("AB" * 16, texte)
+        self.assertNotIn("CD" * 16, texte)
+        self.assertEqual(lignes, ["amaran> mesh cles <cle masquee> <cle masquee>"])
 
     def test_port_inaccessible_rend_1(self):
         dossier = tempfile.mkdtemp()
@@ -74,6 +90,57 @@ class TestPortSerie(unittest.TestCase):
         self.port.write(b"lampe 1 releve\r\n")
         self.assertEqual(os.read(self.maitre, 100), b"lampe 1 releve\r\n")
 
+    def vider_le_maitre(self):
+        """Lit tout ce qui attend de l'autre cote, pour que close() ne patiente pas dans flush()."""
+        os.set_blocking(self.maitre, False)
+        try:
+            while os.read(self.maitre, 65536):
+                pass
+        except BlockingIOError:
+            pass
+
+    def test_write_leve_erreur_serie_si_la_carte_ne_lit_plus(self):
+        # Personne ne lit de l'autre cote : le pseudo-terminal se remplit (1 Ko sur macOS).
+        self.port.delai_ecriture = 0.3
+        debut = time.monotonic()
+        with self.assertRaises(serie.ErreurSerie) as cm:
+            self.port.write(b"x" * 100000)
+        self.assertIn("la carte ne lit plus", str(cm.exception))
+        self.assertGreaterEqual(time.monotonic() - debut, 0.3)  # il a bien attendu delai_ecriture
+        self.assertLess(time.monotonic() - debut, 2.0)  # et n'a pas attendu sans fin
+        self.vider_le_maitre()
+
+    def test_write_continue_tant_que_la_carte_lit(self):
+        # Le delai court depuis le dernier octet parti, pas depuis le debut de l'appel :
+        # un lecteur lent (60 ms entre deux lectures) ne fait pas abandonner l'ecriture,
+        # meme si le total (8 Ko a 1 Ko par lecture) depasse largement delai_ecriture.
+        self.port.delai_ecriture = 0.25
+        os.set_blocking(self.maitre, False)
+        recu = []
+        fini = threading.Event()
+
+        def lecteur():
+            while not fini.is_set():
+                try:
+                    recu.append(os.read(self.maitre, 65536))
+                except BlockingIOError:
+                    pass
+                time.sleep(0.06)
+
+        fil = threading.Thread(target=lecteur)
+        fil.start()
+        try:
+            debut = time.monotonic()
+            self.port.write(b"y" * 8192)
+            duree = time.monotonic() - debut
+            time.sleep(0.15)  # laisser le lecteur prendre la fin
+        finally:
+            fini.set()
+            fil.join()
+        self.assertGreater(duree, 0.25)  # sans progres, delai_ecriture aurait deja tranche
+        self.vider_le_maitre()
+        self.assertEqual(sum(len(r) for r in recu), 8192)
+
     def test_reset_input_buffer_oublie_le_tampon(self):
         os.write(self.maitre, b"vieux\r\nreste")
         self.assertEqual(self.port.readline(), b"vieux\r\n")
@@ -107,6 +174,30 @@ class TestPortSerie(unittest.TestCase):
     def test_port_inexistant_leve_erreur_serie(self):
         with self.assertRaises(serie.ErreurSerie):
             serie.ouvrir_port("/dev/amaran-port-inexistant")
+
+
+class TestOuvrirPort(unittest.TestCase):
+    """DTR et RTS doivent tomber ensemble : RTS=1 avec DTR=0, meme un instant, redemarre le C6."""
+
+    def test_un_seul_tiocmset_a_zero_jamais_bis_ni_bic(self):
+        maitre, esclave = os.openpty()  # un pseudo-terminal : pas de carte
+        self.addCleanup(os.close, maitre)
+        self.addCleanup(os.close, esclave)
+        appels = []
+
+        def faux_ioctl(fd, requete, arg=0, *reste):
+            appels.append((requete, arg))
+            return arg  # TIOCOUTQ (vidange a la fermeture) : le tampon d'octets nuls dit "file vide"
+
+        faux_fcntl = types.SimpleNamespace(ioctl=faux_ioctl)
+        with mock.patch.object(serie, "fcntl", faux_fcntl):
+            serie.ouvrir_port(os.ttyname(esclave)).close()
+        requetes = [requete for requete, _ in appels]
+        self.assertEqual(requetes.count(termios.TIOCMSET), 1)
+        self.assertNotIn(termios.TIOCMBIS, requetes)  # mettre DTR ou RTS a 1 seul
+        self.assertNotIn(termios.TIOCMBIC, requetes)  # ou en baisser un seul
+        arg = [a for r, a in appels if r == termios.TIOCMSET][0]
+        self.assertEqual(struct.unpack("I", arg)[0], 0)  # tous les signaux a 0 d'un coup
 
 
 if __name__ == "__main__":

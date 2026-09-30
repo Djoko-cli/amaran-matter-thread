@@ -9,6 +9,14 @@ Lit la base locale d'amaran Desktop, puis envoie par la console du pont :
 Les cles ne sont jamais affichees : seulement leurs empreintes (8 premiers
 chiffres hexa du SHA-256), les memes que la commande `mesh` du pont.
 
+Trois controles, pour ne jamais confier les cles a un autre appareil ni les
+perdre en route :
+    - avant les cles, la commande `mesh` doit rendre une ligne `mesh pret :`
+      (sinon ce port n'est pas le pont, et rien n'est envoye) ;
+    - apres `mesh cles`, les empreintes rendues par le pont doivent etre les
+      notres (sinon erreur, et pas de redemarrage) ;
+    - apres `redemarre`, le pont doit ecrire `redemarrage` (sinon avertissement).
+
     python outils/cles_amaran.py                    # montre ce qui serait envoye
     python outils/cles_amaran.py --port /dev/cu.usbmodem1101
 """
@@ -16,6 +24,7 @@ import argparse
 import glob
 import hashlib
 import os
+import re
 import sqlite3
 import sys
 import time
@@ -28,6 +37,8 @@ MOTIFS_BASE = (
 )
 LAMPES_MAX = 2
 INVITE = "amaran>"
+# Reponse du pont a `mesh cles` : ok cles <EMPREINTE RESEAU> <EMPREINTE APPLICATION> (...)
+REPONSE_CLES = re.compile(r"ok cles ([0-9A-Fa-f]{8}) ([0-9A-Fa-f]{8})(?:\s|$)")
 
 
 class ErreurCles(Exception):
@@ -108,8 +119,17 @@ def commandes(r):
     return lignes
 
 
+def texte_de_ligne(brute):
+    """Une ligne du pont, sans l'invite qui la precede parfois."""
+    return brute.decode(errors="replace").split(INVITE)[-1].strip()
+
+
 def envoyer(port, lignes, attente=3.0, sortie=print):
-    """Envoie chaque ligne et attend la reponse `ok ...` ou `erreur ...` du pont."""
+    """Envoie chaque ligne et attend la reponse `ok ...` ou `erreur ...` du pont.
+
+    Rend les reponses `ok ...`, masquees, dans l'ordre des lignes.
+    """
+    reponses = []
     for ligne in lignes:
         port.write((ligne + "\r\n").encode())
         fin = time.monotonic() + attente
@@ -119,12 +139,71 @@ def envoyer(port, lignes, attente=3.0, sortie=print):
             brute = port.readline()
             if not brute:
                 continue
-            texte = brute.decode(errors="replace").split(INVITE)[-1].strip()
+            texte = texte_de_ligne(brute)
             if texte.startswith("ok"):
                 sortie("pont : " + masquer(texte))
+                reponses.append(masquer(texte))
                 break
             if texte.startswith("erreur"):
                 raise ErreurCles("pont : " + masquer(texte))
+    return reponses
+
+
+def verifier_pont(port, attente=3.0):
+    """Envoie `mesh` et exige une ligne `mesh pret :` : sinon ce port n'est pas le pont.
+
+    A appeler avant tout envoi de cles : sur un port qui ne repond pas comme le
+    pont, seule la commande `mesh` est ecrite.
+    """
+    port.write(b"mesh\r\n")
+    fin = time.monotonic() + attente
+    while time.monotonic() <= fin:
+        brute = port.readline()
+        if brute and texte_de_ligne(brute).startswith("mesh pret :"):
+            return
+    raise ErreurCles("ce port n'est pas le pont : pas de ligne \"mesh pret :\" en reponse a la commande "
+                     "mesh (ou il demarre encore). Aucune cle n'a ete envoyee.")
+
+
+def verifier_empreintes(reponse, r):
+    """Compare les empreintes de `ok cles <EMP> <EMP>` a celles des cles envoyees."""
+    attendues = (empreinte(r["reseau"]), empreinte(r["application"]))
+    m = REPONSE_CLES.match(reponse)
+    if not m:
+        raise ErreurCles("reponse inattendue du pont a mesh cles : %s" % masquer(reponse))
+    rendues = (m.group(1).upper(), m.group(2).upper())
+    if rendues != attendues:
+        raise ErreurCles("le pont a enregistre d'autres cles que celles envoyees (empreintes rendues %s %s, "
+                         "attendues %s %s) : ne pas le redemarrer, relancer l'outil"
+                         % (rendues + attendues))
+
+
+def attendre_redemarrage(port, attente=3.0):
+    """Lit jusqu'a la ligne `redemarrage` que le pont ecrit avant de repartir. Faux si elle ne vient pas."""
+    fin = time.monotonic() + attente
+    while time.monotonic() <= fin:
+        try:
+            brute = port.readline()
+        except (ErreurSerie, OSError):
+            return False  # le port a disparu : la carte repart peut-etre, mais rien ne le confirme
+        if brute and texte_de_ligne(brute).startswith("redemarrage"):
+            return True
+    return False
+
+
+def charger(port, r, attente=3.0, sortie=print):
+    """Charge les cles et les lampes de r dans le pont, puis le redemarre."""
+    verifier_pont(port, attente)
+    cles, *lampes = commandes(r)  # `mesh cles` d'abord, puis une ligne par lampe
+    verifier_empreintes(envoyer(port, [cles], attente=attente, sortie=sortie)[0], r)
+    sortie("empreintes du pont identiques aux notres")
+    envoyer(port, lampes, attente=attente, sortie=sortie)
+    port.write(b"redemarre\r\n")
+    if attendre_redemarrage(port, attente):
+        sortie("pont redemarre avec les nouvelles cles")
+    else:
+        sortie("avertissement : pas de ligne \"redemarrage\" recue : verifier avec la commande mesh "
+               "que le pont a redemarre")
 
 
 def main(argv=None, sortie=print):
@@ -146,9 +225,7 @@ def main(argv=None, sortie=print):
         try:
             time.sleep(0.3)
             port.reset_input_buffer()
-            envoyer(port, lignes, sortie=sortie)
-            port.write(b"redemarre\r\n")
-            sortie("pont redemarre avec les nouvelles cles")
+            charger(port, r, sortie=sortie)
         finally:
             port.close()
         return 0

@@ -12,6 +12,7 @@ import termios
 import time
 
 HEXA_CLE = re.compile(r"[0-9A-Fa-f]{32}")
+DELAI_ECRITURE = 2.0  # sans aucun octet parti au-dela : la carte ne lit plus
 
 
 class ErreurSerie(Exception):
@@ -27,19 +28,28 @@ def masquer(texte):
 class PortSerie:
     """Port serie deja ouvert : write(), readline(), reset_input_buffer(), close()."""
 
-    def __init__(self, fd, delai):
+    def __init__(self, fd, delai, delai_ecriture=DELAI_ECRITURE):
         self.fd = fd
         self.delai = delai
+        self.delai_ecriture = delai_ecriture
         self._tampon = b""
 
     def write(self, octets):
+        """Ecrit tout, ou leve ErreurSerie si rien ne part pendant delai_ecriture secondes."""
+        limite = time.monotonic() + self.delai_ecriture
         while octets:
             try:
                 n = os.write(self.fd, octets)
             except BlockingIOError:
-                select.select([], [self.fd], [], self.delai)
+                n = 0
+            if n:
+                octets = octets[n:]
+                limite = time.monotonic() + self.delai_ecriture  # la carte lit : on repart pour un tour
                 continue
-            octets = octets[n:]
+            reste = limite - time.monotonic()
+            if reste <= 0:
+                raise ErreurSerie("la carte ne lit plus")
+            select.select([], [self.fd], [], min(self.delai, reste))
 
     def readline(self):
         """Une ligne avec son \\n, sinon ce qui est arrive pendant delai secondes."""

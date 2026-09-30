@@ -139,13 +139,21 @@ def main():
     if len(sys.argv) not in (1, 3):
         sys.exit("usage : polices_amaran_desktop.py [MPL_DATA SORTIE.json]")
     mpl_data, sortie = sys.argv[1:] if len(sys.argv) == 3 else (MPL_DATA, os.path.expanduser(SORTIE))
-    os.makedirs(os.path.dirname(os.path.abspath(sortie)), exist_ok=True)
     ttflist = []
     for sous in ("ttf",):
         dossier = os.path.join(mpl_data, "fonts", sous)
+        if not os.path.isdir(dossier):
+            sys.exit("erreur : dossier des polices introuvable : %s\n"
+                     "amaran Desktop est-il installe ? Sinon, donner MPL_DATA et SORTIE.json en arguments "
+                     "(voir l'usage en tete de ce fichier)." % dossier)
         for f in sorted(os.listdir(dossier)):
-            if f.lower().endswith((".ttf", ".otf", ".ttc")):
+            if f.lower().endswith(".ttf"):  # lire_tables ne lit que le TrueType : ni .otf ni .ttc
                 ttflist.append(propriete(os.path.join(dossier, f), "fonts/%s/%s" % (sous, f)))
+    if not ttflist:
+        sys.exit("erreur : aucune police .ttf dans %s" % os.path.join(mpl_data, "fonts", "ttf"))
+    # Rien n'est cree avant d'avoir trouve les polices : sans l'application, ce dossier reste intact.
+    remplace = os.path.exists(sortie)
+    os.makedirs(os.path.dirname(os.path.abspath(sortie)), exist_ok=True)
     fm = {
         "_version": 390,
         "_FontManager__default_weight": "normal",
@@ -180,7 +188,8 @@ def main():
     for e in relu["ttflist"]:
         print("%-38s %-24s %-8s %4d %s" % (e.fname, e.name, e.style, e.weight, e.stretch))
     print("%d polices ; relecture OK" % len(relu["ttflist"]))
-    print("cache ecrit : %s" % os.path.abspath(sortie))
+    print("cache ecrit : %s (%s)" % (os.path.abspath(sortie),
+                                      "il remplace le cache qui existait deja" if remplace else "il n'y en avait pas"))
 
 
 if __name__ == "__main__":

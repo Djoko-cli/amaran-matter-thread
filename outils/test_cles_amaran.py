@@ -10,6 +10,7 @@ import unittest
 
 import cles_amaran as ca
 from port_factice import PortFactice
+from serie import ErreurSerie
 
 NET = "00112233445566778899aabbccddeeff"
 APP = "ffeeddccbbaa99887766554433221100"
@@ -156,6 +157,120 @@ class TestEnvoi(unittest.TestCase):
         texte = str(cm.exception)
         self.assertNotIn(NET.lower(), texte.lower())
         self.assertNotIn(APP.lower(), texte.lower())
+
+
+class TestReponsesRendues(unittest.TestCase):
+    def test_envoyer_rend_les_reponses_ok_masquees(self):
+        port = PortFactice(["ok cles A8FAED6A 811407F1 " + NET.upper(), "amaran> ok lampe 1 0x0002 Lampe A"])
+        reponses = ca.envoyer(port, ["mesh cles X Y", "mesh lampe 1 0x0002 M Lampe A"], attente=1,
+                              sortie=lambda t: None)
+        self.assertEqual(reponses, ["ok cles A8FAED6A 811407F1 <cle masquee>", "ok lampe 1 0x0002 Lampe A"])
+
+
+class PortQuiSeFerme(PortFactice):
+    """Comme PortFactice, mais le port disparait (carte qui repart) quand il n'y a plus rien a lire."""
+
+    def readline(self):
+        if not self.reponses:
+            raise ErreurSerie("port ferme")
+        return super().readline()
+
+
+class TestChargement(unittest.TestCase):
+    """charger() : le port doit etre le pont, les empreintes rendues doivent etre les notres."""
+
+    def setUp(self):
+        self.r = ca.lire_reseau(base_factice(tempfile.mkdtemp()))
+        self.cles = "mesh cles %s %s" % (NET.upper(), APP.upper())
+        self.capture = []
+
+    def reponses(self, ok_cles="ok cles A8FAED6A 811407F1 (redemarrer pour les appliquer)",
+                 fin=("redemarre", "redemarrage")):
+        """Ce que dit le pont : etat (reponse a `mesh`), puis un `ok` par ligne, puis le redemarrage."""
+        return ["mesh", "mesh pret : oui", "cles : reseau A8FAED6A, application 811407F1", "amaran>",
+                self.cles, ok_cles,
+                "ok lampe 1 0x0002 Lampe A (redemarrer pour l'appliquer)",
+                "ok lampe 2 0x0004 Lampe B (redemarrer pour l'appliquer)"] + list(fin)
+
+    def charger(self, port, attente=1):
+        return ca.charger(port, self.r, attente=attente, sortie=self.capture.append)
+
+    def assert_aucune_cle(self, *textes):
+        tout = "\n".join(textes).lower()
+        self.assertNotIn(NET.lower(), tout)
+        self.assertNotIn(APP.lower(), tout)
+
+    def test_chargement_complet_dans_l_ordre(self):
+        port = PortFactice(self.reponses())
+        self.charger(port)
+        self.assertEqual(port.ecrit, [
+            "mesh\r\n",  # d'abord verifier le pont
+            self.cles + "\r\n",
+            "mesh lampe 1 0x0002 70:3E:97:00:00:01 Lampe A\r\n",
+            "mesh lampe 2 0x0004 70:3E:97:00:00:02 Lampe B\r\n",
+            "redemarre\r\n",
+        ])
+        self.assertIn("empreintes du pont identiques aux notres", self.capture)
+        self.assertEqual(self.capture[-1], "pont redemarre avec les nouvelles cles")
+        self.assert_aucune_cle(*self.capture)
+
+    def test_un_autre_appareil_ne_recoit_pas_les_cles(self):
+        # Un terminal quelconque : il ne rend jamais `mesh pret :`.
+        port = PortFactice(["$ ", "bash: mesh: command not found"])
+        with self.assertRaises(ca.ErreurCles) as cm:
+            self.charger(port, attente=0.3)
+        self.assertIn("n'est pas le pont", str(cm.exception))
+        self.assertEqual(port.ecrit, ["mesh\r\n"])  # seule la commande de controle est partie
+        self.assert_aucune_cle("".join(port.ecrit), str(cm.exception))
+
+    def test_port_muet_ne_recoit_pas_les_cles(self):
+        port = PortFactice([])
+        with self.assertRaises(ca.ErreurCles):
+            self.charger(port, attente=0.3)
+        self.assertEqual(port.ecrit, ["mesh\r\n"])
+
+    def test_le_pont_pas_pret_est_accepte(self):
+        # `mesh pret : non` (cles pas encore chargees) reste bien le pont.
+        reponses = self.reponses()
+        reponses[1] = "mesh pret : non"
+        port = PortFactice(reponses)
+        self.charger(port)
+        self.assertEqual(port.ecrit[1], self.cles + "\r\n")
+
+    def test_empreinte_reseau_differente_arrete_tout(self):
+        port = PortFactice(self.reponses(ok_cles="ok cles DEADBEEF 811407F1 (redemarrer pour les appliquer)"))
+        with self.assertRaises(ca.ErreurCles) as cm:
+            self.charger(port)
+        self.assertIn("DEADBEEF", str(cm.exception))
+        self.assertIn("A8FAED6A", str(cm.exception))  # l'empreinte attendue
+        # Ni les lampes ni le redemarrage : le pont garde ses cles d'avant en memoire.
+        self.assertEqual(port.ecrit, ["mesh\r\n", self.cles + "\r\n"])
+        self.assert_aucune_cle(str(cm.exception), *self.capture)
+
+    def test_empreinte_application_differente_arrete_tout(self):
+        port = PortFactice(self.reponses(ok_cles="ok cles A8FAED6A DEADBEEF (redemarrer pour les appliquer)"))
+        with self.assertRaises(ca.ErreurCles):
+            self.charger(port)
+        self.assertEqual(port.ecrit, ["mesh\r\n", self.cles + "\r\n"])
+
+    def test_reponse_sans_empreintes_arrete_tout(self):
+        port = PortFactice(self.reponses(ok_cles="ok cles (redemarrer pour les appliquer)"))
+        with self.assertRaises(ca.ErreurCles) as cm:
+            self.charger(port)
+        self.assertIn("inattendue", str(cm.exception))
+        self.assertEqual(port.ecrit, ["mesh\r\n", self.cles + "\r\n"])
+
+    def test_redemarrage_non_confirme_avertit(self):
+        port = PortFactice(self.reponses(fin=("redemarre",)))  # jamais de ligne `redemarrage`
+        self.charger(port, attente=0.3)
+        self.assertEqual(port.ecrit[-1], "redemarre\r\n")
+        self.assertTrue(self.capture[-1].startswith("avertissement"))
+        self.assertNotIn("pont redemarre avec les nouvelles cles", self.capture)
+
+    def test_port_qui_disparait_avant_la_confirmation_avertit(self):
+        port = PortQuiSeFerme(self.reponses(fin=("redemarre",)))
+        self.charger(port)  # pas d'exception : la carte a peut-etre bien redemarre
+        self.assertTrue(self.capture[-1].startswith("avertissement"))
 
 
 class TestValidationLampes(unittest.TestCase):
