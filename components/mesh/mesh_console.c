@@ -269,7 +269,7 @@ void mesh_console_evenement(const mesh_evenement_t *ev, bool etats) {
     case MESH_EV_IV_CHANGE: {
       const esp_err_t err = config_sauver_iv(ev->iv);
       if (err == ESP_OK) {
-        s_cfg->iv = ev->iv;
+        if (s_cfg) s_cfg->iv = ev->iv;
         printf("[%lld ms] IV Index 0x%08" PRIx32 " adopte et sauve\n", ms, ev->iv);
       } else {
         printf("[%lld ms] IV Index 0x%08" PRIx32 " adopte, mais non sauve (NVS : %s)\n", ms, ev->iv,

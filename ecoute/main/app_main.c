@@ -25,6 +25,9 @@ void app_main(void) {
     ESP_LOGE(TAG, "reglages illisibles (%s) : console seule", esp_err_to_name(err));
     cfg.cles_presentes = false;
   }
+  // La console d'abord : elle initialise la console mesh partagee, dont le
+  // journal se sert (mesh_console_init avant mesh_console_evenement).
+  console_demarrer(&cfg);
   if (cfg.cles_presentes) {
     err = hote_ble_demarrer();
     if (err == ESP_OK) err = mesh_demarrer(&cfg);
@@ -36,5 +39,4 @@ void app_main(void) {
   } else {
     ESP_LOGW(TAG, "cles absentes : lancer outils/cles_amaran.py");
   }
-  console_demarrer(&cfg);
 }

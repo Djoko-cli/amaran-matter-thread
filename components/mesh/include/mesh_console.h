@@ -12,7 +12,8 @@
 extern "C" {
 #endif
 
-// cfg reste la propriete de l'appelant (la console le lit ; l'IV y est mis a
+// A appeler avant toute autre fonction de ce module (mesh_console_evenement
+// compris). cfg reste la propriete de l'appelant (la console le lit ; l'IV y est mis a
 // jour). taches : les noms de taches que `taches` examine.
 void mesh_console_init(amaran_config_t *cfg, const char *const *taches, size_t nb_taches);
 // La commande `mesh` : etat sans argument ; cles, lampe, iv, adresse, oublie,
