@@ -38,6 +38,9 @@ static pont_ordre_cb_t s_ordre;
 static int64_t s_ordres_des_us;  // avant : valeurs posees par la pile au demarrage, pas des ordres
 static volatile bool s_ble_annonce;
 static volatile int s_role = OT_DEVICE_ROLE_DISABLED;
+// Fabriques, relues dans la tache CHIP (evenements, et apres start) : lues sans
+// le verrou de la pile depuis nos taches (spec 4.3).
+static volatile uint8_t s_fabriques;
 static volatile uint32_t s_abo_demandes, s_abo_plafonnes, s_abo_etablis, s_abo_termines;
 
 // --- Abonnements : intervalle maximal plafonne (lecon du Halo : apres un
@@ -106,11 +109,16 @@ static void rappel_evenement(const chip::DeviceLayer::ChipDeviceEvent *ev, intpt
       break;
     case DeviceEventType::kCommissioningComplete:
       ESP_LOGI(TAG, "mise en service terminee");
+      s_fabriques = chip::Server::GetInstance().GetFabricTable().FabricCount();
+      break;
+    case DeviceEventType::kFabricCommitted:
+      s_fabriques = chip::Server::GetInstance().GetFabricTable().FabricCount();
       break;
     case DeviceEventType::kFabricRemoved: {
       // Derniere fabrique retiree depuis Maison : la fenetre de mise en service
       // se rouvre (DNS-SD, 300 s), comme la bibliotheque Arduino du Halo le faisait.
-      if (chip::Server::GetInstance().GetFabricTable().FabricCount() != 0) break;
+      s_fabriques = chip::Server::GetInstance().GetFabricTable().FabricCount();
+      if (s_fabriques != 0) break;
       chip::CommissioningWindowManager &fenetre = chip::Server::GetInstance().GetCommissioningWindowManager();
       if (!fenetre.IsCommissioningWindowOpen()) {
         const CHIP_ERROR err = fenetre.OpenBasicCommissioningWindow(chip::System::Clock::Seconds16(300),
@@ -194,8 +202,10 @@ esp_err_t pont_demarrer(const amaran_config_t *cfg, pont_ordre_cb_t ordre) {
     snprintf(s_nom_lampe[i], sizeof(s_nom_lampe[i]), "%s", l->adresse ? l->nom : "lampe absente");
     cluster_t *pontee = cluster::get(ep, BridgedDeviceBasicInformation::Id);
     if (pontee) {
-      cluster::bridged_device_basic_information::attribute::create_node_label(pontee, s_nom_lampe[i],
-                                                                              strlen(s_nom_lampe[i]));
+      // Sans NONVOLATILE (create_node_label le mettrait en NVS, et ce premier nom
+      // resterait) : le nom de la base prime a chaque demarrage.
+      attribute::create(pontee, BridgedDeviceBasicInformation::Attributes::NodeLabel::Id, ATTRIBUTE_FLAG_WRITABLE,
+                        esp_matter_char_str(s_nom_lampe[i], strlen(s_nom_lampe[i])), 32);
     }
     s_ep_lampe[i] = endpoint::get_id(ep);
     // Les etats relus changent CurrentLevel souvent : ecriture en flash differee.
@@ -227,6 +237,7 @@ esp_err_t pont_demarrer(const amaran_config_t *cfg, pont_ordre_cb_t ordre) {
   {
     lock::ScopedChipStackLock verrou(portMAX_DELAY);
     chip::app::InteractionModelEngine::GetInstance()->RegisterReadHandlerAppCallback(&s_plafond);
+    s_fabriques = chip::Server::GetInstance().GetFabricTable().FabricCount();
   }
   // Un emplacement sans lampe n'est jamais joignable. Les autres partent
   // joignables (spec 6.5) et se calent au premier etat lu.
@@ -251,7 +262,7 @@ void pont_publier(int lampe, const lampe_etat_t *etat, bool joignable) {
   attribute::report(ep, LevelControl::Id, LevelControl::Attributes::CurrentLevel::Id, &v);
 }
 
-bool pont_appaire(void) { return chip::Server::GetInstance().GetFabricTable().FabricCount() > 0; }
+bool pont_appaire(void) { return s_fabriques > 0; }
 
 bool pont_ble_annonce(void) { return s_ble_annonce; }
 
