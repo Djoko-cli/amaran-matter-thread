@@ -103,3 +103,17 @@ Compteurs en fin de banc : 750 messages vus, 750 déchiffrés, 0 NetMIC faux ; 1
 Incidents du banc, corrigés :
 - ouvrir le port redémarrait la carte (pyserial baissait DTR puis RTS), et la première commande se perdait : commit d6fad12 ;
 - le `redemarre` final de `cles_amaran.py` se perdait à la fermeture du port : commit 3d63553.
+
+### Plan 2 : contrôle du firmware d'écoute (Tasks 2 à 4)
+
+30/09/2026, firmware `ecoute` du commit `00254ff`, sur la C6 du pont. La NVS du plan 1 est gardée : adresse `0x7F38`, IV Index 0. amaran Desktop est ouvert.
+- **Autotest** : 11 vérifications, 0 échec, dont la BeaconKey (8.2.6) et l'authentification de balise (8.4.3).
+- **Entrée dans le réseau sans balise « non provisionné »** : `mesh pret : oui` dès le démarrage. La séquence reprend au plancher sauvé (`0x000303`).
+- **Balises des lampes authentifiées** : 7 en 30 s, 0 fausse ; 30 sur l'ensemble du contrôle.
+- **R2 abrégé** : 10 réponses sur 10, une ligne chacune.
+  - 13 copies réseau écartées.
+  - 10 messages émis, 0 refus, 0 NetMIC faux.
+- **Coupure de la lampe 2** au bouton d'alimentation, puis remise :
+  - elle répond aussitôt, 3 fois sur 3 : le filtre des rejeux ne l'écarte pas, donc son compteur de séquence survit à la coupure ;
+  - elle est revenue **allumée à 6 %**, son niveau retenu, et non vers 40 % comme au banc R4.
+- **Marges** : pile libre la plus basse `console_repl` 1 932 o ; tas libre au plus bas 330 692 o.
