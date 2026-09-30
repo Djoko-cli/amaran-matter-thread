@@ -57,6 +57,7 @@ esp_err_t config_charger(amaran_config_t *c) {
     if (err == ESP_OK) err = nvs_set_u16(h, "adresse", c->adresse);
   }
   if (nvs_get_u32(h, "plancher", &c->plancher_seq) != ESP_OK) c->plancher_seq = 0;
+  if (nvs_get_u32(h, "releve", &c->releve_ms) != ESP_OK) c->releve_ms = 0;
   for (uint8_t i = 0; i < AMARAN_LAMPES_MAX; i++) {
     if (!lire_blob(h, NOMS_LAMPES[i], &c->lampes[i], sizeof(amaran_lampe_t))) {
       memset(&c->lampes[i], 0, sizeof(amaran_lampe_t));
@@ -109,6 +110,13 @@ esp_err_t config_sauver_plancher(uint32_t plancher) {
   esp_err_t err = ouvrir(&h);
   if (err != ESP_OK) return err;
   return fermer(h, nvs_set_u32(h, "plancher", plancher));
+}
+
+esp_err_t config_sauver_releve(uint32_t releve_ms) {
+  nvs_handle_t h;
+  esp_err_t err = ouvrir(&h);
+  if (err != ESP_OK) return err;
+  return fermer(h, nvs_set_u32(h, "releve", releve_ms));
 }
 
 esp_err_t config_oublier_cles(void) {

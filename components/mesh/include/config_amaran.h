@@ -30,6 +30,7 @@ typedef struct {
   uint32_t iv;            // IV Index de depart
   uint16_t adresse;       // adresse Mesh de l'ESP32
   uint32_t plancher_seq;  // la sequence repart de la au demarrage
+  uint32_t releve_ms;     // periode de relecture des lampes (pont) ; 0 = celle par defaut
   uint8_t nb_lampes;
   amaran_lampe_t lampes[AMARAN_LAMPES_MAX];
 } amaran_config_t;
@@ -42,6 +43,8 @@ esp_err_t config_sauver_iv(uint32_t iv);
 // Nouvelle adresse source : le plancher de sequence repart de 0 si l'adresse change.
 esp_err_t config_sauver_adresse(uint16_t adresse);
 esp_err_t config_sauver_plancher(uint32_t plancher);
+// Periode de relecture des lampes, en ms (commande `mesh releve` du pont).
+esp_err_t config_sauver_releve(uint32_t releve_ms);
 // Efface les cles et les lampes ; garde adresse, plancher et IV Index.
 esp_err_t config_oublier_cles(void);
 // 8 premiers chiffres hexa (majuscules) du SHA-256 de la cle, et un NUL.

@@ -1,17 +1,20 @@
 // Firmware du pont (plan 2) : Matter sur Thread vers Maison, Bluetooth Mesh vers
 // les deux amaran 60d. Ordre de demarrage : spec 6.5 et 6.6.
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "nvs_flash.h"
 
 #include "config_amaran.h"
+#include "console_pont.h"
+#include "mesh_amaran.h"
 #include "pont_matter.h"
+#include "tache_lampes.h"
 
 static const char *TAG = "pont";
 
-// Provisoire : la tache lampes (Task 7) recevra ces ordres.
 static void ordre_matter(int lampe, const bool *marche, const uint16_t *intensite) {
-  ESP_LOGI(TAG, "ordre Matter, lampe %d : marche %d, intensite %d", lampe + 1, marche ? (int)*marche : -1,
-           intensite ? (int)*intensite : -1);
+  tache_lampes_ordre(lampe, marche, intensite, true);
 }
 
 extern "C" void app_main(void) {
@@ -25,10 +28,25 @@ extern "C" void app_main(void) {
   static amaran_config_t cfg;
   err = config_charger(&cfg);
   if (err != ESP_OK) {
-    // Pas de boucle de redemarrage : on demarre sans Bluetooth Mesh.
+    // Pas de boucle de redemarrage : la console reste la pour diagnostiquer.
     ESP_LOGE(TAG, "reglages illisibles (%s) : sans Bluetooth Mesh", esp_err_to_name(err));
     cfg.cles_presentes = false;
   }
+  console_pont_demarrer(&cfg);
+  ESP_ERROR_CHECK(tache_lampes_demarrer(&cfg));
   err = pont_demarrer(&cfg, ordre_matter);
-  if (err != ESP_OK) ESP_LOGE(TAG, "Matter non demarre : %s", esp_err_to_name(err));
+  if (err != ESP_OK) {
+    ESP_LOGE(TAG, "Matter non demarre : %s", esp_err_to_name(err));
+    return;
+  }
+  if (!cfg.cles_presentes) {
+    ESP_LOGW(TAG, "cles absentes : lancer outils/cles_amaran.py");
+    return;
+  }
+  // Le Bluetooth Mesh n'entre dans le reseau des lampes qu'une fois Maison
+  // appairee : pendant la mise en service, CHIPoBLE a besoin des annonces (6.6).
+  while (!pont_appaire() || pont_ble_annonce()) vTaskDelay(pdMS_TO_TICKS(500));
+  vTaskDelay(pdMS_TO_TICKS(3000));  // la connexion BLE de mise en service se ferme
+  err = mesh_demarrer(&cfg);
+  if (err != ESP_OK) ESP_LOGE(TAG, "Bluetooth Mesh non demarre : %s", esp_err_to_name(err));
 }
