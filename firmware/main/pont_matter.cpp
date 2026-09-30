@@ -218,6 +218,9 @@ esp_err_t pont_demarrer(const amaran_config_t *cfg, pont_ordre_cb_t ordre) {
   if (boucle != ESP_OK && boucle != ESP_ERR_INVALID_STATE) return boucle;
   esp_event_handler_register(OPENTHREAD_EVENT, OPENTHREAD_EVENT_ROLE_CHANGED, rappel_role, NULL);
 
+  // start() attend la fin de l'init de la pile : les valeurs qu'elle pose alors
+  // (CurrentLevel ramene au minimum au premier demarrage...) ne sont pas des ordres.
+  s_ordres_des_us = INT64_MAX;
   const esp_err_t err = esp_matter::start(rappel_evenement);
   if (err != ESP_OK) return err;
   s_ordres_des_us = esp_timer_get_time() + 2000000;  // lecon du Halo : ce qui arrive avant vient de la pile
