@@ -35,7 +35,8 @@ typedef struct {
   int8_t lampe;       // index 0..AMARAN_LAMPES_MAX-1, ou -1
   uint8_t len;        // octets utiles de acces
   uint8_t acces[16];  // opcode puis charge
-  uint32_t iv;        // MESH_EV_BALISE, MESH_EV_IV_CHANGE
+  uint32_t iv;        // IV Index du message, de la balise, ou le nouveau (MESH_EV_IV_CHANGE)
+  uint32_t seq;       // SEQ du message (MESH_EV_ETAT_LAMPE, MESH_EV_ACCES)
   uint8_t flags;      // MESH_EV_BALISE
 } mesh_evenement_t;
 
@@ -46,8 +47,10 @@ typedef struct {
   uint32_t netmic_faux;       // notre NID, mais NetMIC faux (IV Index ?)
   uint32_t acces_dechiffres;  // messages d'acces dechiffres avec l'AppKey
   uint32_t etats_lampes;      // dont trames 0x26 de nos lampes
+  uint32_t doublons;          // copies reseau et rejeux ecartes (meme SEQ, ou plus ancien)
   uint32_t balises_notres;
   uint32_t balises_autres;
+  uint32_t balises_fausses;   // NetID du reseau, mais authentification fausse : ignorees
   uint32_t file_pleine;       // evenements perdus
   uint32_t emis;              // messages partis (repetitions comptees une fois)
   uint32_t echecs_emission;

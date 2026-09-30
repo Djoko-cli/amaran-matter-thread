@@ -36,5 +36,17 @@ bool tri_lire_balise(const uint8_t *b, size_t len, tri_balise_t *balise) {
   balise->flags = b[1];
   memcpy(balise->net_id, b + 2, 8);
   balise->iv_index = ((uint32_t)b[10] << 24) | ((uint32_t)b[11] << 16) | ((uint32_t)b[12] << 8) | b[13];
+  memcpy(balise->auth, b + 14, 8);
   return true;
+}
+
+bool tri_plus_recent(const tri_dernier_t *d, uint32_t iv, uint32_t seq) {
+  if (!d->connu || iv > d->iv) return true;
+  return iv == d->iv && seq > d->seq;
+}
+
+void tri_retenir(tri_dernier_t *d, uint32_t iv, uint32_t seq) {
+  d->connu = true;
+  d->iv = iv;
+  d->seq = seq;
 }

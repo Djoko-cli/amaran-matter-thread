@@ -48,18 +48,33 @@ static void test_balise(void) {
   uint8_t b[22];
   texte_hex_vers_octets("01003ecaff672f673370123456788ea261582f364f6f", b, 22);  // 8.4.3
   const uint8_t net_id[8] = {0x3E, 0xCA, 0xFF, 0x67, 0x2F, 0x67, 0x33, 0x70};
+  const uint8_t auth[8] = {0x8E, 0xA2, 0x61, 0x58, 0x2F, 0x36, 0x4F, 0x6F};
   tri_balise_t bal;
   VERIFIE(tri_lire_balise(b, 22, &bal) && bal.iv_index == 0x12345678 && bal.flags == 0 &&
               memcmp(bal.net_id, net_id, 8) == 0,
           "balise 8.4.3");
+  VERIFIE(memcmp(bal.auth, auth, 8) == 0, "balise 8.4.3 : authentification lue");
   b[0] = 0x00;
   VERIFIE(!tri_lire_balise(b, 22, &bal), "balise non securisee refusee");
   b[0] = 0x01;
   VERIFIE(!tri_lire_balise(b, 21, &bal), "balise courte refusee");
 }
 
+static void test_plus_recent(void) {
+  tri_dernier_t d = {0};
+  VERIFIE(tri_plus_recent(&d, 0, 5), "premier message retenu");
+  tri_retenir(&d, 0, 5);
+  VERIFIE(!tri_plus_recent(&d, 0, 5), "copie reseau (meme SEQ) ecartee");
+  VERIFIE(!tri_plus_recent(&d, 0, 4), "rejeu (SEQ plus ancien) ecarte");
+  VERIFIE(tri_plus_recent(&d, 0, 6), "SEQ suivant retenu");
+  VERIFIE(tri_plus_recent(&d, 1, 0), "IV Index suivant : SEQ repart de 0");
+  tri_retenir(&d, 1, 0);
+  VERIFIE(!tri_plus_recent(&d, 0, 100), "IV Index plus ancien ecarte");
+}
+
 int main(void) {
   test_entete();
+  test_plus_recent();
   test_transport();
   test_etat_lampe();
   test_balise();

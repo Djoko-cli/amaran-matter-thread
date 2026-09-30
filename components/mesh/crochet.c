@@ -8,17 +8,23 @@
 
 #include <string.h>
 
+#include "esp_idf_version.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
 
 #include "access.h"  // bt_mesh_rx_netkey_*, bt_mesh_rx_appkey_*
-#include "crypto.h"  // bt_mesh_net_obfuscate, bt_mesh_ccm_decrypt_raw_key, bt_mesh_app_decrypt
+#include "crypto.h"  // bt_mesh_net_obfuscate, bt_mesh_ccm_decrypt_raw_key, bt_mesh_app_decrypt, bt_mesh_secure_beacon_auth
 #include "mesh/buf.h"
 #include "net.h"
 
 #include "crochet_tri.h"
+
+// --wrap et en-tetes internes : verifies pour ESP-IDF v5.5.4 seulement.
+#if ESP_IDF_VERSION != ESP_IDF_VERSION_VAL(5, 5, 4)
+#error "components/mesh depend des internes d'ESP-IDF v5.5.4 : a reverifier avant de changer de version"
+#endif
 
 #define FILE_EVENEMENTS 32
 #define PDU_MIN 18  // plancher de la pile (net.c) : le plus court message reseau qu'elle accepte
@@ -33,6 +39,9 @@ static uint16_t s_lampes[AMARAN_LAMPES_MAX];
 static volatile bool s_detail;
 static mesh_stats_t s_st;
 static uint32_t s_iv_connu;
+// Dernier message retenu de chaque lampe : ecarte les copies reseau (1 a 3 par
+// reponse au banc) et les rejeux. En RAM seulement : repart a zero au demarrage.
+static tri_dernier_t s_dernier[AMARAN_LAMPES_MAX];
 
 // Messages de notre reseau au NetMIC faux : matiere de `mesh iv cherche`. La
 // tache Bluetooth les remplace (garder_echantillon), la tache de la console les
@@ -123,7 +132,7 @@ static size_t copier_echantillon(int e, uint8_t copie[PDU_MAX]) {
   return len;
 }
 
-static void traiter_acces(const tri_entete_t *e, const uint8_t *acces, size_t n) {
+static void traiter_acces(const tri_entete_t *e, uint32_t iv, const uint8_t *acces, size_t n) {
   s_st.acces_dechiffres++;
   mesh_evenement_t ev = {
       .type = MESH_EV_ACCES,
@@ -132,11 +141,18 @@ static void traiter_acces(const tri_entete_t *e, const uint8_t *acces, size_t n)
       .dst = e->dst,
       .lampe = -1,
       .len = (uint8_t)n,
+      .iv = iv,
+      .seq = e->seq,
   };
   memcpy(ev.acces, acces, n);
   uint8_t trame[TELINK_TAILLE];
   const int l = tri_etat_lampe(e->src, acces, n, s_lampes, AMARAN_LAMPES_MAX, trame);
   if (l >= 0) {
+    if (!tri_plus_recent(&s_dernier[l], iv, e->seq)) {
+      s_st.doublons++;
+      return;
+    }
+    tri_retenir(&s_dernier[l], iv, e->seq);
     ev.type = MESH_EV_ETAT_LAMPE;
     ev.lampe = (int8_t)l;
     s_st.etats_lampes++;
@@ -183,7 +199,7 @@ static void traiter(const uint8_t *pdu, size_t len) {
         uint8_t acces[16];
         size_t na = sizeof(acces);
         if (crochet_dechiffrer_acces(ak->val, clair, n, iv, NULL, acces, &na) == 0) {
-          traiter_acces(&e, acces, na);
+          traiter_acces(&e, iv, acces, na);
           return;
         }
       }
@@ -218,7 +234,17 @@ void __wrap_bt_mesh_beacon_recv(struct net_buf_simple *buf, int8_t rssi) {
   tri_balise_t b;
   if (tri_lire_balise(copie, n, &b)) {
     struct bt_mesh_subnet *sub = bt_mesh_rx_netkey_size() ? bt_mesh_rx_netkey_get(0) : NULL;
-    if (sub && sub->net_idx != BLE_MESH_KEY_UNUSED && memcmp(sub->keys[0].net_id, b.net_id, sizeof(b.net_id)) == 0) {
+    const bool notre_id =
+        sub && sub->net_idx != BLE_MESH_KEY_UNUSED && memcmp(sub->keys[0].net_id, b.net_id, sizeof(b.net_id)) == 0;
+    // Le NetID seul se recopie : on ne croit l'IV annonce que si l'authentification,
+    // calculee avec la BeaconKey du reseau, est juste (la pile fait de meme).
+    uint8_t auth[8];
+    const bool authentique = notre_id &&
+                             bt_mesh_secure_beacon_auth(sub->keys[0].beacon, b.flags, b.net_id, b.iv_index, auth) == 0 &&
+                             memcmp(auth, b.auth, sizeof(auth)) == 0;
+    if (notre_id && !authentique) {
+      s_st.balises_fausses++;
+    } else if (authentique) {
       s_st.balises_notres++;
       s_st.derniere_balise_us = esp_timer_get_time();
       s_st.derniere_balise_iv = b.iv_index;

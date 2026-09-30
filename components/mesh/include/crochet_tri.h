@@ -32,7 +32,15 @@ typedef struct {
   uint8_t flags;
   uint8_t net_id[8];
   uint32_t iv_index;
+  uint8_t auth[8];  // a verifier avec la BeaconKey du reseau avant de croire l'IV
 } tri_balise_t;
+
+// Dernier message retenu d'une source : (IV Index, SEQ).
+typedef struct {
+  bool connu;
+  uint32_t iv;
+  uint32_t seq;
+} tri_dernier_t;
 
 bool tri_lire_entete(const uint8_t *clair, size_t len, tri_entete_t *e);
 void tri_lire_transport(uint8_t octet, tri_transport_t *t);
@@ -42,6 +50,10 @@ int tri_etat_lampe(uint16_t src, const uint8_t *acces, size_t len, const uint16_
                    uint8_t trame[TELINK_TAILLE]);
 // Balise reseau securisee (type 0x01), octet de type compris : 22 octets.
 bool tri_lire_balise(const uint8_t *b, size_t len, tri_balise_t *balise);
+// Vrai si (iv, seq) est plus recent que le dernier message retenu de la source :
+// une copie reseau (meme SEQ) ou un rejeu (SEQ plus ancien) rendent faux.
+bool tri_plus_recent(const tri_dernier_t *d, uint32_t iv, uint32_t seq);
+void tri_retenir(tri_dernier_t *d, uint32_t iv, uint32_t seq);
 
 #ifdef __cplusplus
 }

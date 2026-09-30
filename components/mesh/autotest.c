@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "crypto.h"  // bt_mesh_k2, bt_mesh_k3, bt_mesh_app_id
+#include "crypto.h"  // bt_mesh_k2, bt_mesh_k3, bt_mesh_app_id, bt_mesh_secure_beacon_key, bt_mesh_secure_beacon_auth
 
 #include "crochet.h"
 #include "crochet_tri.h"
@@ -64,6 +64,14 @@ int mesh_autotest(void) {
   tri_balise_t b;
   verifie(tri_lire_balise(balise, 22, &b) && b.iv_index == 0x12345678, "8.4.3 : IV Index");
   verifie(bt_mesh_k3(netkey, net_id) == 0 && memcmp(net_id, b.net_id, 8) == 0, "8.4.3 : NetID (k3)");
+  // 8.2.6 : BeaconKey ; 8.4.3 : authentification de la balise, comme le crochet.
+  uint8_t cle_balise[16], auth[8];
+  hexa("5423d967da639a99cb02231a83f7d254", attendu, 16);
+  verifie(bt_mesh_secure_beacon_key(netkey, cle_balise) == 0 && memcmp(cle_balise, attendu, 16) == 0,
+          "8.2.6 : cle de balise");
+  verifie(bt_mesh_secure_beacon_auth(cle_balise, b.flags, b.net_id, b.iv_index, auth) == 0 &&
+              memcmp(auth, b.auth, 8) == 0,
+          "8.4.3 : authentification de la balise");
 
   printf("autotest : %d echec(s)\n", s_echecs);
   return s_echecs;
