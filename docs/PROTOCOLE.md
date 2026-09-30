@@ -10,6 +10,7 @@ Relevé le 30/09/2026 (bancs R1 à R6, [BANC.md](BANC.md)), avec le firmware `ec
 - **Aucun état spontané.** Ni la molette, ni son bouton, ni une coupure ne font parler une lampe. Pour suivre un réglage fait à la main, il faut relire la lampe (spec 5.7).
 - **Commandes physiques inertes.** Une lampe éteinte par l'app (ou par le pont) ignore sa molette et le bouton de molette (+20 %). Seule une coupure au bouton d'alimentation la rallume.
 - **Retour de coupure.** Coupée puis remise au bouton, la lampe revient **allumée vers 40 %** (41 % et 40 % au banc). Deux cas seulement, une fois par lampe, chacune éteinte avant la coupure (à 93 % et à 6 % de niveau retenu) : une lampe allumée avant la coupure n'a pas été essayée. Au contrôle du plan 2 (30/09), la lampe 2, éteinte à 6 % de niveau retenu, est revenue allumée à 6 % : le niveau au retour n'est donc pas toujours 40 %.
+- **Intensité au pour cent.** Une 60d ne garde que le pour cent entier : `niveau 433` et `niveau 437` sont relus 430, `niveau 500` est relu 500 (banc C, 30/09). Le pont arrondit donc ses consignes au pour cent le plus proche.
 - **Trames et opcodes absents de la spec :** type `0x0A` (alimentation), type `0x00` (produit), et les opcodes à un octet `0x33` / `0x31`.
 
 ## Réseau

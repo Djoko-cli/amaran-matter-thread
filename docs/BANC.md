@@ -98,6 +98,48 @@ Carte : ESP32-C6 dédiée, firmware `ecoute` (commit fc18fae), adresse Mesh `0x7
 
 Marges (`taches`, après tous les essais) : pile libre au plus bas `mesh_adv_task` 1 052 o, `amaran_tx` 1 924 o, `console_repl` 2 092 o, `journal` 2 168 o, `nimble_host` 2 460 o ; tas libre au plus bas 330 Ko. Aucune tâche sous 512 o.
 
+## Phase 1 : banc C, radio partagée (firmware du pont)
+
+Procédure : plan 2, Task 8. Carte du pont effacée, flashée, clés rechargées, puis appairée dans Maison. Thread en enfant non dormant (MED), relecture au groupe toutes les 5 s, amaran Desktop fermé pendant les mesures au repos.
+
+### Premier essai : le Mesh étouffe Thread
+
+Réglé comme par défaut dans ESP-IDF, le Bluetooth Mesh écoute en continu (20 ms toutes les 20 ms). Dès son entrée dans le réseau, 3 s après la mise en service, toutes les émissions Thread échouent (« ChannelAccessFailure »). La seconde mise en service d'Apple expire, et l'appairage échoue dans Maison. C'est le cas « End Device + BLE Scan », que la documentation d'ESP-IDF sur la coexistence classe comme instable.
+
+### Leviers appliqués
+
+- **Écoute du Mesh à 50 %** (20 ms toutes les 40 ms), réglable à chaud par `mesh balayage` (commit `67631cc`). Thread ne perd plus une émission. Le pont règle cette valeur au démarrage.
+- **Consigne d'intensité arrondie au pour cent** (commit `c588bc3`). La 60d ne garde que le pour cent entier (voir PROTOCOLE.md). Sans cela, les ordres dont l'intensité ne tombait pas sur un pour cent entier finissaient abandonnés après trois essais, alors que la lampe avait obéi.
+- **Demande d'état envoyée deux fois** (commit `c0b7f13`). À 50 % d'écoute, une réponse sur dix environ était manquée ; deux demandes donnent deux chances.
+
+### Mesures
+
+| réglage | durée | relectures répondues, lampe 1 | lampe 2 |
+|---|---|---|---|
+| écoute 50 %, 1 demande | 30 min | 324/360 (90,0 %) | 323/360 (89,7 %) |
+| écoute 75 %, 1 demande | 10 min | 108/120 (90,0 %) | 112/120 (93,3 %) |
+| écoute 100 %, 1 demande (Thread en échec) | 3 min | 35/36 (97,2 %) | 34/36 (94,4 %) |
+| écoute 50 %, 2 demandes | 30 min | 349/360 (96,9 %) | 354/360 (98,3 %) |
+
+| ordres de Maison | salves | confirmées | abandonnées | au-delà d'1 s | délai moyen, maximal |
+|---|---|---|---|---|---|
+| écoute 50 %, 1 demande, sans arrondi | 15 | 10 | 5 | 2 | 650 ms, 1 111 ms |
+| écoute 50 %, 2 demandes, avec arrondi | 47 | 47 | 0 | 0 | 455 ms, 974 ms |
+
+**Verdict (règle 5.8) : une seule C6 suffit**, avec les trois leviers.
+- Relectures répondues : 96,9 % et 98,3 % sur 30 min (seuil : 95 %).
+- Ordres de Maison : 0 échec et 0 au-delà d'une seconde sur 47 (seuil : 1 %).
+- Thread : aucun échec d'émission sur les mesures à 50 %.
+
+Mémoire : image de 1,70 Mo (58 % de la partition libre) ; pile de `main` 1 552 o libres au plus bas ; pile libre la plus basse `lampes` 1 892 o ; tas libre au plus bas 186 548 o.
+
+Remarques :
+- Maison reprend les noms d'amaran Desktop. Au premier démarrage sans clés, les deux emplacements s'appellent « lampe absente » ; ils prennent les vrais noms au redémarrage qui suit le chargement des clés.
+- Aucun ordre parasite au démarrage.
+- Glisser le curseur de luminosité dans Maison envoie une valeur toutes les 150 à 300 ms. Le pont suit, mais taper sur la jauge est plus fluide (constat de Djoko).
+- Pendant une série d'ordres, les relectures répondues baissent (104/122 et 115/122 sur 10 min) : elles partagent la file d'émission.
+- Budget de séquence : deux demandes toutes les 5 s consomment environ 35 000 numéros par jour ; l'adresse change d'elle-même tous les 7 mois environ.
+
 Compteurs en fin de banc : 750 messages vus, 750 déchiffrés, 0 NetMIC faux ; 190 messages émis, 0 refusé ; 0 événement perdu. Le plancher de séquence en NVS n'est jamais resté derrière la séquence (il lui est égal juste après un démarrage).
 
 Incidents du banc, corrigés :

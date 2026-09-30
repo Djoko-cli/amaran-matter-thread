@@ -18,7 +18,7 @@ et lit leur état.** Le design complet est dans
 | Phase | Contenu | État |
 |---|---|---|
 | P0 | Reconnaissance. Un firmware d'écoute rejoint le réseau des lampes et vérifie : IV Index, réponses captées, ordres, molette, groupe, cohabitation avec amaran Desktop | faite (30/09/2026) : 62 ordres sur 62 confirmés par relecture, toutes les demandes d'état ont reçu leur réponse ; aucun état spontané (ni molette, ni bouton, ni coupure) |
-| P1 | Matter sur la même carte, et banc de la radio partagée entre Thread et Bluetooth : une ou deux C6 | à faire |
+| P1 | Matter sur la même carte, et banc de la radio partagée entre Thread et Bluetooth : une ou deux C6 | faite (30/09/2026) : une seule C6 suffit, avec l'écoute du Mesh à 50 % ; 96,9 % et 98,3 % des relectures répondues, 47 ordres de Maison sans échec |
 | P2 | Produit : voyant, bouton, console, fiche produit ; bancs, puis endurance 24 h | à faire |
 
 Résultats des bancs : [docs/BANC.md](docs/BANC.md). Protocole relevé : [docs/PROTOCOLE.md](docs/PROTOCOLE.md).
