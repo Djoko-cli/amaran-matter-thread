@@ -26,7 +26,7 @@ extern "C" {
 #define LAMPES_ESSAIS 3u                   // essais par ordre, puis abandon (spec 5.6, 7.1)
 #define LAMPES_RELEVES_MUETTE 3u           // relectures sans reponse -> muette (spec 7.2)
 #define LAMPES_REPETITIONS_ORDRE 2u
-#define LAMPES_REPETITIONS_ETAT 1u
+#define LAMPES_REPETITIONS_ETAT 2u        // banc C : ~1 reponse sur 10 manquee (radio partagee avec Thread), deux chances
 #define LAMPES_PAS_INTENSITE 10            // une 60d ne garde que le pour cent entier (banc C : 433 relu 430)
 
 typedef struct {
