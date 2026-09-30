@@ -2,8 +2,8 @@
 # Verifie que chaque symbole des sdkconfig.defaults* existe dans les Kconfig
 # d'ESP-IDF (et d'esp-matter si ESP_MATTER_PATH est pose). Un symbole inconnu
 # est ignore EN SILENCE par idf.py. Repris du SmartButton.
-# Verifie aussi, si ecoute/sdkconfig existe, que la pile Mesh n'est pas reglee
-# au-dessus du niveau de trace WARNING (elle imprimerait les cles).
+# Verifie aussi, pour chaque sdkconfig genere (ecoute, firmware), que la pile
+# Mesh n'est pas reglee au-dessus du niveau de trace ERROR (elle imprimerait des cles).
 #
 # Usage : source ~/esp/esp-idf/export.sh, puis bash outils/check_sdkconfig.sh
 set -u
@@ -41,26 +41,29 @@ for f in "$ICI"/ecoute/sdkconfig.defaults* "$ICI"/firmware/sdkconfig.defaults*; 
   [ "$mauvais" -eq 0 ] && echo "   ok : tous les symboles existent"
 done
 
-# Valeur epinglee, lue dans ecoute/sdkconfig (genere, ignore par git) : au-dessus
-# d'ERROR la pile Mesh imprime des cles (voir components/mesh/mesh_amaran.c).
-# sdkconfig.defaults ne pese que sur les symboles absents de sdkconfig : une
-# valeur plus ancienne, ou posee par menuconfig, l'emporterait en silence.
-SDKCONFIG="$ICI/ecoute/sdkconfig"
-echo "-- ecoute/sdkconfig (niveau de trace de la pile Mesh)"
-if [ ! -f "$SDKCONFIG" ]; then
-  echo "   sdkconfig absent (pas encore genere) : rien a verifier ici, mesh_amaran.c garde la compilation"
-elif "$GREP" -qx 'CONFIG_BLE_MESH_NO_LOG=y' "$SDKCONFIG"; then
-  echo "   ok : BLE_MESH_NO_LOG, la pile n'imprime rien (mais l'erreur \"IVIndex out of sync\" disparait, spec 5.3)"
-else
-  niveau="$("$GREP" -E '^CONFIG_BLE_MESH_STACK_TRACE_LEVEL=[0-9]+$' "$SDKCONFIG" | cut -d= -f2)"
-  if [ -z "$niveau" ]; then
-    echo "   x CONFIG_BLE_MESH_STACK_TRACE_LEVEL : introuvable dans ecoute/sdkconfig"
-    rc=1
-  elif [ "$niveau" -gt 1 ]; then
-    echo "   x CONFIG_BLE_MESH_STACK_TRACE_LEVEL=$niveau : au-dessus d'ERROR (1), la pile imprime des cles"
-    rc=1
+# Valeur epinglee, lue dans le sdkconfig genere (ignore par git) de chaque
+# firmware : au-dessus d'ERROR la pile Mesh imprime des cles (voir
+# components/mesh/mesh_amaran.c). sdkconfig.defaults ne pese que sur les symboles
+# absents de sdkconfig : une valeur plus ancienne, ou posee par menuconfig,
+# l'emporterait en silence.
+for projet in ecoute firmware; do
+  SDKCONFIG="$ICI/$projet/sdkconfig"
+  echo "-- $projet/sdkconfig (niveau de trace de la pile Mesh)"
+  if [ ! -f "$SDKCONFIG" ]; then
+    echo "   sdkconfig absent (pas encore genere) : rien a verifier ici, mesh_amaran.c garde la compilation"
+  elif "$GREP" -qx 'CONFIG_BLE_MESH_NO_LOG=y' "$SDKCONFIG"; then
+    echo "   ok : BLE_MESH_NO_LOG, la pile n'imprime rien (mais l'erreur \"IVIndex out of sync\" disparait, spec 5.3)"
   else
-    echo "   ok : niveau $niveau (0 NONE, 1 ERROR) : la pile n'imprime aucune cle"
+    niveau="$("$GREP" -E '^CONFIG_BLE_MESH_STACK_TRACE_LEVEL=[0-9]+$' "$SDKCONFIG" | cut -d= -f2)"
+    if [ -z "$niveau" ]; then
+      echo "   x CONFIG_BLE_MESH_STACK_TRACE_LEVEL : introuvable dans $projet/sdkconfig"
+      rc=1
+    elif [ "$niveau" -gt 1 ]; then
+      echo "   x CONFIG_BLE_MESH_STACK_TRACE_LEVEL=$niveau : au-dessus d'ERROR (1), la pile imprime des cles"
+      rc=1
+    else
+      echo "   ok : niveau $niveau (0 NONE, 1 ERROR) : la pile n'imprime aucune cle"
+    fi
   fi
-fi
+done
 exit $rc

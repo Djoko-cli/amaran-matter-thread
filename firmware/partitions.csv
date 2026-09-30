@@ -1,0 +1,6 @@
+# Nom,     Type, SousType, Adresse,  Taille
+# Une seule application, pas d'OTA (spec 10). nvs : Matter, Thread, et l'espace
+# "amaran" (cles du reseau Mesh, lampes, plancher de sequence).
+nvs,       data, nvs,      0x9000,   0xC000,
+phy_init,  data, phy,      0x15000,  0x1000,
+factory,   app,  factory,  0x20000,  0x3E0000,

@@ -1,0 +1,85 @@
+# Firmware du pont : ESP32-C6, Matter sur Thread (esp-matter) et Bluetooth Mesh
+# sur le meme hote NimBLE. Chaque symbole est verifie par outils/check_sdkconfig.sh.
+
+CONFIG_IDF_TARGET="esp32c6"
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# Console et journaux sur l'USB natif : la C6 SuperMini n'a pas de pont USB-serie.
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+# Tic de 1 ms : bouton BOOT et voyant repris du Halo (Arduino tourne a 1000 Hz).
+CONFIG_FREERTOS_HZ=1000
+
+# Bluetooth : NimBLE. La pile Matter demarre l'hote et le garde apres la mise en
+# service (USE_BLE_ONLY_FOR_COMMISSIONING=n, sinon le Mesh meurt a l'appairage).
+CONFIG_BT_ENABLED=y
+CONFIG_BT_NIMBLE_ENABLED=y
+CONFIG_BT_NIMBLE_EXT_ADV=n
+CONFIG_BT_NIMBLE_50_FEATURE_SUPPORT=n
+CONFIG_BT_LE_50_FEATURE_SUPPORT=n
+CONFIG_BT_LE_SCAN_DUPL_TYPE_DATA_DEVICE=y
+CONFIG_BT_NIMBLE_ENABLE_CONN_REATTEMPT=n
+CONFIG_BT_NIMBLE_LOG_LEVEL_WARNING=y
+CONFIG_ENABLE_CHIPOBLE=y
+CONFIG_USE_BLE_ONLY_FOR_COMMISSIONING=n
+
+# Bluetooth Mesh : noeud qui entre seul dans le reseau des lampes (spec 5.1),
+# memes reglages que le firmware d'ecoute.
+CONFIG_BLE_MESH=y
+CONFIG_BLE_MESH_NODE=y
+CONFIG_BLE_MESH_PB_ADV=y
+CONFIG_BLE_MESH_PB_GATT=n
+CONFIG_BLE_MESH_GATT_PROXY_SERVER=n
+# Ni proxy ni PB-GATT : la pile Mesh n'enregistre aucun service GATT sur un hote
+# que Matter a deja demarre (elle planterait si CHIPoBLE annonce).
+CONFIG_BLE_MESH_PROXY=n
+CONFIG_BLE_MESH_RELAY=n
+CONFIG_BLE_MESH_FRIEND=n
+CONFIG_BLE_MESH_LOW_POWER=n
+CONFIG_BLE_MESH_SETTINGS=n
+CONFIG_BLE_MESH_SUBNET_COUNT=1
+CONFIG_BLE_MESH_APP_KEY_COUNT=2
+CONFIG_BLE_MESH_MODEL_KEY_COUNT=2
+CONFIG_BLE_MESH_MODEL_GROUP_COUNT=4
+CONFIG_BLE_MESH_CRPL=20
+CONFIG_BLE_MESH_ADV_BUF_COUNT=120
+CONFIG_BLE_MESH_IVU_RECOVERY_IVI=y
+# Trace de la pile epinglee a ERROR : au-dessus, elle imprime des cles
+# (components/mesh/mesh_amaran.c refuse de compiler au-dela).
+CONFIG_BLE_MESH_TRACE_LEVEL_ERROR=y
+
+# Thread : appareil minimal (MTD), donc enfant toujours a l'ecoute (MED) des le
+# demarrage. Un routeur ne tient pas face au scan Mesh permanent (ESP-IDF,
+# coexist.rst). Le mode dormant (ICD) est une variante du banc C.
+CONFIG_OPENTHREAD_ENABLED=y
+CONFIG_OPENTHREAD_MTD=y
+CONFIG_OPENTHREAD_SRP_CLIENT=y
+CONFIG_OPENTHREAD_DNS_CLIENT=y
+CONFIG_OPENTHREAD_LOG_LEVEL_DYNAMIC=n
+CONFIG_OPENTHREAD_LOG_LEVEL_NOTE=y
+CONFIG_OPENTHREAD_CLI=n
+CONFIG_ENABLE_ICD_SERVER=n
+CONFIG_LWIP_IPV6_AUTOCONFIG=n
+CONFIG_LWIP_IPV6_NUM_ADDRESSES=8
+CONFIG_LWIP_MULTICAST_PING=y
+CONFIG_LWIP_HOOK_IP6_ROUTE_DEFAULT=y
+CONFIG_LWIP_HOOK_ND6_GET_GW_DEFAULT=y
+CONFIG_USE_MINIMAL_MDNS=n
+CONFIG_ENABLE_EXTENDED_DISCOVERY=y
+CONFIG_ENABLE_WIFI_STATION=n
+
+# Matter : fiche produit (main/CHIPProjectConfig.h), VID/PID et codes d'essai du
+# SDK (comme le Halo : Maison accepte, avec l'avertissement « non certifie »).
+CONFIG_CHIP_PROJECT_CONFIG="main/CHIPProjectConfig.h"
+CONFIG_DEVICE_VENDOR_ID=0xFFF1
+CONFIG_DEVICE_PRODUCT_ID=0x8000
+CONFIG_ENABLE_PERSIST_SUBSCRIPTIONS=y
+CONFIG_ENABLE_CHIP_SHELL=n
+CONFIG_ENABLE_OTA_REQUESTOR=n
+CONFIG_SUPPORT_GROUPCAST_CLUSTER=n
+CONFIG_MBEDTLS_HKDF_C=y
+
+# AES logiciel : l'AES materiel fait une allocation DMA par bloc, et la pile
+# Mesh finit par s'arreter (amaran-bridge : "Encrypt failed").
+CONFIG_MBEDTLS_HARDWARE_AES=n
