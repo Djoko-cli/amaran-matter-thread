@@ -180,6 +180,7 @@ def main():
     for e in relu["ttflist"]:
         print("%-38s %-24s %-8s %4d %s" % (e.fname, e.name, e.style, e.weight, e.stretch))
     print("%d polices ; relecture OK" % len(relu["ttflist"]))
+    print("cache ecrit : %s" % os.path.abspath(sortie))
 
 
 if __name__ == "__main__":

@@ -11,14 +11,17 @@ Projets frères :
 
 ## État
 
-**Conception terminée, rien n'est encore implémenté.** Le design complet est
-dans [docs/superpowers/specs/2026-09-28-pont-amaran-design.md](docs/superpowers/specs/2026-09-28-pont-amaran-design.md).
+**Reconnaissance faite : l'ESP32 entre dans le réseau des lampes, les pilote
+et lit leur état.** Le design complet est dans
+[docs/superpowers/specs/2026-09-28-pont-amaran-design.md](docs/superpowers/specs/2026-09-28-pont-amaran-design.md).
 
 | Phase | Contenu | État |
 |---|---|---|
-| P0 | Reconnaissance. Un firmware d'écoute rejoint le réseau des lampes et vérifie : IV Index, réponses captées, ordres, molette, groupe, cohabitation avec amaran Desktop | à faire |
+| P0 | Reconnaissance. Un firmware d'écoute rejoint le réseau des lampes et vérifie : IV Index, réponses captées, ordres, molette, groupe, cohabitation avec amaran Desktop | faite (30/09/2026) : 62 ordres sur 62 confirmés par relecture, toutes les demandes d'état ont reçu leur réponse ; les lampes n'envoient jamais rien d'elles-mêmes |
 | P1 | Matter sur la même carte, et banc de la radio partagée entre Thread et Bluetooth : une ou deux C6 | à faire |
 | P2 | Produit : voyant, bouton, console, fiche produit ; bancs, puis endurance 24 h | à faire |
+
+Résultats des bancs : [docs/BANC.md](docs/BANC.md). Protocole relevé : [docs/PROTOCOLE.md](docs/PROTOCOLE.md).
 
 ## Ce que le pont fera
 
@@ -50,10 +53,23 @@ Qui détient les clés du réseau Bluetooth Mesh contrôle les lampes.
 - Un script les lit dans la base d'amaran Desktop et les charge dans l'ESP32
   par l'USB.
 
+## amaran Desktop sur macOS 27
+
+amaran Desktop 1.1.03 plante au démarrage sur macOS 27 : matplotlib, qu'il
+embarque, ne sait plus lire la liste des polices du système. Le script
+[outils/polices_amaran_desktop.py](outils/polices_amaran_desktop.py) lui pose
+le cache de polices qu'il cherche, sans toucher à l'application :
+
+```bash
+python3 outils/polices_amaran_desktop.py
+```
+
+Pour annuler, supprimer le fichier que le script indique.
+
 ## Crédits
 
 Le protocole des lampes a été décodé par deux projets libres, sous licence
-MIT. Ce pont reprendra leur code d'encodage des trames, avec leur mention de
+MIT. Ce pont reprend leur code d'encodage des trames, avec leur mention de
 licence :
 - [amaran-bridge](https://github.com/kevinschaich/amaran-bridge), de Kevin
   Schaich ;
