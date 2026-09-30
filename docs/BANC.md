@@ -104,6 +104,20 @@ Incidents du banc, corrigés :
 - ouvrir le port redémarrait la carte (pyserial baissait DTR puis RTS), et la première commande se perdait : commit d6fad12 ;
 - le `redemarre` final de `cles_amaran.py` se perdait à la fermeture du port : commit 3d63553.
 
+### Plan 2 : contrôle du firmware d'écoute (Tasks 2 à 4)
+
+30/09/2026, firmware `ecoute` du commit `00254ff`, sur la C6 du pont. La NVS du plan 1 est gardée : adresse `0x7F38`, IV Index 0. amaran Desktop est ouvert.
+- **Autotest** : 11 vérifications, 0 échec, dont la BeaconKey et l'authentification de balise (exemples 8.2.6 et 8.4.3 de la spec Mesh).
+- **Entrée dans le réseau sans balise « non provisionné »** : `mesh pret : oui` dès le démarrage. La séquence reprend au plancher sauvé (`0x000303`).
+- **Balises des lampes authentifiées** : 7 après 30 s d'écoute, 0 fausse ; 30 sur l'ensemble du contrôle.
+- **R2 abrégé** : 10 réponses sur 10, une ligne chacune.
+  - 11 doublons écartés pendant les 10 demandes (13 au compteur depuis le démarrage, dont 2 avant la première demande).
+  - 10 messages émis, 0 refus, 0 NetMIC faux.
+- **Coupure de la lampe 2** au bouton d'alimentation, puis remise :
+  - elle répond à chacune des 3 demandes : le filtre des rejeux ne l'écarte pas. Son compteur de séquence n'est donc très probablement pas reparti sous la dernière valeur vue (déduit : le numéro de séquence n'est pas journalisé, et une seule coupure a été faite) ;
+  - elle est revenue **allumée à 6 %**, son niveau retenu, et non vers 40 % comme au banc R4.
+- **Marges** : pile libre la plus basse `console_repl` 1 932 o ; tas libre au plus bas 330 692 o.
+
 ## Phase 1 : banc C, radio partagée (firmware du pont)
 
 30/09/2026. Procédure : plan 2, Task 8. Carte du pont effacée, flashée, clés rechargées, puis appairée dans Maison. Thread en enfant non dormant (MED), relecture au groupe toutes les 5 s, amaran Desktop fermé pendant les mesures au repos.
@@ -145,17 +159,3 @@ Remarques :
 - Glisser le curseur de luminosité dans Maison envoie une valeur toutes les 150 à 300 ms. Le pont suit, mais taper sur la jauge est plus fluide (constat de Djoko).
 - Pendant une série d'ordres, les relectures répondues baissent (104/122 et 115/122 sur 10 min). Relectures et ordres passent par la même file d'émission, mais la cause n'est pas établie.
 - Budget de séquence : deux demandes toutes les 5 s consomment environ 35 000 numéros par jour ; l'adresse change d'elle-même tous les 7 mois environ.
-
-### Plan 2 : contrôle du firmware d'écoute (Tasks 2 à 4)
-
-30/09/2026, firmware `ecoute` du commit `00254ff`, sur la C6 du pont. La NVS du plan 1 est gardée : adresse `0x7F38`, IV Index 0. amaran Desktop est ouvert.
-- **Autotest** : 11 vérifications, 0 échec, dont la BeaconKey et l'authentification de balise (exemples 8.2.6 et 8.4.3 de la spec Mesh).
-- **Entrée dans le réseau sans balise « non provisionné »** : `mesh pret : oui` dès le démarrage. La séquence reprend au plancher sauvé (`0x000303`).
-- **Balises des lampes authentifiées** : 7 après 30 s d'écoute, 0 fausse ; 30 sur l'ensemble du contrôle.
-- **R2 abrégé** : 10 réponses sur 10, une ligne chacune.
-  - 11 doublons écartés pendant les 10 demandes (13 au compteur depuis le démarrage, dont 2 avant la première demande).
-  - 10 messages émis, 0 refus, 0 NetMIC faux.
-- **Coupure de la lampe 2** au bouton d'alimentation, puis remise :
-  - elle répond à chacune des 3 demandes : le filtre des rejeux ne l'écarte pas. Son compteur de séquence n'est donc très probablement pas reparti sous la dernière valeur vue (déduit : le numéro de séquence n'est pas journalisé, et une seule coupure a été faite) ;
-  - elle est revenue **allumée à 6 %**, son niveau retenu, et non vers 40 % comme au banc R4.
-- **Marges** : pile libre la plus basse `console_repl` 1 932 o ; tas libre au plus bas 330 692 o.
