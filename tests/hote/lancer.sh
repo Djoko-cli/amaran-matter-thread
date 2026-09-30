@@ -20,4 +20,5 @@ compiler_et_lancer test_texte components/mesh/texte.c tests/hote/test_texte.c
 compiler_et_lancer test_crochet_tri components/telink/telink.c components/mesh/texte.c components/mesh/crochet_tri.c tests/hote/test_crochet_tri.c
 compiler_et_lancer test_plancher components/mesh/plancher.c tests/hote/test_plancher.c
 compiler_et_lancer test_lampes components/telink/telink.c components/lampes/lampes.c tests/hote/test_lampes.c
+compiler_et_lancer test_diagnostic components/mesh/diagnostic.c tests/hote/test_diagnostic.c
 echo "tests hote : tout est vert"
