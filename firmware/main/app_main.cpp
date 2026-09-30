@@ -56,6 +56,17 @@ extern "C" void app_main(void) {
   while (!pont_appaire() || pont_ble_annonce()) vTaskDelay(pdMS_TO_TICKS(500));
   vTaskDelay(pdMS_TO_TICKS(3000));  // la connexion BLE de mise en service se ferme
   err = mesh_demarrer(&cfg);
-  if (err != ESP_OK) ESP_LOGE(TAG, "Bluetooth Mesh non demarre : %s", esp_err_to_name(err));
+  if (err != ESP_OK) {
+    ESP_LOGE(TAG, "Bluetooth Mesh non demarre : %s", esp_err_to_name(err));
+  } else {
+    // Banc C, levier 1 : le Mesh n'ecoute que la moitie du temps, pour laisser la
+    // radio a Thread (a 100 %, plus aucune emission Thread ne passe).
+    // Le Mesh n'est "pret" qu'au rappel de fin d'adhesion, livre par la tache BTC
+    // sans garantie qu'il ait eu lieu au retour de mesh_demarrer : on l'attend au
+    // plus 5 s.
+    for (int i = 0; i < 100 && !mesh_pret(); i++) vTaskDelay(pdMS_TO_TICKS(50));
+    err = mesh_regler_balayage(20, 40);
+    if (err != ESP_OK) ESP_LOGE(TAG, "balayage du Bluetooth Mesh non regle : %s", esp_err_to_name(err));
+  }
   marge_main();
 }

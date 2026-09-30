@@ -104,7 +104,7 @@ void console_demarrer(amaran_config_t *cfg) {
   ESP_ERROR_CHECK(esp_console_new_repl_usb_serial_jtag(&usb, &conf, &repl));
   const esp_console_cmd_t cmds[] = {
       {.command = "mesh",
-       .help = "etat ; mesh cles|lampe|iv|adresse|oublie|ecoute|autotest ...",
+       .help = "etat ; mesh cles|lampe|iv|adresse|oublie|ecoute|balayage|autotest ...",
        .func = mesh_console_commande},
       {.command = "lampe", .help = "lampe <1-2> releve|on|off|niveau <0-1000>", .func = cmd_lampe},
       {.command = "groupe", .help = "groupe releve : demande d'etat au groupe All (0xC000)", .func = cmd_groupe},

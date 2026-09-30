@@ -48,11 +48,13 @@
 #include "esp_ble_mesh_provisioning_api.h"
 
 // En-tetes internes de la pile (chemins ajoutes par CMakeLists.txt) : aucune
-// API publique ne permet d'entrer dans un reseau existant.
+// API publique ne permet d'entrer dans un reseau existant, ni de regler le
+// balayage.
 #include "local.h"        // bt_mesh_node_local_app_key_add, bt_mesh_node_bind_app_key_to_model
 #include "mesh/atomic.h"  // bt_mesh_atomic_set_bit
 #include "mesh/main.h"    // bt_mesh_provision
 #include "net.h"          // bt_mesh : flags, seq, iv_index
+#include "scan.h"         // bt_mesh_scan_param_update, struct bt_mesh_scan_param
 
 #include "crochet.h"
 #include "hote_ble.h"
@@ -95,6 +97,10 @@ static amaran_config_t s_cfg;
 static QueueHandle_t s_tx;
 static volatile bool s_pret;
 static volatile bool s_emission_permise = true;
+// Balayage en ms : la pile demarre a 0x20 unites de 0,625 ms pour la fenetre et
+// l'intervalle (SCAN_WINDOW, SCAN_INTERVAL dans core/scan.c), soit 20 sur 20 ms.
+static uint16_t s_fenetre_ms = 20;
+static uint16_t s_intervalle_ms = 20;
 static plancher_t s_plancher;  // compteur de sequence (spec 5.4), tenu par la tache d'emission
 static uint32_t s_emis;
 static uint32_t s_echecs;
@@ -328,5 +334,46 @@ uint32_t mesh_sequence(void) { return bt_mesh.seq; }
 uint32_t mesh_plancher(void) { return s_plancher.plancher_sauve; }
 
 void mesh_autoriser_emission(bool oui) { s_emission_permise = oui; }
+
+// La pile compte en unites de 0,625 ms : 8 unites font 5 ms, donc un multiple de
+// 5 ms tombe juste (ms * 8 / 5).
+#define BALAYAGE_MIN_MS 5
+#define BALAYAGE_MAX_MS 1000
+#define BALAYAGE_PAS_MS 5
+
+esp_err_t mesh_regler_balayage(uint16_t fenetre_ms, uint16_t intervalle_ms) {
+  if (fenetre_ms < BALAYAGE_MIN_MS || fenetre_ms > intervalle_ms || intervalle_ms > BALAYAGE_MAX_MS ||
+      fenetre_ms % BALAYAGE_PAS_MS != 0 || intervalle_ms % BALAYAGE_PAS_MS != 0) {
+    return ESP_ERR_INVALID_ARG;
+  }
+  if (!s_pret) return ESP_ERR_INVALID_STATE;
+  struct bt_mesh_scan_param param = {
+      .type = BLE_MESH_SCAN_PASSIVE,
+#if CONFIG_BLE_MESH_USE_DUPLICATE_SCAN
+      .filter_dup = BLE_MESH_SCAN_FILTER_DUP_ENABLE,
+#else
+      .filter_dup = BLE_MESH_SCAN_FILTER_DUP_DISABLE,
+#endif
+      .interval = (uint16_t)(intervalle_ms * 8 / 5),
+      .window = (uint16_t)(fenetre_ms * 8 / 5),
+      .scan_fil_policy = BLE_MESH_SP_ADV_ALL,
+  };
+  // Arrete le balayage et le relance avec ces deux valeurs seulement ; le reste
+  // (type, doublons, filtre) est celui que la pile garde (core/scan.c).
+  const int rc = bt_mesh_scan_param_update(&param);
+  if (rc != 0) {
+    ESP_LOGW(TAG, "balayage %u sur %u ms refuse par la pile (%d)", (unsigned)fenetre_ms, (unsigned)intervalle_ms, rc);
+    return ESP_FAIL;
+  }
+  s_fenetre_ms = fenetre_ms;
+  s_intervalle_ms = intervalle_ms;
+  ESP_LOGI(TAG, "balayage regle : %u ms sur %u ms", (unsigned)fenetre_ms, (unsigned)intervalle_ms);
+  return ESP_OK;
+}
+
+void mesh_balayage(uint16_t *fenetre_ms, uint16_t *intervalle_ms) {
+  if (fenetre_ms) *fenetre_ms = s_fenetre_ms;
+  if (intervalle_ms) *intervalle_ms = s_intervalle_ms;
+}
 
 int mesh_iv_chercher(uint32_t max, uint32_t *trouve) { return crochet_chercher_iv(max, trouve); }

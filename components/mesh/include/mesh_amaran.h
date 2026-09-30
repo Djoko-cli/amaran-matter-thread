@@ -78,6 +78,15 @@ uint32_t mesh_plancher(void);
 // Retient les emissions (faux) tant que Matter s'annonce en BLE : un seul jeu
 // d'annonces existe. Vrai au demarrage.
 void mesh_autoriser_emission(bool oui);
+// Part d'ecoute du Bluetooth Mesh : fenetre et intervalle de balayage, en ms,
+// multiples de 5 (unites de 0,625 ms de la pile, par 8), 5 <= fenetre <=
+// intervalle <= 1000. Au demarrage, la pile ecoute 100 % du temps (20 sur 20 ms) ;
+// le pont en laisse a Thread (banc C). Rend ESP_ERR_INVALID_ARG ou
+// ESP_ERR_INVALID_STATE (Mesh pas pret), ou ESP_FAIL si la pile refuse (le
+// reglage reste alors celui d'avant).
+esp_err_t mesh_regler_balayage(uint16_t fenetre_ms, uint16_t intervalle_ms);
+// Reglage courant, en ms.
+void mesh_balayage(uint16_t *fenetre_ms, uint16_t *intervalle_ms);
 // Cherche l'IV Index du reseau de 0 a max (max <= 0xFFFFFF), voir crochet.h.
 // Bloque la tache appelante jusqu'a la fin.
 int mesh_iv_chercher(uint32_t max, uint32_t *trouve);

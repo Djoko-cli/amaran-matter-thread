@@ -17,7 +17,7 @@ extern "C" {
 // jour). taches : les noms de taches que `taches` examine.
 void mesh_console_init(amaran_config_t *cfg, const char *const *taches, size_t nb_taches);
 // La commande `mesh` : etat sans argument ; cles, lampe, iv, adresse, oublie,
-// ecoute, autotest.
+// ecoute, balayage, autotest.
 int mesh_console_commande(int argc, char **argv);
 // La commande `taches` : pile libre au plus bas de chaque tache, et le tas.
 int mesh_console_taches(int argc, char **argv);

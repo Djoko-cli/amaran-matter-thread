@@ -1,7 +1,7 @@
 // Commandes de console communes aux deux firmwares (ecoute et pont) : `mesh`
-// (etat, reglages, autotest) et `taches` (marges de pile), plus l'impression des
-// evenements du crochet. Spec 7.5 et 7.7 : les cles ne s'affichent jamais,
-// seulement leurs empreintes.
+// (etat, reglages, balayage, autotest) et `taches` (marges de pile), plus
+// l'impression des evenements du crochet. Spec 7.5 et 7.7 : les cles ne
+// s'affichent jamais, seulement leurs empreintes.
 #include "mesh_console.h"
 
 #include <inttypes.h>
@@ -36,6 +36,15 @@ void mesh_console_redemarrer(void) {
 
 // Age en secondes d'un instant capte. L'appelant traite d'abord le cas "jamais" (instant a 0).
 static long long age_s(int64_t quand_us) { return (long long)((esp_timer_get_time() - quand_us) / 1000000); }
+
+// "balayage : 20 ms sur 40 ms (50 %)" : la part de temps radio que le Mesh
+// passe a ecouter, arrondie au pour cent.
+static void afficher_balayage(void) {
+  uint16_t fenetre = 0, intervalle = 0;
+  mesh_balayage(&fenetre, &intervalle);
+  printf("balayage : %u ms sur %u ms (%u %%)\n", (unsigned)fenetre, (unsigned)intervalle,
+         intervalle ? (unsigned)((100u * fenetre + intervalle / 2u) / intervalle) : 0u);
+}
 
 static void afficher_etat(void) {
   mesh_stats_t st;
@@ -78,6 +87,7 @@ static void afficher_etat(void) {
   }
   printf("emission : %" PRIu32 " messages, %" PRIu32 " refus ; evenements perdus %" PRIu32 "\n", st.emis,
          st.echecs_emission, st.file_pleine);
+  afficher_balayage();
   if (st.netmic_faux > 0 && st.acces_dechiffres == 0) {
     printf("indice : NetMIC faux sans message dechiffre : IV Index faux ? (mesh iv cherche)\n");
   }
@@ -194,6 +204,39 @@ static int mesh_adresse(int argc, char **argv) {
   return 0;
 }
 
+// mesh balayage : affiche le reglage ; mesh balayage <fenetre_ms> <intervalle_ms> :
+// le change a chaud (banc C : laisser de la radio a Thread).
+static int mesh_balayage_cmd(int argc, char **argv) {
+  if (argc == 2) {
+    afficher_balayage();
+    return 0;
+  }
+  uint32_t fenetre = 0, intervalle = 0;
+  if (argc != 4 || !texte_lire_nombre(argv[2], &fenetre) || !texte_lire_nombre(argv[3], &intervalle)) {
+    printf("erreur : mesh balayage [<fenetre_ms> <intervalle_ms>]\n");
+    return 1;
+  }
+  // Une valeur au-dela de 16 bits ne doit pas se replier sur une valeur valide :
+  // on la borne, et mesh_regler_balayage la refuse (65535 n'est pas un multiple de 5).
+  const esp_err_t err = mesh_regler_balayage(fenetre > UINT16_MAX ? UINT16_MAX : (uint16_t)fenetre,
+                                             intervalle > UINT16_MAX ? UINT16_MAX : (uint16_t)intervalle);
+  switch (err) {
+    case ESP_OK:
+      printf("ok ");
+      afficher_balayage();
+      return 0;
+    case ESP_ERR_INVALID_ARG:
+      printf("erreur : bornes : multiples de 5 ms, 5 <= fenetre <= intervalle <= 1000\n");
+      return 1;
+    case ESP_ERR_INVALID_STATE:
+      printf("erreur : Bluetooth Mesh pas pret\n");
+      return 1;
+    default:
+      printf("erreur : refus de la pile Bluetooth Mesh (%s)\n", esp_err_to_name(err));
+      return 1;
+  }
+}
+
 int mesh_console_commande(int argc, char **argv) {
   if (argc == 1) {
     afficher_etat();
@@ -204,6 +247,7 @@ int mesh_console_commande(int argc, char **argv) {
   if (!strcmp(s, "lampe")) return mesh_lampe(argc, argv);
   if (!strcmp(s, "iv")) return mesh_iv(argc, argv);
   if (!strcmp(s, "adresse")) return mesh_adresse(argc, argv);
+  if (!strcmp(s, "balayage")) return mesh_balayage_cmd(argc, argv);
   if (!strcmp(s, "oublie") && argc == 2) {
     if (config_oublier_cles() != ESP_OK) {
       printf("erreur : ecriture NVS\n");

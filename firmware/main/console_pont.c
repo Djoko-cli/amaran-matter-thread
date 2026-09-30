@@ -160,7 +160,9 @@ void console_pont_demarrer(amaran_config_t *cfg) {
   const esp_console_cmd_t cmds[] = {
       {.command = "lampes", .help = "etat des lampes : lu, consigne, joignabilite, releves, ordres", .func = cmd_lampes},
       {.command = "lampe", .help = "lampe <1-2> on|off|niveau <0-1000>|releve", .func = cmd_lampe},
-      {.command = "mesh", .help = "etat ; mesh cles|lampe|iv|adresse|oublie|ecoute|autotest|releve ...", .func = cmd_mesh},
+      {.command = "mesh",
+       .help = "etat ; mesh cles|lampe|iv|adresse|oublie|ecoute|balayage|autotest|releve ...",
+       .func = cmd_mesh},
       {.command = "matter", .help = "mise en service, Thread, abonnements, codes, identite", .func = cmd_matter},
       {.command = "decommission", .help = "retire toutes les fabriques Matter (cles gardees)", .func = cmd_decommission},
       {.command = "redemarre", .help = "redemarre la carte", .func = cmd_redemarre},
