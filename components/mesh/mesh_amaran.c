@@ -7,6 +7,8 @@
 #include <inttypes.h>
 #include <string.h>
 
+#include "sdkconfig.h"
+
 #include "esp_log.h"
 #include "esp_mac.h"
 #include "esp_system.h"
@@ -29,12 +31,23 @@
 #include "crochet.h"
 #include "hote_ble.h"
 
+// Garde-fou : au-dessus de WARNING, la pile Mesh imprime les cles (BT_INFO NetKey
+// et DevKey dans core/main.c, BT_DBG dans core/crypto.c). Le niveau est epingle
+// dans ecoute/sdkconfig.defaults. Pas de BLE_MESH_NO_LOG : la spec 5.3 veut
+// garder l'erreur "IVIndex out of sync". Symbole d'ESP-IDF (Kconfig.in) :
+// 0 NONE, 1 ERROR, 2 WARNING, 3 INFO, 4 DEBUG, 5 VERBOSE.
+#if defined(CONFIG_BLE_MESH_STACK_TRACE_LEVEL) && CONFIG_BLE_MESH_STACK_TRACE_LEVEL > 2
+#error "Niveau de trace Bluetooth Mesh au-dessus de WARNING : la pile imprimerait les cles du reseau. Choisir CONFIG_BLE_MESH_TRACE_LEVEL_WARNING (idf.py menuconfig, ou supprimer ecoute/sdkconfig pour le regenerer depuis sdkconfig.defaults)."
+#endif
+
 static const char *TAG = "mesh";
 
 #define NET_IDX 0x0000
 #define APP_IDX 0x0000
 #define TTL 3
 #define ECART_MS 70          // entre deux messages et entre deux repetitions
+// vTaskDelay(n) dort entre n-1 et n ticks (60 a 70 ms a 100 Hz) : un tick de plus tient ECART_MS au moins.
+#define ECART_TICKS (pdMS_TO_TICKS(ECART_MS) + 1)
 #define FILE_TX 16
 #define BLOC_SEQ 256         // le plancher sauve devance toujours la sequence
 // Sous le seuil ou la pile lance seule une mise a jour d'IV (IV_UPDATE_SEQ_LIMIT
@@ -185,7 +198,7 @@ static void tache_tx(void *arg) {
     while (!s_pret) vTaskDelay(pdMS_TO_TICKS(100));
     if (!preparer_sequence(m.repetitions)) {
       s_echecs++;
-      vTaskDelay(pdMS_TO_TICKS(ECART_MS));
+      vTaskDelay(ECART_TICKS);
       continue;
     }
     esp_ble_mesh_msg_ctx_t ctx = {
@@ -203,7 +216,7 @@ static void tache_tx(void *arg) {
       err = esp_ble_mesh_server_model_send_msg(&s_vendeur[0], &ctx, TELINK_OPCODE, TELINK_TAILLE, m.trame);
       if (err != ESP_OK) break;
       if (seq_envoi + 1 > s_seq_min) s_seq_min = seq_envoi + 1;
-      if (r + 1 < m.repetitions) vTaskDelay(pdMS_TO_TICKS(ECART_MS));
+      if (r + 1 < m.repetitions) vTaskDelay(ECART_TICKS);
     }
     if (err == ESP_OK) {
       s_emis++;
@@ -211,7 +224,7 @@ static void tache_tx(void *arg) {
       s_echecs++;
       ESP_LOGW(TAG, "envoi vers 0x%04x refuse : %s", m.dst, esp_err_to_name(err));
     }
-    vTaskDelay(pdMS_TO_TICKS(ECART_MS));
+    vTaskDelay(ECART_TICKS);
   }
 }
 
@@ -232,7 +245,10 @@ esp_err_t mesh_demarrer(const amaran_config_t *cfg) {
   err = hote_ble_demarrer();
   if (err != ESP_OK) return err;
   esp_read_mac(s_uuid, ESP_MAC_BT);
-  // Relais coupe : la pile avertirait pour chaque message qu'elle ne relaie pas.
+  // Erreurs seules : le relais coupe ferait avertir la pile a chaque message qu'elle
+  // ne relaie pas, et certains avertissements impriment une cle (BT_WARN
+  // "AppKeyValExist %s" dans local.c, compile au niveau WARNING que le garde-fou
+  // ci-dessus laisse passer).
   esp_log_level_set("BLE_MESH", ESP_LOG_ERROR);
   esp_ble_mesh_register_prov_callback(rappel_prov);
   esp_ble_mesh_register_config_server_callback(rappel_cfg_srv);

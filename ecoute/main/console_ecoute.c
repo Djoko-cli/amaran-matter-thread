@@ -90,6 +90,9 @@ static int envoyer(uint16_t dst, const uint8_t t[TELINK_TAILLE], uint8_t repetit
 }
 
 static int mesh_cles(int argc, char **argv) {
+  // La ligne tapee contient les cles, meme invalide ou si la NVS echoue : on
+  // vide l'historique (fleche haut) avant tout le reste.
+  linenoiseHistoryFree();
   uint8_t net[16], app[16];
   if (argc != 4 || !texte_hex_vers_octets(argv[2], net, 16) || !texte_hex_vers_octets(argv[3], app, 16)) {
     printf("erreur : mesh cles <reseau 32 hexa> <application 32 hexa>\n");
@@ -99,7 +102,6 @@ static int mesh_cles(int argc, char **argv) {
     printf("erreur : ecriture NVS\n");
     return 1;
   }
-  linenoiseHistoryFree();  // la ligne tapee contenait les cles
   char en[9], ea[9];
   config_empreinte(net, en);
   config_empreinte(app, ea);

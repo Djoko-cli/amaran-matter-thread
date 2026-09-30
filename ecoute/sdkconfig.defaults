@@ -39,6 +39,11 @@ CONFIG_BLE_MESH_CRPL=20
 CONFIG_BLE_MESH_ADV_BUF_COUNT=120
 # Accepte l'IV Index +1 annonce sans drapeau de mise a jour (recuperation).
 CONFIG_BLE_MESH_IVU_RECOVERY_IVI=y
+# Trace de la pile epinglee a WARNING (le defaut d'ESP-IDF, mais on le fixe) :
+# au-dessus, elle imprime les cles (BT_INFO NetKey et DevKey dans core/main.c,
+# BT_DBG dans core/crypto.c). mesh_amaran.c refuse de compiler au-dessus de
+# WARNING, et outils/check_sdkconfig.sh controle la valeur de ecoute/sdkconfig.
+CONFIG_BLE_MESH_TRACE_LEVEL_WARNING=y
 
 # AES logiciel : l'AES materiel fait une allocation DMA par bloc, et la pile
 # Mesh finit par s'arreter (amaran-bridge : "Encrypt failed").

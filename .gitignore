@@ -9,6 +9,13 @@ __pycache__/
 .vscode/
 .DS_Store
 logs/
+.superpowers/
+*.log
+
+# Bases d'amaran Desktop et binaires : jamais dans le depot (il est public)
+*.db
+*.sqlite*
+*.bin
 
 # Cles du reseau Bluetooth Mesh : jamais dans le depot (il est public)
 *.cles
