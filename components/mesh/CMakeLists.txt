@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "texte.c" "crochet_tri.c" "config_amaran.c" "hote_ble.c" "crochet.c" "mesh_amaran.c" "autotest.c"
+    SRCS "texte.c" "crochet_tri.c" "config_amaran.c" "hote_ble.c" "crochet.c" "plancher.c" "mesh_amaran.c" "autotest.c"
     INCLUDE_DIRS "include"
     PRIV_INCLUDE_DIRS
         "."

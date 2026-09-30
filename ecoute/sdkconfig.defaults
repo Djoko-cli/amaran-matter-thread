@@ -16,6 +16,8 @@ CONFIG_BT_NIMBLE_ENABLED=y
 CONFIG_BT_LE_SCAN_DUPL_TYPE_DATA_DEVICE=y
 CONFIG_BT_LE_50_FEATURE_SUPPORT=n
 CONFIG_BT_NIMBLE_50_FEATURE_SUPPORT=n
+# Journal NimBLE aux avertissements : au banc, 557 lignes « GAP procedure » a l'INFO.
+CONFIG_BT_NIMBLE_LOG_LEVEL_WARNING=y
 
 # Bluetooth Mesh : noeud qui entre seul dans le reseau des lampes (spec 5.1).
 CONFIG_BLE_MESH=y
@@ -23,6 +25,9 @@ CONFIG_BLE_MESH_NODE=y
 CONFIG_BLE_MESH_PB_ADV=y
 CONFIG_BLE_MESH_PB_GATT=n
 CONFIG_BLE_MESH_GATT_PROXY_SERVER=n
+# Ni proxy ni PB-GATT : la pile Mesh n'enregistre aucun service GATT. Obligatoire
+# dans le firmware du pont, ou l'hote NimBLE appartient a Matter.
+CONFIG_BLE_MESH_PROXY=n
 CONFIG_BLE_MESH_RELAY=n
 CONFIG_BLE_MESH_FRIEND=n
 CONFIG_BLE_MESH_LOW_POWER=n

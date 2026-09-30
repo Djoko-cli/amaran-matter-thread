@@ -8,6 +8,10 @@
 
 #include "telink.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define TRI_ENTETE_RESEAU 9  // IVI/NID, CTL/TTL, SEQ (3), SRC (2), DST (2)
 
 typedef struct {
@@ -38,3 +42,7 @@ int tri_etat_lampe(uint16_t src, const uint8_t *acces, size_t len, const uint16_
                    uint8_t trame[TELINK_TAILLE]);
 // Balise reseau securisee (type 0x01), octet de type compris : 22 octets.
 bool tri_lire_balise(const uint8_t *b, size_t len, tri_balise_t *balise);
+
+#ifdef __cplusplus
+}
+#endif

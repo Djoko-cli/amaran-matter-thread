@@ -12,6 +12,10 @@
 #include "config_amaran.h"
 #include "telink.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define MESH_GROUPE_TOUS 0xC000
 #define MESH_REPETITIONS_ORDRE 2
 #define MESH_REPETITIONS_ETAT 1
@@ -53,6 +57,9 @@ typedef struct {
   int64_t derniere_reponse_us[AMARAN_LAMPES_MAX];
 } mesh_stats_t;
 
+// Entre dans le reseau des lampes. L'hote NimBLE doit etre demarre, par
+// hote_ble_demarrer() ou par la pile Matter : on attend 10 s au plus qu'il soit
+// synchronise (ESP_ERR_TIMEOUT sinon).
 esp_err_t mesh_demarrer(const amaran_config_t *cfg);
 bool mesh_pret(void);
 // repetitions : MESH_REPETITIONS_ORDRE pour un ordre, MESH_REPETITIONS_ETAT
@@ -65,8 +72,15 @@ uint32_t mesh_iv_courant(void);
 uint32_t mesh_sequence(void);
 // plancher de sequence sauve en NVS (0 avant l'adhesion)
 uint32_t mesh_plancher(void);
+// Retient les emissions (faux) tant que Matter s'annonce en BLE : un seul jeu
+// d'annonces existe. Vrai au demarrage.
+void mesh_autoriser_emission(bool oui);
 // Cherche l'IV Index du reseau de 0 a max (max <= 0xFFFFFF), voir crochet.h.
 // Bloque la tache appelante jusqu'a la fin.
 int mesh_iv_chercher(uint32_t max, uint32_t *trouve);
 // Passe les exemples chiffres de la specification Mesh ; rend le nombre d'echecs.
 int mesh_autotest(void);
+
+#ifdef __cplusplus
+}
+#endif

@@ -30,6 +30,8 @@ static void tache_hote(void *arg) {
   nimble_port_freertos_deinit();
 }
 
+bool hote_ble_pret(void) { return ble_hs_synced(); }
+
 esp_err_t hote_ble_demarrer(void) {
   s_synchro = xSemaphoreCreateBinary();
   if (!s_synchro) return ESP_ERR_NO_MEM;

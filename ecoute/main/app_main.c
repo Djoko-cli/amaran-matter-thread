@@ -5,6 +5,7 @@
 
 #include "config_amaran.h"
 #include "console_ecoute.h"
+#include "hote_ble.h"
 #include "mesh_amaran.h"
 
 static const char *TAG = "ecoute";
@@ -18,9 +19,15 @@ void app_main(void) {
   }
   ESP_ERROR_CHECK(err);
   static amaran_config_t cfg;
-  ESP_ERROR_CHECK(config_charger(&cfg));
+  err = config_charger(&cfg);
+  if (err != ESP_OK) {
+    // Pas de boucle de redemarrage : la console reste la pour diagnostiquer.
+    ESP_LOGE(TAG, "reglages illisibles (%s) : console seule", esp_err_to_name(err));
+    cfg.cles_presentes = false;
+  }
   if (cfg.cles_presentes) {
-    err = mesh_demarrer(&cfg);
+    err = hote_ble_demarrer();
+    if (err == ESP_OK) err = mesh_demarrer(&cfg);
     if (err == ESP_OK) {
       journal_demarrer(&cfg);
     } else {

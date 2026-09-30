@@ -7,6 +7,10 @@
 
 #include "esp_err.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define AMARAN_LAMPES_MAX 2
 #define AMARAN_NOM_MAX 32
 #define AMARAN_ADRESSE_MIN 0x7F00
@@ -42,3 +46,7 @@ esp_err_t config_sauver_plancher(uint32_t plancher);
 esp_err_t config_oublier_cles(void);
 // 8 premiers chiffres hexa (majuscules) du SHA-256 de la cle, et un NUL.
 void config_empreinte(const uint8_t cle[16], char sortie[9]);
+
+#ifdef __cplusplus
+}
+#endif
