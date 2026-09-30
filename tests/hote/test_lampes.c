@@ -452,6 +452,21 @@ static void test_mesures_du_banc_c(void) {
           (unsigned)L.delai_max_ms);
 }
 
+static void test_delai_depuis_le_dernier_ordre(void) {
+  demarrer(0, true);
+  recevoir(0x0002, true, 500);
+  oublier_sorties();
+  for (int k = 0; k < 12; k++) {  // curseur de Maison : une valeur toutes les 250 ms pendant 3 s
+    const uint16_t v = (uint16_t)(510 + 10 * k);
+    ordre_matter(0, NULL, &v);
+    avancer(250);
+  }
+  avancer(500);  // la derniere valeur (620) est partie, sa demande d'etat aussi
+  recevoir(0x0002, true, 620);
+  VERIFIE(L.confirmes == 1 && L.lents == 0 && L.delai_max_ms < 1000,
+          "delai compte depuis la derniere valeur (%u ms)", (unsigned)L.delai_max_ms);
+}
+
 int main(void) {
   test_conversion();
   test_demarrage_relit_aussitot();
@@ -473,5 +488,6 @@ int main(void) {
   test_regler_releve();
   test_file_refusee();
   test_mesures_du_banc_c();
+  test_delai_depuis_le_dernier_ordre();
   return bilan("lampes");
 }

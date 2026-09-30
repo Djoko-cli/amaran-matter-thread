@@ -140,6 +140,7 @@ void lampes_ordre(lampes_t *l, int lampe, const bool *marche, const uint16_t *in
   // l'ancienne, et part au plus tot a la prochaine etape (5.6).
   if (p->phase != LAMPE_REPOS) {
     p->a_refaire = true;
+    p->debut_ms = maintenant_ms;  // delai mesure depuis la derniere valeur (regle 5.8)
     return;
   }
   // Une valeur egale au dernier etat lu ne fait jamais emettre (6.4).
