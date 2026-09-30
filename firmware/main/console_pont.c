@@ -128,8 +128,11 @@ static int cmd_matter(int argc, char **argv) {
 }
 
 static int cmd_decommission(int argc, char **argv) {
-  (void)argc;
   (void)argv;
+  if (argc != 1) {  // `decommission ?` ne doit pas desappairer
+    printf("erreur : decommission ne prend pas d'argument\n");
+    return 1;
+  }
   printf("Retrait de toutes les fabriques Matter, puis redemarrage (cles et lampes gardees)...\n");
   pont_desappairer();
   return 0;

@@ -17,6 +17,12 @@ static void ordre_matter(int lampe, const bool *marche, const uint16_t *intensit
   tache_lampes_ordre(lampe, marche, intensite, true);
 }
 
+// Marge de la pile de main (CONFIG_ESP_MAIN_TASK_STACK_SIZE), relevee au banc :
+// la tache se termine a la fin d'app_main.
+static void marge_main(void) {
+  ESP_LOGI(TAG, "pile de main : %u o libres au plus bas", (unsigned)uxTaskGetStackHighWaterMark(NULL));
+}
+
 extern "C" void app_main(void) {
   esp_err_t err = nvs_flash_init();
   if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -37,10 +43,12 @@ extern "C" void app_main(void) {
   err = pont_demarrer(&cfg, ordre_matter);
   if (err != ESP_OK) {
     ESP_LOGE(TAG, "Matter non demarre : %s", esp_err_to_name(err));
+    marge_main();
     return;
   }
   if (!cfg.cles_presentes) {
     ESP_LOGW(TAG, "cles absentes : lancer outils/cles_amaran.py");
+    marge_main();
     return;
   }
   // Le Bluetooth Mesh n'entre dans le reseau des lampes qu'une fois Maison
@@ -49,4 +57,5 @@ extern "C" void app_main(void) {
   vTaskDelay(pdMS_TO_TICKS(3000));  // la connexion BLE de mise en service se ferme
   err = mesh_demarrer(&cfg);
   if (err != ESP_OK) ESP_LOGE(TAG, "Bluetooth Mesh non demarre : %s", esp_err_to_name(err));
+  marge_main();
 }

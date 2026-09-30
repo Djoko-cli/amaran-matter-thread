@@ -271,9 +271,19 @@ bool pont_thread_attache(void) {
   return r == OT_DEVICE_ROLE_CHILD || r == OT_DEVICE_ROLE_ROUTER || r == OT_DEVICE_ROLE_LEADER;
 }
 
-void pont_desappairer(void) { esp_matter::factory_reset(); }
+void pont_desappairer(void) {
+  if (!esp_matter::is_started()) {
+    printf("Matter non demarre : rien a desappairer\n");
+    return;
+  }
+  esp_matter::factory_reset();
+}
 
 void pont_afficher(void) {
+  if (!esp_matter::is_started()) {  // sans la pile, ses fournisseurs n'existent pas (VerifyOrDie)
+    printf("Matter non demarre (voir le journal de demarrage)\n");
+    return;
+  }
   // Tout est lu sous le verrou de la pile, puis imprime apres (la sortie USB
   // peut attendre : la pile n'attend pas avec elle).
   char qr[128] = {0}, manuel[32] = {0}, fabricant[33] = {0}, produit[33] = {0}, serie[33] = {0};
