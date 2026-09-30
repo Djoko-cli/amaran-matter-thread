@@ -1,4 +1,4 @@
-"""Imite un port pyserial pour les tests : lignes a rendre, octets ecrits."""
+"""Imite un port serie (PortSerie) pour les tests : lignes a rendre, octets ecrits."""
 
 
 class PortFactice:

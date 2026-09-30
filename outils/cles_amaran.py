@@ -11,8 +11,6 @@ chiffres hexa du SHA-256), les memes que la commande `mesh` du pont.
 
     python outils/cles_amaran.py                    # montre ce qui serait envoye
     python outils/cles_amaran.py --port /dev/cu.usbmodem1101
-
-Avec --port, lancer avec le Python d'ESP-IDF (pyserial).
 """
 import argparse
 import glob

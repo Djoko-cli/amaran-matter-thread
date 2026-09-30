@@ -1,4 +1,4 @@
-"""Tests de outils/serie.py et outils/console.py, sans carte ni pyserial."""
+"""Tests de outils/serie.py et outils/console.py, sans carte."""
 import contextlib
 import io
 import os
@@ -43,6 +43,49 @@ class TestConsole(unittest.TestCase):
         self.assertEqual(result, 1)
         output = stdout.getvalue()
         self.assertTrue(any("erreur : " in line for line in output.split('\n')))
+
+
+class TestPortSerie(unittest.TestCase):
+    """Le port brut, sur une paire de pseudo-terminaux (pas de carte)."""
+
+    def setUp(self):
+        import tty
+
+        self.maitre, esclave = os.openpty()
+        tty.setraw(esclave)
+        os.set_blocking(esclave, False)
+        self.port = serie.PortSerie(esclave, 0.1)
+
+    def tearDown(self):
+        self.port.close()
+        os.close(self.maitre)
+
+    def test_readline_rend_une_ligne_a_la_fois(self):
+        os.write(self.maitre, b"mesh\r\nok cles A B\r\namaran> ")
+        self.assertEqual(self.port.readline(), b"mesh\r\n")
+        self.assertEqual(self.port.readline(), b"ok cles A B\r\n")
+        self.assertEqual(self.port.readline(), b"amaran> ")  # sans fin de ligne : rendu au bout du delai
+
+    def test_readline_sans_rien_rend_vide(self):
+        self.assertEqual(self.port.readline(), b"")
+
+    def test_write_arrive_de_l_autre_cote(self):
+        self.port.write(b"lampe 1 releve\r\n")
+        self.assertEqual(os.read(self.maitre, 100), b"lampe 1 releve\r\n")
+
+    def test_reset_input_buffer_oublie_le_tampon(self):
+        os.write(self.maitre, b"vieux\r\nreste")
+        self.assertEqual(self.port.readline(), b"vieux\r\n")
+        self.port.reset_input_buffer()
+        self.assertEqual(self.port.readline(), b"")
+
+    def test_close_deux_fois_sans_erreur(self):
+        self.port.close()
+        self.port.close()
+
+    def test_port_inexistant_leve_erreur_serie(self):
+        with self.assertRaises(serie.ErreurSerie):
+            serie.ouvrir_port("/dev/amaran-port-inexistant")
 
 
 if __name__ == "__main__":

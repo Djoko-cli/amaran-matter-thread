@@ -5,7 +5,7 @@
 
 "@N" lit pendant N secondes. Tout est copie, horodate, dans
 logs/AAAA-MM-JJ-HHMM-console.log (logs/ est ignore par git). Les cles sont
-masquees. Lancer avec le Python d'ESP-IDF (pyserial).
+masquees.
 """
 import argparse
 import os

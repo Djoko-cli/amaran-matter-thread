@@ -1,17 +1,21 @@
 """Liaison serie avec le pont (USB natif du C6) et masquage des cles.
 
-ouvrir_port() demande pyserial : lancer les outils avec le Python d'ESP-IDF
-(`export PATH="/opt/homebrew/bin:$PATH" && source ~/esp/esp-idf/export.sh`).
-Les tests n'en ont pas besoin.
+Sans pyserial : le port est ouvert a la main (os, termios), pour baisser DTR
+et RTS en un seul appel (voir ouvrir_port).
 """
+import fcntl
+import os
 import re
+import select
+import struct
+import termios
 import time
 
 HEXA_CLE = re.compile(r"[0-9A-Fa-f]{32}")
 
 
 class ErreurSerie(Exception):
-    """Port serie inaccessible, ou pyserial absent."""
+    """Port serie inaccessible ou inutilisable."""
     pass
 
 
@@ -20,24 +24,84 @@ def masquer(texte):
     return HEXA_CLE.sub("<cle masquee>", texte)
 
 
-def ouvrir_port(nom, debit=115200, delai=0.2):
-    try:
-        import serial  # pyserial
-    except ImportError:
-        raise ErreurSerie("pyserial absent : lancer avec le Python d'ESP-IDF")
+class PortSerie:
+    """Port serie deja ouvert : write(), readline(), reset_input_buffer(), close()."""
 
-    port = serial.Serial()
-    port.port = nom
-    port.baudrate = debit
-    port.timeout = delai
-    # Jamais RTS=1/DTR=0 : cette combinaison redemarre le C6 (lecon du Halo).
-    port.dtr = False
-    port.rts = False
+    def __init__(self, fd, delai):
+        self.fd = fd
+        self.delai = delai
+        self._tampon = b""
+
+    def write(self, octets):
+        while octets:
+            try:
+                n = os.write(self.fd, octets)
+            except BlockingIOError:
+                select.select([], [self.fd], [], self.delai)
+                continue
+            octets = octets[n:]
+
+    def readline(self):
+        """Une ligne avec son \\n, sinon ce qui est arrive pendant delai secondes."""
+        fin = time.monotonic() + self.delai
+        while b"\n" not in self._tampon:
+            reste = fin - time.monotonic()
+            if reste <= 0:
+                break
+            prets, _, _ = select.select([self.fd], [], [], reste)
+            if not prets:
+                break
+            try:
+                octets = os.read(self.fd, 4096)
+            except BlockingIOError:
+                continue
+            if not octets:
+                raise ErreurSerie("port ferme")
+            self._tampon += octets
+        i = self._tampon.find(b"\n") + 1
+        if i == 0:
+            i = len(self._tampon)
+        ligne, self._tampon = self._tampon[:i], self._tampon[i:]
+        return ligne
+
+    def reset_input_buffer(self):
+        termios.tcflush(self.fd, termios.TCIFLUSH)
+        self._tampon = b""
+
+    def close(self):
+        if self.fd is not None:
+            os.close(self.fd)
+            self.fd = None
+
+
+def ouvrir_port(nom, debit=115200, delai=0.2):
+    """Ouvre le port du C6 sans le redemarrer.
+
+    RTS=1 avec DTR=0, meme un instant, redemarre le C6. pyserial baisse DTR
+    puis RTS en deux appels et passe par cet etat : chaque ouverture relancait
+    la carte (constate au banc du 30/09, deja vu sur le Halo et la hotte). Ici
+    les deux tombent ensemble (TIOCMSET), comme dans les outils de ces projets.
+    """
     try:
-        port.open()
+        fd = os.open(nom, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
     except OSError as e:
         raise ErreurSerie("port %s inaccessible (%s)" % (nom, e))
-    return port
+    try:
+        fcntl.ioctl(fd, termios.TIOCEXCL)
+        fcntl.ioctl(fd, termios.TIOCMSET, struct.pack("I", 0))
+        iflag, oflag, cflag, lflag, _, _, cc = termios.tcgetattr(fd)
+        iflag &= ~(termios.IGNBRK | termios.BRKINT | termios.PARMRK | termios.ISTRIP | termios.INLCR
+                   | termios.IGNCR | termios.ICRNL | termios.IXON)
+        oflag &= ~termios.OPOST
+        lflag &= ~(termios.ECHO | termios.ECHONL | termios.ICANON | termios.ISIG | termios.IEXTEN)
+        cflag &= ~(termios.CSIZE | termios.PARENB | termios.HUPCL)
+        cflag |= termios.CS8 | termios.CLOCAL | termios.CREAD
+        vitesse = getattr(termios, "B%d" % debit)
+        termios.tcsetattr(fd, termios.TCSANOW, [iflag, oflag, cflag, lflag, vitesse, vitesse, cc])
+    except (OSError, termios.error, AttributeError) as e:
+        os.close(fd)
+        raise ErreurSerie("port %s inutilisable (%s)" % (nom, e))
+    return PortSerie(fd, delai)
 
 
 def lire_pendant(port, duree, ecrire):

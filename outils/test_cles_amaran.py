@@ -1,4 +1,4 @@
-"""Tests de outils/cles_amaran.py, sans carte ni pyserial.
+"""Tests de outils/cles_amaran.py, sans carte.
 
     python3 -m unittest discover -s outils -p "test_*.py" -v
 """
