@@ -12,9 +12,9 @@ Relevé le 30/09/2026 (bancs R1 à R6, [BANC.md](BANC.md)), avec le firmware `ec
 - **Retour de coupure.** Coupée puis remise au bouton, la lampe ne revient pas toujours dans le même état. Quatre retours relevés, de trois sortes :
   - **allumée vers 40 %**, deux fois (41 % et 40 %, banc R4), une fois par lampe, chacune éteinte avant la coupure (à 93 % et à 6 % de niveau retenu) ;
   - **allumée à 6 %**, une fois : au contrôle du plan 2 (30/09), la lampe 2, éteinte à 6 % de niveau retenu ;
-  - **éteinte, au niveau retenu de 60 %**, une fois (banc T5, 01/10).
+  - **éteinte, au niveau retenu de 60 %**, une fois (banc T5, 01/10) : la lampe 2, vue allumée à 60 % juste avant la coupure.
 
-  Une lampe allumée avant la coupure n'a pas été essayée.
+  C'est le seul essai d'une lampe allumée avant la coupure.
 - **Intensité au pour cent.** Une 60d ne garde que le pour cent entier : `niveau 433` et `niveau 437` sont relus 430, `niveau 500` est relu 500 (banc C, 30/09). Le pont arrondit donc ses consignes au pour cent le plus proche.
 - **Trames et opcodes absents de la spec :** type `0x0A` (alimentation), type `0x00` (produit), et les opcodes à un octet `0x33` / `0x31`.
 
