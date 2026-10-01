@@ -11,25 +11,24 @@ Projets frères :
 
 ## État
 
-**Reconnaissance faite : l'ESP32 entre dans le réseau des lampes, les pilote
-et lit leur état.** Le design complet est dans
+**Le pont marche : les deux lampes sont dans Maison, sur une seule C6.** Le design complet est dans
 [docs/superpowers/specs/2026-09-28-pont-amaran-design.md](docs/superpowers/specs/2026-09-28-pont-amaran-design.md).
 
 | Phase | Contenu | État |
 |---|---|---|
 | P0 | Reconnaissance. Un firmware d'écoute rejoint le réseau des lampes et vérifie : IV Index, réponses captées, ordres, molette, groupe, cohabitation avec amaran Desktop | faite (30/09/2026) : 62 ordres sur 62 confirmés par relecture, toutes les demandes d'état ont reçu leur réponse ; aucun état spontané (ni molette, ni bouton, ni coupure) |
 | P1 | Matter sur la même carte, et banc de la radio partagée entre Thread et Bluetooth : une ou deux C6 | faite (30/09/2026) : une seule C6 suffit, avec l'écoute du Mesh à 50 %, l'arrondi au pour cent et la demande d'état doublée ; 96,9 % et 98,3 % des relectures répondues, 47 salves d'ordres de Maison sans échec |
-| P2 | Produit : voyant, bouton, console, fiche produit ; bancs, puis endurance 24 h | à faire |
+| P2 | Produit : voyant, bouton, console, fiche produit ; bancs, puis endurance 24 h | en cours : T1 à T9 passés le 01/10/2026 (T5 partiel, T7 non fait) ; endurance 24 h en cours |
 
 Résultats des bancs : [docs/BANC.md](docs/BANC.md). Protocole relevé : [docs/PROTOCOLE.md](docs/PROTOCOLE.md).
 
-## Ce que le pont fera
+## Ce que fait le pont
 
-- Montrer chaque 60d dans Maison comme une lampe à intensité variable, avec
+- Il montre chaque 60d dans Maison comme une lampe à intensité variable, avec
   marche/arrêt et luminosité.
-- Suivre l'état réel des lampes, qu'on les règle dans Maison, dans amaran
+- Il suit l'état réel des lampes, qu'on les règle dans Maison, dans amaran
   Desktop ou à la molette.
-- Laisser amaran Desktop fonctionner en même temps.
+- Il laisse amaran Desktop fonctionner en même temps.
 
 ## Comment
 
@@ -45,6 +44,60 @@ Desktop.
 
 **Côté Maison.** C'est un pont Matter sur Thread (ESP-IDF + esp-matter) : un
 agrégateur, et une lampe « pontée » par 60d.
+
+## Installer
+
+Il faut ESP-IDF v5.5.4 et esp-matter (commit `c5b9ea8`) dans `~/esp`, une ESP32-C6 SuperMini, et un routeur de bordure Thread (HomePod mini, Apple TV).
+
+1. Compiler et flasher. Le port est toujours donné explicitement :
+
+   ```bash
+   source ~/esp/esp-idf/export.sh && source ~/esp/esp-matter/export.sh
+   cd firmware && idf.py build && idf.py -p /dev/cu.usbmodemXXXX erase-flash flash
+   ```
+
+2. Charger les clés du réseau des lampes, lues dans la base d'amaran Desktop :
+
+   ```bash
+   python3 outils/cles_amaran.py --port /dev/cu.usbmodemXXXX
+   ```
+
+3. Appairer. `python3 outils/console.py --port /dev/cu.usbmodemXXXX matter` imprime le code manuel. Dans Maison : « + », « Ajouter un accessoire », « Plus d'options… », puis ce code. Le pont utilise les codes de test du SDK Matter : Maison prévient qu'il n'est pas certifié, « Ajouter quand même ».
+
+Une fois appairé, le pont entre dans le réseau des lampes, et elles apparaissent sous leurs noms d'amaran Desktop.
+
+## Voyant et bouton
+
+| voyant | sens |
+|---|---|
+| bleu clignotant | pas appairé à Maison |
+| orange lent | réseau Thread absent |
+| éteint, brève lueur blanche toutes les 10 s | tout va bien |
+| rouge fixe | Bluetooth Mesh inopérant : la console dit pourquoi |
+| éclat vert | ordre confirmé par la lampe |
+| rouge ×3 | ordre abandonné après 3 essais |
+| arc-en-ciel | un contrôleur demande l'identification |
+| rouge, noir, violet, noir, vite | BOOT tenu 8 s : relâcher pour désappairer |
+| éclat blanc | BOOT court : redémarrage |
+
+Bouton BOOT : appui court, redémarrage ; de 2 à 8 s, rien ; 8 s ou plus, désappairage de Maison. Les clés restent.
+
+## Console
+
+Sur l'USB, en français (`python3 outils/console.py --port <port> "<commande>"`, ou tout terminal série) :
+- `lampes` : état lu, consigne, joignabilité, relectures et ordres de chaque lampe ;
+- `lampe <n> on|off|niveau <0-1000>|releve` ;
+- `mesh` : réseau, empreintes des clés, compteurs ; `mesh releve <s>`, `mesh balayage`, `mesh ecoute on|off`, `mesh autotest`, etc. ;
+- `matter` : mise en service, Thread, abonnements, codes, identité ;
+- `led [test|stop]`, `cause`, `taches`, `decommission`, `redemarre`.
+
+## À savoir
+
+- Une lampe éteinte depuis Maison, ou depuis amaran Desktop, ignore sa molette et le bouton de sa molette. Pour la rallumer à la main : couper puis remettre son alimentation. Son état au retour varie : allumée vers 40 %, allumée à son niveau retenu, ou éteinte.
+- Maison suit la molette et amaran Desktop en 5 s environ : les lampes ne signalent rien d'elles-mêmes, et le pont les relit toutes les 5 s.
+- amaran Desktop, lui, ne suit pas les ordres venus de Maison.
+- Maison ne montre une lampe « Pas de réponse », puis son retour, qu'après avoir touché sa tuile. Le pont publie pourtant chaque changement.
+- Pour la luminosité, taper sur la jauge de Maison est plus fluide que la faire glisser : un glissé envoie une valeur toutes les 150 à 300 ms.
 
 ## Clés du réseau
 
@@ -87,5 +140,9 @@ de [matplotlib](https://matplotlib.org) 3.10.8 (`font_manager.py`) la fonction
 (Copyright (c) 2012- Matplotlib Development Team). Sa mention est en tête du
 script, et le texte de la licence dans
 [outils/LICENCE-matplotlib.txt](outils/LICENCE-matplotlib.txt).
+
+Le voyant et le bouton BOOT reprennent la logique du pont Halo
+([benq-screenbar-halo-matter](https://github.com/Djoko-cli/benq-screenbar-halo-matter),
+du même auteur) : `components/socle`, avec ses tests.
 
 Projet personnel, sans lien avec Aputure. Il n'ouvre ni ne modifie les lampes.

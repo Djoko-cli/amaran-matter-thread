@@ -159,3 +159,29 @@ Remarques :
 - Glisser le curseur de luminosité dans Maison envoie une valeur toutes les 150 à 300 ms. Le pont suit, mais taper sur la jauge est plus fluide (constat de Djoko).
 - Pendant une série d'ordres, les relectures répondues baissent (104/122 et 115/122 sur 10 min). Relectures et ordres passent par la même file d'émission, mais la cause n'est pas établie.
 - Budget de séquence : deux demandes toutes les 5 s consomment environ 35 000 numéros par jour ; l'adresse change d'elle-même tous les 7 mois environ.
+
+## Phase 2 : bancs T (firmware complet)
+
+01/10/2026. Procédure : plan 2, Task 11. Firmware du commit `8bf88a5`, flashé sans effacer : l'appairage et les clés de la phase 1 restent. amaran Desktop fermé, sauf pour T4.
+
+Au démarrage : cause `reinitialisation par l'USB`, 2 fabriques, Thread `child`, Bluetooth Mesh prêt, écoute à 50 %, voyant opérationnel. `led test` : Djoko a vu les 9 motifs, dans l'ordre.
+
+| banc | date | résultat | remarques |
+|---|---|---|---|
+| T1 ordres depuis Maison | 01/10/2026 | réussi | Chaque ordre obéi, sur les deux lampes. 25 ordres confirmés, 0 abandon, 465 ms en moyenne, 781 ms au plus. Les tuiles portent les noms d'amaran Desktop. |
+| T2 curseur glissé vite | 01/10/2026 | réussi | La lampe finit à la valeur lâchée. 51 écritures, 9 salves, toutes confirmées, 0 abandon, 0 refus ; une confirmation à 1 577 ms pendant le glissé. |
+| T3 molette | 01/10/2026 | réussi | Maison suit en 5 s environ, trois fois par lampe. |
+| T4 amaran Desktop | 01/10/2026 | réussi | Luminosité et extinction depuis l'app : Maison suit en 5 s environ. L'app fonctionne normalement. |
+| T5 lampe coupée | 01/10/2026 | partiel | Le pont est conforme : `PAS DE REPONSE` et Reachable à faux publiés 15 à 20 s après la coupure ; Reachable revient à vrai dès la première réponse. Mais **Maison n'affiche « Pas de réponse », puis le retour, qu'après avoir touché la tuile**. La lampe est revenue éteinte, au niveau retenu (60 %). |
+| T6 redémarrage du pont | 01/10/2026 | réussi | Aucune lampe n'a bougé. `redemarrage logiciel`, 0 ordre, 6 relectures en 28 s. Maison garde les lampes joignables, avec leur état réel. |
+| T7 Thread perdu | — | non fait | Couper tout le réseau Thread de la maison était trop contraignant. À faire plus tard. |
+| T8 bouton BOOT | 01/10/2026 | réussi | Appuis courts (183 et 168 ms) : éclat blanc, redémarrage. 3,7 s et 6,7 s : annulés. 8,5 s : rouge et violet, retrait des fabriques, redémarrage en bleu. Clés gardées ; réappairé dans Maison, les deux lampes reviennent sous leurs noms. |
+| T9 clés oubliées, rechargées | 01/10/2026 | réussi | `mesh oublie` : message `cles absentes`, rouge fixe, « Pas de réponse » pour les deux lampes. Clés rechargées : tout revient en 30 s environ. Maison garde les tuiles (noms, pièce). |
+| T10 endurance 24 h | 01/10/2026 | en cours | Lancé à 00:56. |
+
+Remarques :
+- **Maison et Reachable (T5, T9).** Maison ne met pas d'elle-même à jour l'état « joignable » d'une lampe : il faut toucher sa tuile. Le pont, lui, publie chaque changement. La spec (11) acceptait ce risque, qui relève du confort.
+- **Appui de 42 ms (T8).** Juste après l'appui annulé de 6,7 s, la console a noté un appui court de 42 ms, et la carte a redémarré : un second appui bref, ou un rebond au relâchement.
+- **Tuile en chargement (T1).** Une fois, la tuile de la lampe 2 est restée « en chargement » à 100 % après son extinction, alors que le pont avait publié l'état. Non reproduit sur 4 essais.
+- **Molette à 0 %.** Baissée jusqu'à 0 % à la molette, la lampe n'éclaire plus, mais Maison la montre allumée à 1 %. À confirmer à la console, puis à corriger (vague de correctifs du plan 2).
+- **Pile de la tâche `socle`** : 2 604 o libres au plus bas, après le désappairage par BOOT. Tas libre au plus bas : 178 540 o après le réappairage.
