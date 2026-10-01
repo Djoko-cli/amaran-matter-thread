@@ -55,7 +55,8 @@ typedef struct {
 
 typedef enum {
   LAMPE_REPOS,    // aucun ordre en cours
-  LAMPE_TRAMES,   // regroupement (a_refaire : rien n'est parti), puis trames parties ; demande d'etat a echeance
+  LAMPE_TRAMES,   // regroupement (a_refaire : rien de la consigne courante n'est parti), puis trames parties ;
+                  // demande d'etat a echeance
   LAMPE_ATTENTE,  // demande d'etat partie ; etat egal a la consigne attendu avant echeance
 } lampe_phase_t;
 

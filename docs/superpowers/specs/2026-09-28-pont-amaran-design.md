@@ -457,9 +457,15 @@ Autres règles :
   `attribute::report()`, qui ne rappelle pas l'application. Aucun marquage des
   mises à jour n'est nécessaire.
 - En plus, une valeur égale au dernier état lu, après l'arrondi au pour cent,
-  ne fait jamais émettre. Allumée = en marche et intensité non nulle : un
-  ordre d'allumage sur une lampe noire n'est donc pas égal à son état, et la
-  rallume (6.3).
+  ne fait jamais émettre. Cette comparaison porte sur l'état brut de la lampe.
+- « Allumée = en marche et intensité non nulle » vaut pour ce que Maison
+  montre et pour l'allumage : un ordre d'allumage sur une lampe noire n'est
+  donc pas égal à son état, et la rallume (6.3).
+- Un arrêt explicite sur une lampe noire, lui, part bien (`0x8C` à 0) : la
+  lampe s'éteint alors « par l'app » et ignore sa molette (PROTOCOLE.md). Trois
+  cas : `lampe <n> off` à la console ; un arrêt de Maison avant que le pont ait
+  relu la lampe à 0 (une période de relecture au plus : 5 s par défaut) ; un
+  double appui rapide sur sa tuile.
 
 ### 6.5 Démarrage
 

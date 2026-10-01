@@ -16,7 +16,7 @@ uint16_t lampes_niveau_vers_intensite(uint8_t niveau) {
 uint8_t lampes_intensite_vers_niveau(uint16_t intensite) {
   if (intensite > TELINK_INTENSITE_MAX) intensite = TELINK_INTENSITE_MAX;
   unsigned n = (508u * intensite + 1000u) / 2000u;  // arrondi(intensite x 254 / 1000)
-  if (n < 1) n = 1;  // Matter n'a pas de niveau 0 ; une lampe noire ne passe pas ici (pont_publier)
+  if (n < 1) n = 1;  // Matter n'a pas de niveau 0 ; pont_publier ne convertit jamais une intensite 0
   if (n > 254) n = 254;
   return (uint8_t)n;
 }

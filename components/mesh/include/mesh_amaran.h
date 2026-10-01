@@ -85,9 +85,9 @@ void mesh_autoriser_emission(bool oui);
 // Part d'ecoute du Bluetooth Mesh : fenetre et intervalle de balayage, en ms,
 // multiples de 5 (unites de 0,625 ms de la pile, par 8), 5 <= fenetre <=
 // intervalle <= 1000. Par defaut, la pile ecoute 100 % du temps (20 sur 20 ms) ;
-// le pont en laisse a Thread (banc C). Avant mesh_demarrer : le reglage est
-// retenu, et le balayage demarre ainsi (la pile le recoit avant l'adhesion).
-// Apres : il est applique aussitot, et le balayage relance avec. Rend
+// le pont en laisse a Thread (banc C). Tant que mesh_demarrer n'a pas initialise
+// la pile : le reglage est seulement retenu, et la pile le recoit avant l'adhesion.
+// Ensuite : il est applique aussitot, et le balayage relance avec. Rend
 // ESP_ERR_INVALID_ARG (bornes), ou ESP_FAIL si la pile refuse (le reglage reste
 // alors celui d'avant).
 esp_err_t mesh_regler_balayage(uint16_t fenetre_ms, uint16_t intervalle_ms);
