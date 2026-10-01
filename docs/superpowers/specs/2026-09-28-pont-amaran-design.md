@@ -1,7 +1,8 @@
 # Pont amaran → Matter : design
 
 Date : 28/09/2026. Statut : design validé section par section avec Djoko, à
-relire avant le plan d'implémentation.
+relire avant le plan d'implémentation. Mis à jour le 01/10/2026 avec ce que
+les plans 1 et 2 et leurs bancs ont établi (5.4, 5.6, 5.7, 5.8, 6.2, 6.3, 8.3).
 
 Deux amaran COB 60d pilotées depuis Maison (Apple Home) par un ESP32-C6 : un
 nœud Matter sur Thread qui rejoint le réseau Bluetooth Mesh qu'amaran Desktop a
@@ -268,10 +269,9 @@ changent pas.
 
 ### 5.4 Compteur de séquence et adresse
 
-- La pile sauve le compteur en NVS (`CONFIG_BLE_MESH_SETTINGS`) à un rythme
-  donné, et saute d'autant au démarrage.
-  - À vérifier dans le code d'ESP-IDF lors du plan.
-  - Si besoin, on ajoute un plancher, comme amaran-bridge.
+- Le compteur est sauvé par nous, pas par la pile (`CONFIG_BLE_MESH_SETTINGS=n`,
+  plan 1) : un plancher en NVS, avancé par blocs de 256, d'où la séquence
+  repart au démarrage. Elle ne redescend jamais.
 - Adresses réservées : `0x7F00` à `0x7F7F`. **On change d'adresse** au lieu
   de toucher au compteur :
   - après un effacement de la flash (`mesh adresse suivante`), faute de quoi
@@ -280,9 +280,9 @@ changent pas.
     8 000 000 où la pile d'ESP-IDF lance d'elle-même une mise à jour d'IV. Cela
     évite la mise à jour d'IV, qui engagerait tout le réseau, amaran Desktop
     compris.
-- Budget : une relecture de groupe toutes les 5 s fait environ 6 millions de
-  messages par an, et le double avec une demande par lampe (5.7). Une adresse
-  tient donc entre ~7 et ~14 mois, ordres compris à la marge.
+- Budget, mesuré au banc C : deux demandes d'état de groupe toutes les 5 s
+  (5.6, 5.7) consomment environ 35 000 numéros par jour, ordres compris. Une
+  adresse tient donc environ 7 mois avant de changer d'elle-même.
 
 ### 5.5 Crochet de réception
 
@@ -318,7 +318,8 @@ Autres règles :
   de s'empiler.
 - **Déroulé d'un ordre :**
   1. la trame (`0x8F` ou `0x8C`), envoyée 2 fois ;
-  2. 200 ms plus tard, une demande d'état `0x0E` ;
+  2. 200 ms plus tard, une demande d'état `0x0E`, envoyée 2 fois (banc C :
+     à 50 % d'écoute, une réponse sur dix environ était manquée) ;
   3. l'ordre est confirmé si, dans la seconde, arrive un état égal à la
      consigne (marche/arrêt et intensité) ;
   4. sinon, on recommence : 3 essais au plus, puis abandon (7.1).
@@ -329,7 +330,8 @@ Autres règles :
 
 ### 5.7 Relecture périodique
 
-- Une demande d'état toutes les 5 s, réglable (`mesh releve <s>`).
+- Une demande d'état toutes les 5 s, envoyée 2 fois comme en 5.6, réglable
+  (`mesh releve <s>`).
   - Adressée au groupe `0xC000` si les deux lampes y répondent (R5).
   - Sinon, une demande par lampe, à 2,5 s d'écart.
 - Une lampe devient joignable dès qu'elle répond, et muette après 3
@@ -355,6 +357,14 @@ Autres règles :
   - moins de 95 % des demandes d'état obtiennent une réponse ;
   - ou plus de 1 % des ordres de Maison échouent ou prennent plus d'une
     seconde.
+- **Verdict du banc C (30/09/2026) : une seule C6.** Le levier qui a compté
+  n'était pas dans la liste : l'écoute du Bluetooth Mesh, continue par défaut
+  dans ESP-IDF, étouffait Thread (aucune émission 802.15.4 ne passait). Le pont
+  écoute à 50 % (20 ms toutes les 40 ms, réglable par `mesh balayage`), en
+  Thread non dormant. Avec la demande d'état doublée (5.6) et l'arrondi au
+  pour cent (6.2) : 96,9 % et 98,3 % des relectures répondues sur 30 min,
+  47 salves d'ordres de Maison sans échec ni dépassement d'une seconde
+  (docs/BANC.md).
 
 ## 6. Côté Matter
 
@@ -384,12 +394,20 @@ Autres règles :
   niveau vaut au plus 0,5 × 0,254 ≈ 0,13, sous le demi : le curseur de
   Maison ne saute pas.
 - Une intensité de 0 lue sur la lampe donne le niveau 1.
+- **Consigne arrondie au pour cent entier avant l'envoi** (banc C) : la 60d
+  ne garde que le pour cent entier (433 est relu 430), et un ordre dont
+  l'intensité tombait entre deux finissait abandonné alors que la lampe avait
+  obéi. Une consigne non nulle vaut au moins 10 (1 %). Le prix : après la
+  relecture, le curseur de Maison peut se recaler d'un niveau.
 
 ### 6.3 Marche/arrêt
 
 - L'attribut OnOff correspond à la trame `0x8C`.
-- Un niveau reçu pendant que la lampe reste éteinte est gardé comme
-  consigne. Il n'est émis qu'à l'allumage.
+- Un niveau reçu pendant que la lampe reste éteinte part tout de suite (plan
+  2) : R3 a montré qu'une lampe éteinte retient le niveau reçu sans
+  s'allumer, puis s'allume directement à ce niveau. Le garder jusqu'à
+  l'allumage ramènerait le curseur de Maison à l'ancien niveau, à la
+  relecture suivante.
 
 ### 6.4 Pas d'écho
 
@@ -540,7 +558,8 @@ Ils sont consignés dans `docs/BANC.md` et `docs/PROTOCOLE.md`.
 
 - Firmware produit minimal : pont Matter, `mesh` et `lampes`.
 - Appairage dans Maison.
-- Mesures avec Thread non dormant, puis dormant :
+- Mesures avec Thread non dormant, puis dormant (le dormant n'a pas été
+  essayé : la règle de 5.8 a tenu en non dormant) :
   - la part des relectures qui obtiennent une réponse, sur au moins 30 min ;
   - les ordres depuis Maison (une trentaine, à la main) et depuis la console
     (en rafales) : échecs et délai.

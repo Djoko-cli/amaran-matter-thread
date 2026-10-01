@@ -36,7 +36,7 @@ Maison ─Thread─► pont_matter ─ordres─► tâche lampes (lampes.c) ─t
 - `CONFIG_MBEDTLS_HARDWARE_AES=n`.
 - Émission :
   - au moins 70 ms entre deux messages ;
-  - un ordre part 2 fois, une demande d'état 1 fois ;
+  - un ordre part 2 fois, une demande d'état 2 fois (1 fois jusqu'au banc C : commit `c0b7f13`) ;
   - 3 copies réseau à 20 ms d'écart, TTL 3.
 - Français partout : code, console, commits, docs. Les commentaires du code sont **sans accents** (style du pont Halo).
 - Commits : directement sur `main`, message en français, terminé par `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. **Aucun push sans l'accord de Djoko.**
