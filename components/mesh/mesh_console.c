@@ -217,7 +217,7 @@ static int mesh_balayage_cmd(int argc, char **argv) {
     return 1;
   }
   // Une valeur au-dela de 16 bits ne doit pas se replier sur une valeur valide :
-  // on la borne, et mesh_regler_balayage la refuse (65535 n'est pas un multiple de 5).
+  // on la borne a 65535, et mesh_regler_balayage la refuse (elle depasse 1000).
   const esp_err_t err = mesh_regler_balayage(fenetre > UINT16_MAX ? UINT16_MAX : (uint16_t)fenetre,
                                              intervalle > UINT16_MAX ? UINT16_MAX : (uint16_t)intervalle);
   switch (err) {
@@ -227,9 +227,6 @@ static int mesh_balayage_cmd(int argc, char **argv) {
       return 0;
     case ESP_ERR_INVALID_ARG:
       printf("erreur : bornes : multiples de 5 ms, 5 <= fenetre <= intervalle <= 1000\n");
-      return 1;
-    case ESP_ERR_INVALID_STATE:
-      printf("erreur : Bluetooth Mesh pas pret\n");
       return 1;
     default:
       printf("erreur : refus de la pile Bluetooth Mesh (%s)\n", esp_err_to_name(err));

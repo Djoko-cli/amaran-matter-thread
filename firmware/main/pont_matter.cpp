@@ -274,7 +274,9 @@ esp_err_t pont_demarrer(const amaran_config_t *cfg, pont_ordre_cb_t ordre) {
 }
 
 void pont_publier(int lampe, const lampe_etat_t *etat, bool joignable) {
-  if (lampe < 0 || lampe >= LAMPES_MAX || !s_ep_lampe[lampe]) return;
+  // Si esp_matter::start() a echoue, app_main garde la console : la pile n'existe pas, et
+  // attribute::report y prendrait le verrou et marquerait des attributs. Rien a publier.
+  if (lampe < 0 || lampe >= LAMPES_MAX || !s_ep_lampe[lampe] || !esp_matter::is_started()) return;
   const uint16_t ep = s_ep_lampe[lampe];
   esp_matter_attr_val_t v = esp_matter_bool(joignable);
   attribute::report(ep, BridgedDeviceBasicInformation::Id, BridgedDeviceBasicInformation::Attributes::Reachable::Id,

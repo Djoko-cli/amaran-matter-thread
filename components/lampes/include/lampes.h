@@ -55,7 +55,7 @@ typedef struct {
 
 typedef enum {
   LAMPE_REPOS,    // aucun ordre en cours
-  LAMPE_TRAMES,   // trames parties ; demande d'etat a echeance
+  LAMPE_TRAMES,   // regroupement (a_refaire : rien n'est parti), puis trames parties ; demande d'etat a echeance
   LAMPE_ATTENTE,  // demande d'etat partie ; etat egal a la consigne attendu avant echeance
 } lampe_phase_t;
 
@@ -77,7 +77,7 @@ typedef struct {
   uint8_t essai;                 // 1..LAMPES_ESSAIS
   uint32_t echeance_ms;
   uint32_t demande_ms;           // demande d'etat de l'essai en cours
-  uint32_t debut_ms;             // arrivee de l'ordre (delai de confirmation)
+  uint32_t debut_ms;             // arrivee du dernier ordre de la chaine (delai de confirmation)
   bool a_refaire;                // consigne changee depuis les dernieres trames
   // Ce que Matter montre (publie par nous, ou ecrit par un controleur)
   bool montre_connu;

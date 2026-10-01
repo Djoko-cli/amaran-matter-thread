@@ -96,9 +96,12 @@ typedef struct {
 static amaran_config_t s_cfg;
 static QueueHandle_t s_tx;
 static volatile bool s_pret;
+static volatile bool s_pile_prete;  // esp_ble_mesh_init a abouti : le balayage se regle dans la pile
 static volatile bool s_emission_permise = true;
-// Balayage en ms : la pile demarre a 0x20 unites de 0,625 ms pour la fenetre et
+// Balayage retenu, en ms : la pile demarre a 0x20 unites de 0,625 ms pour la fenetre et
 // l'intervalle (SCAN_WINDOW, SCAN_INTERVAL dans core/scan.c), soit 20 sur 20 ms.
+// mesh_regler_balayage avant mesh_demarrer change cette valeur, que mesh_demarrer pose
+// dans la pile avant l'adhesion : le balayage ne demarre qu'avec bt_mesh_provision.
 static uint16_t s_fenetre_ms = 20;
 static uint16_t s_intervalle_ms = 20;
 static plancher_t s_plancher;  // compteur de sequence (spec 5.4), tenu par la tache d'emission
@@ -262,6 +265,34 @@ static void tache_tx(void *arg) {
   }
 }
 
+// --- Balayage
+
+// Pose fenetre et intervalle dans la pile, en unites de 0,625 ms (ms * 8 / 5). Tant que
+// rien ne balaie (avant bt_mesh_provision), la pile les range dans son scan_param
+// statique pour le lancement du balayage ; ensuite, elle arrete le balayage et le
+// relance avec ces deux valeurs (core/scan.c). Le reste (type, doublons, filtre) est
+// celui que la pile garde.
+static esp_err_t poser_balayage(uint16_t fenetre_ms, uint16_t intervalle_ms) {
+  struct bt_mesh_scan_param param = {
+      .type = BLE_MESH_SCAN_PASSIVE,
+#if CONFIG_BLE_MESH_USE_DUPLICATE_SCAN
+      .filter_dup = BLE_MESH_SCAN_FILTER_DUP_ENABLE,
+#else
+      .filter_dup = BLE_MESH_SCAN_FILTER_DUP_DISABLE,
+#endif
+      .interval = (uint16_t)(intervalle_ms * 8 / 5),
+      .window = (uint16_t)(fenetre_ms * 8 / 5),
+      .scan_fil_policy = BLE_MESH_SP_ADV_ALL,
+  };
+  const int rc = bt_mesh_scan_param_update(&param);
+  if (rc != 0) {
+    ESP_LOGW(TAG, "balayage %u sur %u ms refuse par la pile (%d)", (unsigned)fenetre_ms, (unsigned)intervalle_ms, rc);
+    return ESP_FAIL;
+  }
+  ESP_LOGI(TAG, "balayage regle : %u ms sur %u ms", (unsigned)fenetre_ms, (unsigned)intervalle_ms);
+  return ESP_OK;
+}
+
 // --- API
 
 esp_err_t mesh_demarrer(const amaran_config_t *cfg) {
@@ -292,6 +323,12 @@ esp_err_t mesh_demarrer(const amaran_config_t *cfg) {
   esp_ble_mesh_register_custom_model_callback(rappel_modele);
   err = esp_ble_mesh_init(&s_prov, &s_composition);
   if (err != ESP_OK) return err;
+  s_pile_prete = true;
+  // Le balayage retenu est pose avant l'adhesion : bt_mesh_provision lance le balayage
+  // (bt_mesh_net_start, net.c) avec ce que la pile a retenu, et a 100 % il etouffe
+  // Thread (banc C). Un refus est journalise, sans arreter le demarrage.
+  err = poser_balayage(s_fenetre_ms, s_intervalle_ms);
+  if (err != ESP_OK) ESP_LOGE(TAG, "balayage non regle avant l'adhesion : %s", esp_err_to_name(err));
   if (xTaskCreate(tache_tx, "amaran_tx", 3072, NULL, 5, NULL) != pdPASS) return ESP_ERR_NO_MEM;
   // Role noeud pose a la main, et non par esp_ble_mesh_node_prov_enable() : celle-ci
   // lance aussi la balise « non provisionne » (notre UUID) le temps que
@@ -346,28 +383,14 @@ esp_err_t mesh_regler_balayage(uint16_t fenetre_ms, uint16_t intervalle_ms) {
       fenetre_ms % BALAYAGE_PAS_MS != 0 || intervalle_ms % BALAYAGE_PAS_MS != 0) {
     return ESP_ERR_INVALID_ARG;
   }
-  if (!s_pret) return ESP_ERR_INVALID_STATE;
-  struct bt_mesh_scan_param param = {
-      .type = BLE_MESH_SCAN_PASSIVE,
-#if CONFIG_BLE_MESH_USE_DUPLICATE_SCAN
-      .filter_dup = BLE_MESH_SCAN_FILTER_DUP_ENABLE,
-#else
-      .filter_dup = BLE_MESH_SCAN_FILTER_DUP_DISABLE,
-#endif
-      .interval = (uint16_t)(intervalle_ms * 8 / 5),
-      .window = (uint16_t)(fenetre_ms * 8 / 5),
-      .scan_fil_policy = BLE_MESH_SP_ADV_ALL,
-  };
-  // Arrete le balayage et le relance avec ces deux valeurs seulement ; le reste
-  // (type, doublons, filtre) est celui que la pile garde (core/scan.c).
-  const int rc = bt_mesh_scan_param_update(&param);
-  if (rc != 0) {
-    ESP_LOGW(TAG, "balayage %u sur %u ms refuse par la pile (%d)", (unsigned)fenetre_ms, (unsigned)intervalle_ms, rc);
-    return ESP_FAIL;
+  // Pile initialisee : le reglage lui est donne aussitot. Sinon, il est seulement retenu,
+  // et mesh_demarrer le pose avant l'adhesion.
+  if (s_pile_prete) {
+    const esp_err_t err = poser_balayage(fenetre_ms, intervalle_ms);
+    if (err != ESP_OK) return err;  // le reglage reste celui d'avant
   }
   s_fenetre_ms = fenetre_ms;
   s_intervalle_ms = intervalle_ms;
-  ESP_LOGI(TAG, "balayage regle : %u ms sur %u ms", (unsigned)fenetre_ms, (unsigned)intervalle_ms);
   return ESP_OK;
 }
 

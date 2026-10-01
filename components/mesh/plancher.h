@@ -13,7 +13,7 @@
 extern "C" {
 #endif
 
-#define PLANCHER_BLOC 256u  // le plancher sauve devance la sequence d'au moins ce bloc
+#define PLANCHER_BLOC 256u  // le plancher sauve devance la sequence d'au plus ce bloc (plus le lot en cours)
 // Sous le seuil ou la pile lance seule une mise a jour d'IV (IV_UPDATE_SEQ_LIMIT
 // = 8000000 dans net.c) ; au-dela : adresse suivante (spec 5.4).
 #define PLANCHER_LIMITE 0x700000u

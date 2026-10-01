@@ -62,7 +62,8 @@ typedef struct {
 
 // Entre dans le reseau des lampes. L'hote NimBLE doit etre demarre, par
 // hote_ble_demarrer() ou par la pile Matter : on attend 10 s au plus qu'il soit
-// synchronise (ESP_ERR_TIMEOUT sinon).
+// synchronise (ESP_ERR_TIMEOUT sinon). Le balayage retenu (mesh_regler_balayage)
+// est pose dans la pile avant l'adhesion, qui lance le balayage.
 esp_err_t mesh_demarrer(const amaran_config_t *cfg);
 bool mesh_pret(void);
 // repetitions : MESH_REPETITIONS_ORDRE pour un ordre, MESH_REPETITIONS_ETAT
@@ -80,12 +81,14 @@ uint32_t mesh_plancher(void);
 void mesh_autoriser_emission(bool oui);
 // Part d'ecoute du Bluetooth Mesh : fenetre et intervalle de balayage, en ms,
 // multiples de 5 (unites de 0,625 ms de la pile, par 8), 5 <= fenetre <=
-// intervalle <= 1000. Au demarrage, la pile ecoute 100 % du temps (20 sur 20 ms) ;
-// le pont en laisse a Thread (banc C). Rend ESP_ERR_INVALID_ARG ou
-// ESP_ERR_INVALID_STATE (Mesh pas pret), ou ESP_FAIL si la pile refuse (le
-// reglage reste alors celui d'avant).
+// intervalle <= 1000. Par defaut, la pile ecoute 100 % du temps (20 sur 20 ms) ;
+// le pont en laisse a Thread (banc C). Avant mesh_demarrer : le reglage est
+// retenu, et le balayage demarre ainsi (la pile le recoit avant l'adhesion).
+// Apres : il est applique aussitot, et le balayage relance avec. Rend
+// ESP_ERR_INVALID_ARG (bornes), ou ESP_FAIL si la pile refuse (le reglage reste
+// alors celui d'avant).
 esp_err_t mesh_regler_balayage(uint16_t fenetre_ms, uint16_t intervalle_ms);
-// Reglage courant, en ms.
+// Reglage courant, en ms (celui qui est retenu, avant mesh_demarrer).
 void mesh_balayage(uint16_t *fenetre_ms, uint16_t *intervalle_ms);
 // Cherche l'IV Index du reseau de 0 a max (max <= 0xFFFFFF), voir crochet.h.
 // Bloque la tache appelante jusqu'a la fin.

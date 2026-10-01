@@ -139,7 +139,11 @@ void tache_lampes_ordre(int lampe, const bool *marche, const uint16_t *intensite
     m.a_intensite = true;
     m.intensite = *intensite;
   }
-  xQueueSend(s_file, &m, 0);  // file pleine : l'ordre se perd, Maison sera recale a la relecture
+  // File pleine : l'ordre se perd, et Maison reste sur sa valeur jusqu'au prochain changement
+  // de la lampe (la relecture ne republie rien tant que la lampe ne change pas). Cela n'arrive
+  // en pratique jamais : la tache CHIP produit elle-meme les ecritures, et la tache lampes
+  // vide la file en continu.
+  xQueueSend(s_file, &m, 0);
 }
 
 void tache_lampes_regler_releve(uint32_t releve_ms) {
