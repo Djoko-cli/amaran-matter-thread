@@ -177,7 +177,7 @@ Au démarrage : cause `reinitialisation par l'USB`, 2 fabriques, Thread `child`,
 | T7 Thread perdu | — | non fait | Couper tout le réseau Thread de la maison était trop contraignant. À faire plus tard. |
 | T8 bouton BOOT | 01/10/2026 | réussi | Appuis courts (183 et 168 ms) : éclat blanc, redémarrage. 3,7 s et 6,7 s : annulés. 8,5 s : rouge et violet, retrait des fabriques, redémarrage en bleu. Clés gardées ; réappairé dans Maison, les deux lampes reviennent sous leurs noms. |
 | T9 clés oubliées, rechargées | 01/10/2026 | réussi | `mesh oublie` : message `cles absentes`, rouge fixe, « Pas de réponse » pour les deux lampes. Clés rechargées : tout revient en 30 s environ. Maison garde les tuiles (noms, pièce). |
-| T10 endurance 24 h | 01/10/2026 | en cours | Lancé à 00:56. |
+| T10 endurance 24 h | 01/10 au 02/10/2026 | réussi | 24 h sans redémarrage. Relectures répondues : 97,9 % (lampe 1) et 98,3 % (lampe 2), sur 17 270 chacune. Ordres de Maison : 41 salves (121 écritures), toutes confirmées, 0 abandon, 510 ms en moyenne, 861 ms au plus. Émission : 17 408 messages, 0 refus, 0 événement perdu. Séquence Mesh : +34 816 en 24 h (2 par message), loin de `0x700000`. Tas libre : 187 324 o au début, 186 636 o à la fin (au plus bas 179 024 o) ; aucune tâche sous 1 888 o libres. Thread toujours attaché ; 1 abonnement actif à la fin. |
 
 Remarques :
 - **Maison et Reachable (T5, T9).** Maison ne met pas d'elle-même à jour l'état « joignable » d'une lampe : il faut toucher sa tuile. Le pont, lui, publie chaque changement : l'attribut Reachable, et aussi l'événement ReachableChanged (constat fait dans le code d'esp-matter, pas à l'écoute du réseau). Le comportement vient donc de Maison. La spec (11) acceptait ce risque, qui relève du confort.
@@ -187,4 +187,5 @@ Remarques :
   - molette à 0 % : `lampes` lit `marche 0,0 %` et ajoute « (noire : eteinte pour Maison) ». Si la lampe relit 10 (1 %), le seuil « noire » est à revoir ;
   - Maison montre la lampe éteinte ; toucher sa tuile la rallume à son niveau ;
   - Siri « éteins » sur la lampe noire : `lampes` ne compte aucun ordre de plus, et la molette remonte la lampe.
+- **Endurance (T10).** Sur les 24 h : 128 830 messages Mesh vus, 0 NetMIC faux ; 6 émissions Thread perdues après leurs relances (3 `ChannelAccessFailure`, 3 `NoAck`), isolées ; environ 95 avertissements Thread « Duplicated » par heure, réguliers (messages de gestion reçus deux fois) ; 3 reprises d'abonnement échouées vers un contrôleur disparu et 5 messages sur une session inconnue, dans la première heure : bruit du SDK Matter, sans effet.
 - **Pile de la tâche `socle`** : 2 604 o libres au plus bas, relevés après le redémarrage qui suit le désappairage par BOOT. Ce minimum ne couvre donc pas le passage par `factory_reset()`, exécuté dans la tâche `socle` avant ce redémarrage. Ce passage s'est fait sans panique (fabriques retirées, réappairage). Tas libre au plus bas : 178 540 o après le réappairage.
