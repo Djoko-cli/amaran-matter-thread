@@ -9,7 +9,12 @@ Relevé le 30/09/2026 (bancs R1 à R6, [BANC.md](BANC.md)), avec le firmware `ec
 - **Aucun accusé.** Les lampes ne répondent jamais à un ordre (`0x8C`, `0x8F`), ni au nôtre ni à celui de l'app. Seule une demande d'état (`0x0E`) obtient une réponse.
 - **Aucun état spontané.** Ni la molette, ni son bouton, ni une coupure ne font parler une lampe. Pour suivre un réglage fait à la main, il faut relire la lampe (spec 5.7).
 - **Commandes physiques inertes.** Une lampe éteinte par l'app (ou par le pont) ignore sa molette et le bouton de molette (+20 %). Seule une coupure au bouton d'alimentation la rallume.
-- **Retour de coupure.** Coupée puis remise au bouton, la lampe revient **allumée vers 40 %** (41 % et 40 % au banc). Deux cas seulement, une fois par lampe, chacune éteinte avant la coupure (à 93 % et à 6 % de niveau retenu) : une lampe allumée avant la coupure n'a pas été essayée. Au contrôle du plan 2 (30/09), la lampe 2, éteinte à 6 % de niveau retenu, est revenue allumée à 6 % : le niveau au retour n'est donc pas toujours 40 %.
+- **Retour de coupure.** Coupée puis remise au bouton, la lampe ne revient pas toujours dans le même état. Quatre retours relevés, de trois sortes :
+  - **allumée vers 40 %**, deux fois (41 % et 40 %, banc R4), une fois par lampe, chacune éteinte avant la coupure (à 93 % et à 6 % de niveau retenu) ;
+  - **allumée à 6 %**, une fois : au contrôle du plan 2 (30/09), la lampe 2, éteinte à 6 % de niveau retenu ;
+  - **éteinte, au niveau retenu de 60 %**, une fois (banc T5, 01/10).
+
+  Une lampe allumée avant la coupure n'a pas été essayée.
 - **Intensité au pour cent.** Une 60d ne garde que le pour cent entier : `niveau 433` et `niveau 437` sont relus 430, `niveau 500` est relu 500 (banc C, 30/09). Le pont arrondit donc ses consignes au pour cent le plus proche.
 - **Trames et opcodes absents de la spec :** type `0x0A` (alimentation), type `0x00` (produit), et les opcodes à un octet `0x33` / `0x31`.
 
@@ -17,7 +22,7 @@ Relevé le 30/09/2026 (bancs R1 à R6, [BANC.md](BANC.md)), avec le firmware `ec
 
 - **IV Index 0.** Les lampes émettent des balises réseau sécurisées avec IV 0 et drapeaux 0 : environ une toutes les 5 s au total. Une balise ne porte pas de source : on ne sait pas de quelle lampe vient chacune.
 - **Destination.** Toutes les réponses des lampes vont à `0x0001` (amaran Desktop), y compris celles qui répondent à notre adresse (`0x7F38`) ou au groupe « All » (`0xC000`).
-- **Copies.** Chaque réponse arrive une à trois fois, à 4 à 76 ms d'écart (médiane 25 ms) : très probablement les copies réseau de la lampe. C'est déduit de cet écart : le numéro de séquence n'est pas journalisé, donc non vérifié. Le pont devra ignorer les doublons.
+- **Copies.** Chaque réponse arrive une à trois fois, à 4 à 76 ms d'écart (médiane 25 ms) : très probablement les copies réseau de la lampe. C'est déduit de cet écart : le numéro de séquence n'est pas journalisé, donc non vérifié. Le pont ignore les doublons depuis le commit 7a4e179 : pour chaque lampe, il ne retient un état que si son IV Index et son numéro de séquence sont plus récents que ceux du dernier état retenu.
 
 ## Trames `0x26` (10 octets, octet 0 = somme des octets 1 à 9)
 

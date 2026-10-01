@@ -18,6 +18,8 @@ extern "C" {
 
 #define MESH_GROUPE_TOUS 0xC000
 #define MESH_REPETITIONS_ORDRE 2
+// Demande d'etat de console (lampe <n> releve, groupe releve de l'ecoute). Le coeur lampes
+// du pont, lui, envoie les siennes LAMPES_REPETITIONS_ETAT fois (2, depuis le banc C).
 #define MESH_REPETITIONS_ETAT 1
 
 typedef enum {
@@ -66,8 +68,9 @@ typedef struct {
 // est pose dans la pile avant l'adhesion, qui lance le balayage.
 esp_err_t mesh_demarrer(const amaran_config_t *cfg);
 bool mesh_pret(void);
-// repetitions : MESH_REPETITIONS_ORDRE pour un ordre, MESH_REPETITIONS_ETAT
-// pour une demande d'etat.
+// repetitions : MESH_REPETITIONS_ORDRE pour un ordre, MESH_REPETITIONS_ETAT pour une
+// demande d'etat de console. Le coeur lampes demande ses etats 2 fois
+// (LAMPES_REPETITIONS_ETAT) et n'utilise donc pas MESH_REPETITIONS_ETAT.
 esp_err_t mesh_envoyer(uint16_t dst, const uint8_t trame[TELINK_TAILLE], uint8_t repetitions);
 QueueHandle_t mesh_file_evenements(void);
 void mesh_ecoute_detaillee(bool oui);

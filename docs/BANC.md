@@ -180,8 +180,11 @@ Au démarrage : cause `reinitialisation par l'USB`, 2 fabriques, Thread `child`,
 | T10 endurance 24 h | 01/10/2026 | en cours | Lancé à 00:56. |
 
 Remarques :
-- **Maison et Reachable (T5, T9).** Maison ne met pas d'elle-même à jour l'état « joignable » d'une lampe : il faut toucher sa tuile. Le pont, lui, publie chaque changement. La spec (11) acceptait ce risque, qui relève du confort.
-- **Appui de 42 ms (T8).** Juste après l'appui annulé de 6,7 s, la console a noté un appui court de 42 ms, et la carte a redémarré : un second appui bref, ou un rebond au relâchement.
+- **Maison et Reachable (T5, T9).** Maison ne met pas d'elle-même à jour l'état « joignable » d'une lampe : il faut toucher sa tuile. Le pont, lui, publie chaque changement : l'attribut Reachable, et aussi l'événement ReachableChanged (constat fait dans le code d'esp-matter, pas à l'écoute du réseau). Le comportement vient donc de Maison. La spec (11) acceptait ce risque, qui relève du confort.
+- **Appui de 42 ms (T8).** Juste après l'appui annulé de 6,7 s, la console a noté un appui court de 42 ms, et la carte a redémarré. Ce n'est pas un rebond : l'anti-rebond du bouton exige que chaque niveau tienne 30 ms, ce qu'un rebond électrique ne fait pas, et ce contact en a duré 42. C'était un second contact réel, probablement un doigt qui retouche le bouton en le quittant. Conséquence bénigne : un redémarrage ne rejoue aucun ordre et garde les clés et l'appairage. Aucune garde n'est ajoutée, et le README conseille de relâcher net.
 - **Tuile en chargement (T1).** Une fois, la tuile de la lampe 2 est restée « en chargement » à 100 % après son extinction, alors que le pont avait publié l'état. Non reproduit sur 4 essais.
-- **Molette à 0 %.** Baissée jusqu'à 0 % à la molette, la lampe n'éclaire plus, mais Maison la montre allumée à 1 %. À confirmer à la console, puis à corriger (vague de correctifs du plan 2).
-- **Pile de la tâche `socle`** : 2 604 o libres au plus bas, après le désappairage par BOOT. Tas libre au plus bas : 178 540 o après le réappairage.
+- **Molette à 0 %.** Baissée jusqu'à 0 % à la molette, la lampe n'éclaire plus, mais Maison la montrait allumée à 1 %. Corrigé dans le commit `2b2393b` : une lampe lue en marche à l'intensité 0 est montrée éteinte, à son dernier niveau non nul, et la toucher la rallume à ce niveau (spec 6.2 et 6.3). Reste à vérifier au banc, avec Djoko, après T10 :
+  - molette à 0 % : `lampes` lit `marche 0,0 %` et ajoute « (noire : eteinte pour Maison) ». Si la lampe relit 10 (1 %), le seuil « noire » est à revoir ;
+  - Maison montre la lampe éteinte ; toucher sa tuile la rallume à son niveau ;
+  - Siri « éteins » sur la lampe noire : `lampes` ne compte aucun ordre de plus, et la molette remonte la lampe.
+- **Pile de la tâche `socle`** : 2 604 o libres au plus bas, relevés après le redémarrage qui suit le désappairage par BOOT. Ce minimum ne couvre donc pas le passage par `factory_reset()`, exécuté dans la tâche `socle` avant ce redémarrage. Ce passage s'est fait sans panique (fabriques retirées, réappairage). Tas libre au plus bas : 178 540 o après le réappairage.

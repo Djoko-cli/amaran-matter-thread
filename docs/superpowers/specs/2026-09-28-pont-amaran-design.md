@@ -2,7 +2,8 @@
 
 Date : 28/09/2026. Statut : design validé section par section avec Djoko, à
 relire avant le plan d'implémentation. Mis à jour le 01/10/2026 avec ce que
-les plans 1 et 2 et leurs bancs ont établi (5.4, 5.6, 5.7, 5.8, 6.2, 6.3, 8.3).
+les plans 1 et 2, leurs bancs et la revue finale ont établi (2.5, 4.2, 4.3,
+5.1, 5.4 à 5.8, 6.1 à 6.6, 7.3 à 7.5, 8.3, 8.4, 9, 10, 11).
 
 Deux amaran COB 60d pilotées depuis Maison (Apple Home) par un ESP32-C6 : un
 nœud Matter sur Thread qui rejoint le réseau Bluetooth Mesh qu'amaran Desktop a
@@ -41,9 +42,11 @@ Hors périmètre (v1) :
    (approche A). Écartées : deux C6 dès le départ, avec Matter en Arduino
    (gardée comme repli matériel) ; Arduino avec un framework recompilé (trop
    d'inconnues côté Matter).
-5. **Une adresse Mesh propre à l'ESP32, `0x7F00`.** Écarté : prendre
-   `0x0001`, l'adresse d'amaran Desktop, comme amaran-bridge. On ne pourrait
-   plus ouvrir l'app en même temps.
+5. **Une adresse Mesh propre à l'ESP32**, tirée au hasard dans `0x7F00` à
+   `0x7F7F` au premier démarrage, et gardée en NVS (5.4) : `0x7F38` pour
+   l'écoute, `0x7F3A` pour le pont. Écarté : prendre `0x0001`, l'adresse
+   d'amaran Desktop, comme amaran-bridge. On ne pourrait plus ouvrir l'app en
+   même temps.
 6. **Les états sont lus par un crochet posé avec l'éditeur de liens
    (`--wrap`), sans modifier ESP-IDF**, que le SmartButton partage. Repli : le
    patch d'amaran-bridge, appliqué à une copie d'ESP-IDF propre au projet.
@@ -200,13 +203,15 @@ Maison ─Thread─► ┌──────────────── ESP32
 `lampes` ne parle à `mesh` que par trois messages :
 - `envoyer(adresse, trame)`, de `lampes` vers `mesh` ;
 - `etat_recu(adresse, trame)`, de `mesh` vers `lampes` ;
-- `mesh_pret(oui/non)`, de `mesh` vers `lampes` : les clés sont présentes et
-  le réseau est reconnu.
+- `mesh_pret(oui/non)`, de `mesh` vers `lampes` : l'ESP32 est entré dans le
+  réseau (clés présentes, adhésion faite). Il ne repasse jamais à non.
 
 **Précision par rapport à la section 1 validée :** décider qu'une lampe est
 muette relève de `lampes` (essais, délais), pas de `mesh`. Le troisième
-message dit donc si le réseau Mesh est utilisable, et non si une lampe est
-muette.
+message dit donc si l'ESP32 est entré dans le réseau Mesh, et non si une lampe
+est muette. Un réseau devenu inutilisable (clés périmées, IV Index faux) ne le
+change pas : le diagnostic (7.3) le signale, et les lampes passent à « Pas de
+réponse » par la règle 7.2.
 
 Si la radio partagée ne tient pas, `mesh` et `telink` partent sur la 2ᵉ C6, et
 ces trois messages passent par une liaison série. `lampes` et `matter` ne
@@ -226,14 +231,17 @@ changent pas.
   - les rappels d'attributs tournent dans la tâche CHIP et déposent un ordre
     dans la file, sans bloquer ;
   - les mises à jour d'attributs venues de `lampes` passent par
-    `PlatformMgr().ScheduleWork()`. Jamais d'appel Matter hors de la tâche
-    CHIP sans son verrou.
+    `attribute::report()` d'esp-matter, qui prend lui-même le verrou de la
+    pile et ne rappelle pas l'application (6.4). Jamais d'appel Matter hors de
+    la tâche CHIP sans son verrou.
 
 ## 5. Côté Bluetooth Mesh
 
 ### 5.1 Adhésion
 
-- Rôle nœud, auto-provisionné au démarrage par `bt_mesh_provision()`.
+- Rôle nœud, auto-provisionné par `bt_mesh_provision()` : au démarrage dans
+  le firmware d'écoute ; dans le pont, une fois Maison appairée, 3 s après la
+  fin de la mise en service (6.6).
   - Paramètres : la clé réseau (indice 0), l'IV Index et l'adresse (5.4).
   - Plus une clé d'appareil, tirée au hasard une fois puis gardée.
 - L'AppKey (indice 0) est ajoutée localement et liée à notre modèle.
@@ -274,8 +282,11 @@ changent pas.
   repart au démarrage. Elle ne redescend jamais.
 - Adresses réservées : `0x7F00` à `0x7F7F`. **On change d'adresse** au lieu
   de toucher au compteur :
-  - après un effacement de la flash (`mesh adresse suivante`), faute de quoi
-    les lampes rejetteraient nos messages ;
+  - après un effacement de la flash : l'ESP32 tire alors une adresse au hasard
+    dans la plage. Si elle tombe sur une adresse déjà employée (environ 1
+    chance sur 128 par adresse déjà servie), les lampes rejettent nos
+    messages, sans indice clair : `mesh adresse suivante` en prend une
+    autre ;
   - automatiquement quand le compteur dépasse `0x700000`, sous le seuil de
     8 000 000 où la pile d'ESP-IDF lance d'elle-même une mise à jour d'IV. Cela
     évite la mise à jour d'IV, qui engagerait tout le réseau, amaran Desktop
@@ -306,8 +317,9 @@ Autres règles :
 - Compteurs pour les diagnostics (7.3) : annonces Mesh vues, NID reconnu,
   NetMIC faux, états transmis.
 - Aucun journal dans ce chemin : il tourne dans la tâche Bluetooth.
-- Les doublons (copies réseau, répétitions) sont sans danger : un état est
-  absolu.
+- Les doublons (copies réseau, rejeux) sont écartés, par lampe : un état n'est
+  transmis que si son IV Index et sa SEQ sont plus récents que ceux du dernier
+  état transmis. Un compteur les dénombre.
 
 ### 5.6 Émission
 
@@ -316,6 +328,10 @@ Autres règles :
 - **`lampes`** garde une seule consigne en attente par lampe : une nouvelle
   valeur (le curseur de Maison qu'on fait glisser) remplace l'ancienne au lieu
   de s'empiler.
+- **Regroupement :** un ordre attend 80 ms avant de partir. Une commande
+  Matter écrit souvent plusieurs attributs de suite (l'arrêt avec effet écrit
+  CurrentLevel au minimum, OnOff, puis CurrentLevel restauré) : tout part en
+  une salve, avec la consigne finale.
 - **Déroulé d'un ordre :**
   1. la trame (`0x8F` ou `0x8C`), envoyée 2 fois ;
   2. 200 ms plus tard, une demande d'état `0x0E`, envoyée 2 fois (banc C :
@@ -323,8 +339,9 @@ Autres règles :
   3. l'ordre est confirmé si, dans la seconde, arrive un état égal à la
      consigne (marche/arrêt et intensité) ;
   4. sinon, on recommence : 3 essais au plus, puis abandon (7.1).
-- Pour allumer à un niveau donné : `0x8F`, puis `0x8C`, puis `0x0E`. Cet
-  ordre sera vérifié en R3.
+- **Ordre des trames :** éteindre avant de changer le niveau (`0x8C`, puis
+  `0x8F`). Pour allumer à un niveau donné : `0x8F`, puis `0x8C`, puis `0x0E`.
+  R3 l'a vérifié.
 - Pendant un ordre en cours, les états arrivés avant notre propre demande
   d'état sont ignorés pour cette lampe : ils peuvent être périmés.
 
@@ -350,9 +367,10 @@ Autres règles :
   1. les priorités de coexistence d'ESP-IDF ;
   2. Thread en appareil dormant, avec une relève rapide ;
   3. la 2ᵉ C6.
-- Rôle Thread : non dormant (MED) par défaut ; le rôle dormant est essayé au
-  banc C. Il se règle par la console s'il peut changer à chaud, sinon par une
-  variante de compilation.
+- Rôle Thread : non dormant (MED). Le rôle dormant n'a pas été essayé : la
+  règle de repli a tenu sans lui (verdict ci-dessous). Si elle cassait un
+  jour, il se réglerait par la console s'il peut changer à chaud, sinon par
+  une variante de compilation.
 - **Règle de repli.** Après réglage, on passe à la 2ᵉ C6 si :
   - moins de 95 % des demandes d'état obtiennent une réponse ;
   - ou plus de 1 % des ordres de Maison échouent ou prennent plus d'une
@@ -377,10 +395,14 @@ Autres règles :
 | 2 | lampe 1 | Bridged Node + Dimmable Light : grappes créées par esp-matter pour ce type (Identify, Groups, OnOff, LevelControl…) ; Bridged Device Basic Information : NodeLabel = nom de la base, Reachable, UniqueID = MAC |
 | 3 | lampe 2 | idem |
 
-- Les numéros d'endpoint sont liés à l'adresse de chaque lampe et gardés en
-  NVS : recharger les clés ne crée pas de nouvelles tuiles.
-- Maison devrait reprendre les noms, et afficher « Pas de réponse » pour une
-  lampe non joignable. À vérifier (T1, T5).
+- Les numéros d'endpoint sont fixes : les deux emplacements sont toujours
+  créés, dans le même ordre (EP2, EP3), sans rien garder en NVS. Recharger les
+  clés ne crée donc pas de nouvelles tuiles. Un emplacement sans lampe est
+  « Pas de réponse ».
+- Maison reprend les noms (T1). Il affiche « Pas de réponse » pour une lampe
+  non joignable, mais seulement après qu'on a touché sa tuile (T5, T9), bien
+  que le pont publie l'attribut Reachable et l'événement ReachableChanged. Ce
+  comportement vient de Maison.
 - Identify reste sans effet sur la lampe : Maison ne le propose pas pour un
   accessoire Matter (leçon du Halo).
 
@@ -393,7 +415,16 @@ Autres règles :
   le même niveau, pour chacun des 254 niveaux. L'erreur d'arrondi ramenée au
   niveau vaut au plus 0,5 × 0,254 ≈ 0,13, sous le demi : le curseur de
   Maison ne saute pas.
-- Une intensité de 0 lue sur la lampe donne le niveau 1.
+- **Lampe noire.** Une lampe lue en marche à l'intensité 0 (molette à 0 %)
+  n'éclaire pas : elle est éteinte pour Maison, au dernier niveau non nul lu
+  (une lampe éteinte à l'intensité 0 est montrée de même). Si elle n'en a lu
+  aucun depuis le démarrage, le niveau de Matter n'est pas touché. La
+  conversion donne bien le niveau 1 pour une intensité de 0 (bornes), mais ce
+  niveau n'est jamais publié. À confirmer au banc : la molette à 0 % doit lire
+  « en marche, 0,0 % » (BANC.md).
+- **Plancher de niveau 4 publié** (`PONT_NIVEAU_PLANCHER`). Leçon du Halo :
+  sous 4, Maison montre une lampe allumée à fond. Une intensité qui donnerait
+  un niveau de 1 à 3 est donc publiée au niveau 4.
 - **Consigne arrondie au pour cent entier avant l'envoi** (banc C) : la 60d
   ne garde que le pour cent entier (433 est relu 430), et un ordre dont
   l'intensité tombait entre deux finissait abandonné alors que la lampe avait
@@ -402,19 +433,33 @@ Autres règles :
 
 ### 6.3 Marche/arrêt
 
-- L'attribut OnOff correspond à la trame `0x8C`.
+- L'attribut OnOff correspond à la trame `0x8C`. « Allumée » veut dire en
+  marche **et** à une intensité non nulle (6.2, lampe noire).
 - Un niveau reçu pendant que la lampe reste éteinte part tout de suite (plan
   2) : R3 a montré qu'une lampe éteinte retient le niveau reçu sans
   s'allumer, puis s'allume directement à ce niveau. Le garder jusqu'à
   l'allumage ramènerait le curseur de Maison à l'ancien niveau, à la
   relecture suivante.
+- **Lampe noire.** Une lampe noire (en marche à l'intensité 0), ou éteinte à
+  l'intensité 0, se rallume à sa dernière intensité non nulle lue ; à défaut, à
+  40 % (`LAMPES_INTENSITE_RALLUMAGE`, le niveau que la 60d a pris d'elle-même
+  au retour d'une coupure, banc R4). Un niveau reçu avec l'ordre d'allumage
+  (effet de LevelControl) remplace cette valeur.
+- Le pont n'éteint jamais de lui-même une lampe noire : sa molette reste vive,
+  alors qu'une lampe éteinte par l'app l'ignore (PROTOCOLE.md). C'est pourquoi
+  Maison la montre éteinte : toucher sa tuile l'allume, au lieu d'envoyer un
+  arrêt.
 
 ### 6.4 Pas d'écho
 
 - Seul un ordre venu d'un contrôleur Matter ou de la console fait émettre.
-- `lampes` marque les mises à jour qu'il pousse dans Matter, et le rappel
-  d'attribut les ignore.
-- En plus, une valeur égale au dernier état lu ne fait jamais émettre.
+- Pas d'écho, par construction : `lampes` pousse l'état dans Matter par
+  `attribute::report()`, qui ne rappelle pas l'application. Aucun marquage des
+  mises à jour n'est nécessaire.
+- En plus, une valeur égale au dernier état lu, après l'arrondi au pour cent,
+  ne fait jamais émettre. Allumée = en marche et intensité non nulle : un
+  ordre d'allumage sur une lampe noire n'est donc pas égal à son état, et la
+  rallume (6.3).
 
 ### 6.5 Démarrage
 
@@ -422,8 +467,9 @@ Autres règles :
   change au démarrage.
 - Joignable part de « oui » : pas de « Pas de réponse » fugace à chaque
   redémarrage.
-- Seules des demandes d'état partent vers les lampes, la première aussitôt.
-  Aucun ordre n'est rejoué.
+- Seules des demandes d'état partent vers les lampes, la première dès que le
+  Mesh est prêt : au moins 3 s après le démarrage d'un pont déjà appairé
+  (6.6). Aucun ordre n'est rejoué.
 - Maison se cale sur l'état réel dès les premières réponses.
 
 ### 6.6 Réseau et Apple
@@ -432,14 +478,18 @@ Autres règles :
 - **L'intervalle maximal des abonnements est plafonné à 20 s.** Leçon du Halo :
   Apple ne reprend pas seul un abonnement après un redémarrage du nœud ; il se
   réabonne quand l'intervalle expire.
-- La pile Bluetooth Mesh est initialisée au démarrage : la plateforme
-  d'esp-matter en a besoin pour les annonces d'appairage. Mais l'ESP32 ne
-  rejoint le réseau des lampes (provisionnement, écoute) qu'une fois
-  l'appairage Matter terminé, ou dès le démarrage s'il est déjà appairé.
-- Le code d'appairage et le discriminateur sont propres à la carte :
-  - rangés dans une partition d'usine (esp-matter-mfg-tool, comme sur le
-    SmartButton) ;
-  - affichés par `matter`.
+- Pas de `blemesh_platform` : la pile Matter possède l'hôte NimBLE, et garde
+  CHIPoBLE après la mise en service. La pile Bluetooth Mesh n'est donc pas
+  initialisée au démarrage : l'ESP32 l'initialise, puis rejoint le réseau des
+  lampes (provisionnement, écoute), une fois l'appairage Matter terminé et
+  CHIPoBLE silencieux, 3 s plus tard (3 s après le démarrage s'il est déjà
+  appairé). Le Mesh retient ses émissions si CHIPoBLE annonce de nouveau, et
+  n'enregistre aucun service GATT (`CONFIG_BLE_MESH_PROXY=n`).
+- Codes d'appairage de test du SDK, VID/PID `0xFFF1`/`0x8000`, comme pour le
+  Halo, sans partition d'usine : une seule carte, à la maison. Maison accepte,
+  avec l'avertissement « non certifié ». `matter` affiche le code tant que la
+  carte n'est pas appairée. Le Halo a les mêmes codes : ne pas mettre les deux
+  en service en même temps.
 
 ## 7. Erreurs et exploitation
 
@@ -457,15 +507,19 @@ et le voyant clignote 3 fois en rouge.
 
 ### 7.3 Bluetooth Mesh inopérant
 
-Le voyant est rouge fixe et la console affiche le message.
+Le voyant est rouge fixe, une fois la carte appairée à Maison (avant, le bleu
+clignotant prime), et la console affiche le message.
 
 | constat | cause probable | remède |
 |---|---|---|
 | clés absentes en NVS | jamais chargées, ou `mesh oublie` | `outils/cles_amaran.py` |
+| clés présentes, mais pas entré dans le réseau après 2 min | Maison pas encore appairée (le Mesh démarre après), ou adhésion échouée | appairer le pont dans Maison ; sinon, lire le journal de démarrage |
 | des annonces Mesh passent, mais aucune ne porte notre NID depuis 2 min | réseau recréé dans amaran Desktop : clés périmées | recharger les clés |
 | notre NID, mais NetMIC faux | IV Index faux | `mesh iv` ou `mesh iv cherche` |
 
-`mesh_pret` passe à non, et les deux lampes à « Pas de réponse ».
+`mesh_pret` ne repasse jamais à non une fois le réseau rejoint : c'est le
+diagnostic qui signale la panne. Dans tous les cas, les deux lampes passent à
+« Pas de réponse » par la règle 7.2.
 
 ### 7.4 Voyant (WS2812, IO8) : signature du Halo
 
@@ -477,6 +531,7 @@ Le voyant est rouge fixe et la console affiche le message.
 | rouge fixe | Bluetooth Mesh inopérant (7.3) |
 | éclat vert | ordre confirmé par la lampe |
 | rouge ×3 | ordre abandonné (7.1) |
+| arc-en-ciel | un contrôleur demande l'identification (Identify) |
 | rouge, noir, violet, noir, vite | BOOT tenu 8 s : relâcher pour désappairer |
 | éclat blanc | BOOT court : redémarrage |
 
@@ -487,16 +542,22 @@ Priorités et intensités comme sur le Halo ; `led test` joue chaque motif.
 - `lampes` : pour chaque lampe, la consigne, l'état lu, l'âge de la dernière
   réponse et si elle est joignable.
 - `lampe <n> on | off | niveau <0-1000> | releve` : pilotage manuel, pour les
-  bancs, Djoko présent.
+  bancs, Djoko présent. Le niveau est arrondi au pour cent, comme pour Maison
+  (6.2).
 - `mesh` : adresse, IV Index, compteur de séquence, empreintes des clés,
-  compteurs du crochet et de l'émission.
+  compteurs du crochet et de l'émission, part d'écoute du Mesh.
 - Réglages : `mesh cles <netkey> <appkey>`, `mesh lampe <n> <adresse> <mac>
   <nom>`, `mesh iv <n> | cherche`, `mesh adresse <a> | suivante`,
-  `mesh releve <s>`, `mesh oublie`.
+  `mesh releve <s>`, `mesh balayage [<fenêtre> <intervalle>]` (part d'écoute
+  du Mesh, en ms : 5.8), `mesh ecoute on | off` (écoute détaillée : messages
+  d'accès, balises et états des lampes), `mesh oublie`.
 - `mesh autotest` : passe les exemples chiffrés de la spécification Bluetooth
   Mesh dans les fonctions de chiffrement de la pile (9).
 - `matter` : codes d'appairage, fabriques, rôle Thread, abonnements.
-- `decommission`, `redemarre`, `led test`.
+- `led` : état du voyant ; `led test` joue chaque motif, `led stop` l'arrête.
+- `cause` : pourquoi la carte a redémarré la dernière fois.
+- `taches` : marges de pile des tâches et du tas.
+- `decommission`, `redemarre`.
 
 ### 7.6 Bouton BOOT (IO9)
 
@@ -567,8 +628,8 @@ Ils sont consignés dans `docs/BANC.md` et `docs/PROTOCOLE.md`.
 
 ### 8.4 Phase 2 : produit
 
-On ajoute le socle (voyant, bouton, console, fiche produit, partition
-d'usine), puis on passe les bancs :
+On ajoute le socle (voyant, bouton, console, fiche produit ; sans partition
+d'usine : codes de test du SDK, 6.6), puis on passe les bancs :
 
 | banc | attendu |
 |---|---|
@@ -589,9 +650,12 @@ Sur le Mac, sans carte :
 - **`telink`** : trames connues (3.2), puis trames relevées en phase 0.
 - **Conversion** : aller-retour exact sur les 254 niveaux, bornes,
   intensité 0.
-- **`lampes`**, avec une horloge simulée : consigne remplacée, déroulé d'un
-  ordre, 3 essais puis abandon, joignabilité, états périmés ignorés, pas
-  d'écho.
+- **`lampes`**, avec une horloge simulée : consigne remplacée, regroupement,
+  ordre des trames, déroulé d'un ordre, 3 essais puis abandon, joignabilité,
+  états périmés ignorés, arrondi au pour cent, lampe noire, valeur égale à
+  l'état lu (rien n'est émis). L'absence d'écho n'est pas dans `lampes` : elle
+  est construite dans `pont_matter` (6.4), qui publie par
+  `attribute::report()`.
 - **Crochet** : le tri (en-têtes, AKF, AID, segmentation, filtre des lampes),
   avec un déchiffrement simulé.
 - **`outils/cles_amaran.py`** : base SQLite factice, empreintes, aucune clé
@@ -612,11 +676,14 @@ Sur la carte :
   d'application (pas d'OTA), WS2812 sur IO8, BOOT sur IO9.
 
 **sdkconfig**
-- NimBLE ; Bluetooth Mesh en rôle nœud, avec réglages persistés et
-  120 tampons d'annonce ; `CONFIG_USE_BLE_ONLY_FOR_COMMISSIONING=n` ;
-  OpenThread MTD ; `CONFIG_MBEDTLS_HARDWARE_AES=n`.
-- Plateforme externe `blemesh_platform` : référencée dans esp-matter tant
-  qu'elle convient au C6 en Thread ; copiée et adaptée sinon.
+- NimBLE ; Bluetooth Mesh en rôle nœud, sans réglages persistés
+  (`CONFIG_BLE_MESH_SETTINGS=n` : le compteur de séquence est sauvé par nous,
+  5.4), avec 120 tampons d'annonce et sans proxy GATT
+  (`CONFIG_BLE_MESH_PROXY=n`) ; `CONFIG_USE_BLE_ONLY_FOR_COMMISSIONING=n` ;
+  OpenThread MTD ; `CONFIG_FREERTOS_HZ=1000` (tic de 1 ms, comme le Halo, pour
+  le bouton et le voyant) ; `CONFIG_MBEDTLS_HARDWARE_AES=n`.
+- Pas de plateforme externe `blemesh_platform` : la pile Matter possède l'hôte
+  NimBLE (6.6).
 - Chaque symbole est vérifié contre les Kconfig, comme dans le SmartButton
   (`check_sdkconfig.sh`) : un symbole inconnu est ignoré en silence.
 
@@ -637,10 +704,11 @@ Sur la carte :
 Arborescence prévue :
 
 ```
-components/          partagés par les deux firmwares
+components/          composants ; telink et mesh servent aux deux firmwares
   telink/            trames 0x26 (C pur)
   lampes/            le cœur (C pur)
   mesh/              ESP-BLE-MESH, crochet --wrap, file d'émission
+  socle/             voyant et bouton BOOT : logique pure copiée du Halo
 firmware/            produit : pont Matter et socle (idf.py)
 ecoute/              reconnaissance (phase 0), sans Matter
 tests/hote/          tests natifs sur le Mac
@@ -658,7 +726,7 @@ docs/                PROTOCOLE.md, BANC.md, superpowers/
 | IV Index introuvable (pas de balises) | rien ne passe | `mesh iv cherche` | R1 |
 | les lampes ignorent un émetteur autre que `0x0001` | décision 5 à revoir avec Djoko | aucune à ce stade | R3 |
 | amaran Desktop ignore les réponses qu'il n'a pas demandées | pas de miroir vers l'app (bonus perdu) | aucune ; accepté | R6 |
-| Maison ne reprend pas les noms, ou n'affiche pas « Pas de réponse » | confort | noms donnés à la main dans Maison | T1, T5 |
+| Maison ne reprend pas les noms, ou n'affiche pas « Pas de réponse » | confort | aucune à faire : noms repris ; « Pas de réponse » seulement au toucher de la tuile, comportement de Maison (le pont publie l'attribut Reachable et l'événement ReachableChanged) | T1, T5 |
 | mémoire vive ou flash du C6 (Matter + NimBLE + Mesh) | ne tient pas | mesurer dès la phase 1 ; réduire tampons et journaux | phase 1 |
 | réseau recréé dans amaran Desktop | clés périmées | diagnostic de 7.3, recharger | à l'usage |
 | les lampes ne relaient pas | une lampe hors de portée de l'ESP32 reste muette | placer l'ESP32 à portée des deux | installation |

@@ -18,7 +18,7 @@ Projets frères :
 |---|---|---|
 | P0 | Reconnaissance. Un firmware d'écoute rejoint le réseau des lampes et vérifie : IV Index, réponses captées, ordres, molette, groupe, cohabitation avec amaran Desktop | faite (30/09/2026) : 62 ordres sur 62 confirmés par relecture, toutes les demandes d'état ont reçu leur réponse ; aucun état spontané (ni molette, ni bouton, ni coupure) |
 | P1 | Matter sur la même carte, et banc de la radio partagée entre Thread et Bluetooth : une ou deux C6 | faite (30/09/2026) : une seule C6 suffit, avec l'écoute du Mesh à 50 %, l'arrondi au pour cent et la demande d'état doublée ; 96,9 % et 98,3 % des relectures répondues, 47 salves d'ordres de Maison sans échec |
-| P2 | Produit : voyant, bouton, console, fiche produit ; bancs, puis endurance 24 h | en cours : T1 à T9 passés le 01/10/2026 (T5 partiel, T7 non fait) ; endurance 24 h en cours |
+| P2 | Produit : voyant, bouton, console, fiche produit ; bancs, puis endurance 24 h | en cours : T1 à T9 passés le 01/10/2026 (T5 partiel, T7 non fait) ; endurance 24 h en cours ; lampe noire (molette à 0 %) corrigée, à vérifier au banc |
 
 Résultats des bancs : [docs/BANC.md](docs/BANC.md). Protocole relevé : [docs/PROTOCOLE.md](docs/PROTOCOLE.md).
 
@@ -66,6 +66,8 @@ Il faut ESP-IDF v5.5.4 et esp-matter (commit `c5b9ea8`) dans `~/esp`, une ESP32-
 
 Une fois appairé, le pont entre dans le réseau des lampes, et elles apparaissent sous leurs noms d'amaran Desktop.
 
+Carte déjà servie : `erase-flash` fait tirer au pont une nouvelle adresse Mesh au hasard (`0x7F00` à `0x7F7F`). Dans environ 1 cas sur 128 par adresse déjà employée, elle retombe sur une adresse que les lampes connaissent, et elles ignorent alors le pont, sans message d'erreur. Si les deux lampes restent muettes (`lampes` : « lue : jamais ») sans autre alerte de la console, taper `mesh adresse suivante` : le pont prend l'adresse voisine, repart de zéro et redémarre.
+
 ## Voyant et bouton
 
 | voyant | sens |
@@ -86,7 +88,7 @@ Bouton BOOT : appui court, redémarrage ; de 2 à 8 s, rien ; 8 s ou plus, désa
 
 Sur l'USB, en français (`python3 outils/console.py --port <port> "<commande>"`, ou tout terminal série) :
 - `lampes` : état lu, consigne, joignabilité, relectures et ordres de chaque lampe ;
-- `lampe <n> on|off|niveau <0-1000>|releve` ;
+- `lampe <n> on|off|niveau <0-1000>|releve` : le niveau est arrondi au pour cent (la lampe ne garde pas mieux) ;
 - `mesh` : réseau, empreintes des clés, compteurs ; `mesh releve <s>`, `mesh balayage`, `mesh ecoute on|off`, `mesh autotest`, etc. ;
 - `matter` : mise en service, Thread, abonnements, codes, identité ;
 - `led [test|stop]`, `cause`, `taches`, `decommission`, `redemarre`.
@@ -94,10 +96,12 @@ Sur l'USB, en français (`python3 outils/console.py --port <port> "<commande>"`,
 ## À savoir
 
 - Une lampe éteinte depuis Maison, ou depuis amaran Desktop, ignore sa molette et le bouton de sa molette. Pour la rallumer à la main : couper puis remettre son alimentation. Son état au retour varie : allumée vers 40 %, allumée à son niveau retenu, ou éteinte.
+- Une lampe dont la molette est à 0 % reste en marche, mais n'éclaire pas : Maison la montre éteinte, à son dernier niveau. La toucher dans Maison la rallume à ce niveau (à 40 % si le pont ne l'a pas vue allumée depuis son démarrage). Le pont ne l'éteint jamais de lui-même : sa molette reste vive.
 - Maison suit la molette et amaran Desktop en 5 s environ : les lampes ne signalent rien d'elles-mêmes, et le pont les relit toutes les 5 s.
 - amaran Desktop, lui, ne suit pas les ordres venus de Maison.
 - Maison ne montre une lampe « Pas de réponse », puis son retour, qu'après avoir touché sa tuile. Le pont publie pourtant chaque changement.
 - Pour la luminosité, taper sur la jauge de Maison est plus fluide que la faire glisser : un glissé envoie une valeur toutes les 150 à 300 ms.
+- Bouton BOOT : juste après un appui annulé (tenu de 2 à 8 s, donc sans effet), relâcher net ; un effleurement redémarre le pont, sans conséquence (les clés et l'appairage restent).
 
 ## Clés du réseau
 

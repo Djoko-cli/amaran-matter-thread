@@ -67,6 +67,7 @@ Maison ─Thread─► pont_matter ─ordres─► tâche lampes (lampes.c) ─t
 7. **6.1 : endpoints fixes.** Les deux emplacements sont toujours créés, dans le même ordre (EP2, EP3) : leurs numéros ne changent jamais, sans rien garder en NVS. Un emplacement sans lampe est « Pas de réponse ».
 8. **7.3, 7.4 : rouge fixe seulement une fois appairé.** Avant, le bleu clignotant prime, et le Mesh n'est pas démarré.
 9. **8.4 : console et fiche produit dès la phase 1.** Le banc C en a besoin. La phase 2 ajoute le voyant, le bouton et Identify.
+10. **6.2 : le niveau publié ne descend pas sous 4.** Leçon du Halo : sous 4, Maison montre une lampe allumée à fond. Une intensité qui donnerait un niveau de 1 à 3 est publiée au niveau 4 (`PONT_NIVEAU_PLANCHER`, `pont_matter.h`).
 
 ## Choix fixés par les bancs R (spec 8.2)
 
@@ -81,6 +82,8 @@ Maison ─Thread─► pont_matter ─ordres─► tâche lampes (lampes.c) ─t
 - La commande `mesh` est partagée par les deux firmwares.
 - Commandes en plus : `taches`, `cause`, `led stop`, `mesh ecoute on|off`.
 - Le diagnostic de 7.3 signale aussi « clés présentes, mais pas entré dans le réseau » après 2 min.
+- `mesh balayage [fenêtre intervalle]` : la part d'écoute du Bluetooth Mesh se lit et se règle à chaud (banc C, levier 1). Le pont la règle à 20 ms sur 40 ms (50 %) au démarrage, avant d'entrer dans le réseau.
+- `led` sans argument : état du voyant (motif, couleur affichée, ordres confirmés et abandonnés).
 
 ## Carte des fichiers
 
