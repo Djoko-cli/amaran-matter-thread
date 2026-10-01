@@ -28,6 +28,8 @@ extern "C" {
 #define LAMPES_REPETITIONS_ORDRE 2u
 #define LAMPES_REPETITIONS_ETAT 2u        // banc C : ~1 reponse sur 10 manquee (radio partagee avec Thread), deux chances
 #define LAMPES_PAS_INTENSITE 10            // une 60d ne garde que le pour cent entier (banc C : 433 relu 430)
+#define LAMPES_INTENSITE_RALLUMAGE 400u    // rallumer une lampe noire jamais vue allumee : 40 %, comme la lampe
+                                           // d'elle-meme apres une coupure (banc R4)
 
 typedef struct {
   bool marche;
@@ -43,6 +45,9 @@ typedef struct {
   // Depose une trame dans la file d'emission de mesh ; faux si elle est refusee.
   bool (*envoyer)(void *ctx, uint16_t dst, const uint8_t trame[TELINK_TAILLE], uint8_t repetitions);
   // Ce que Matter doit montrer pour la lampe : etat (NULL : jamais lu) et joignabilite.
+  // marche = allumee (en marche ET intensite non nulle) : une lampe noire (en marche a
+  // l'intensite 0, molette a 0 %) est eteinte, a sa derniere intensite non nulle lue ;
+  // intensite 0 : aucune encore, le niveau de Matter reste ce qu'il est.
   void (*publier)(void *ctx, int lampe, const lampe_etat_t *etat, bool joignable);
   void (*signaler)(void *ctx, int lampe, lampes_signal_t signal);
   void *ctx;
@@ -59,6 +64,7 @@ typedef struct {
   // Etat lu
   bool connu;                    // un etat a ete lu depuis le demarrage
   lampe_etat_t lu;
+  uint16_t memoire;              // derniere intensite non nulle lue (0 : aucune depuis le demarrage)
   uint32_t reponse_ms;           // derniere trame recue de la lampe
   bool joignable;                // part de vrai (spec 6.5)
   uint8_t releves_sans_reponse;
@@ -100,7 +106,9 @@ void lampes_regler_releve(lampes_t *l, uint32_t periode_ms);
 // Ordre pour une lampe : marche et/ou intensite (NULL : inchange). depuis_matter :
 // le controleur a deja mis ces valeurs dans ses attributs. L'intensite est arrondie
 // au pour cent le plus proche (au moins 1 % si elle n'est pas nulle) : la lampe ne
-// garde pas mieux, et c'est cette valeur que l'etat relu doit egaler.
+// garde pas mieux, et c'est cette valeur que l'etat relu doit egaler. Allumer une
+// lampe lue a l'intensite 0 sans donner d'intensite la rallume a sa derniere
+// intensite non nulle (LAMPES_INTENSITE_RALLUMAGE si elle n'en a jamais eu).
 void lampes_ordre(lampes_t *l, int lampe, const bool *marche, const uint16_t *intensite, bool depuis_matter,
                   uint32_t maintenant_ms);
 // Trame 0x26 recue d'une adresse (crochet de reception).

@@ -16,7 +16,7 @@ uint16_t lampes_niveau_vers_intensite(uint8_t niveau) {
 uint8_t lampes_intensite_vers_niveau(uint16_t intensite) {
   if (intensite > TELINK_INTENSITE_MAX) intensite = TELINK_INTENSITE_MAX;
   unsigned n = (508u * intensite + 1000u) / 2000u;  // arrondi(intensite x 254 / 1000)
-  if (n < 1) n = 1;  // une intensite de 0 lue sur la lampe donne le niveau 1 (6.2)
+  if (n < 1) n = 1;  // Matter n'a pas de niveau 0 ; une lampe noire ne passe pas ici (pont_publier)
   if (n > 254) n = 254;
   return (uint8_t)n;
 }
@@ -41,17 +41,30 @@ void lampes_regler_releve(lampes_t *l, uint32_t periode_ms) {
   l->periode_ms = periode_ms;
 }
 
+// Ce que Matter montre d'une lampe lue (spec 6.2, 6.3) : en marche a l'intensite 0
+// (molette a 0 %), elle n'eclaire pas, donc eteinte pour Maison, au dernier niveau
+// non nul lu (0 si aucun : le niveau de Matter reste ce qu'il est).
+static lampe_etat_t vue(const lampe_t *p) {
+  lampe_etat_t v = p->lu;
+  if (v.intensite == 0) {
+    v.marche = false;
+    v.intensite = p->memoire;
+  }
+  return v;
+}
+
 // Publie ce que Matter doit montrer, s'il differe de ce qu'il montre deja (ou
 // toujours, si forcer).
 static void montrer(lampes_t *l, int i, bool forcer) {
   lampe_t *p = &l->lampes[i];
+  const lampe_etat_t v = vue(p);
   const bool meme = p->montre_connu == p->connu && p->montre_joignable == p->joignable &&
-                    (!p->connu || (p->montre.marche == p->lu.marche && p->montre.intensite == p->lu.intensite));
+                    (!p->connu || (p->montre.marche == v.marche && p->montre.intensite == v.intensite));
   if (meme && !forcer) return;
   p->montre_connu = p->connu;
-  p->montre = p->lu;
+  p->montre = v;
   p->montre_joignable = p->joignable;
-  l->sorties.publier(l->sorties.ctx, i, p->connu ? &p->lu : NULL, p->joignable);
+  l->sorties.publier(l->sorties.ctx, i, p->connu ? &v : NULL, p->joignable);
 }
 
 static bool consigne_tenue(const lampe_t *p, const lampe_etat_t *e) {
@@ -145,6 +158,14 @@ void lampes_ordre(lampes_t *l, int lampe, const bool *marche, const uint16_t *in
     p->veut_intensite = true;
     p->consigne.intensite = arrondir_pour_cent(*intensite);
   }
+  // Allumer une lampe noire (lue a l'intensite 0, en marche ou non) : sans intensite,
+  // l'ordre serait deja tenu (6.4), ou la rallumerait a 0. Elle reprend sa derniere
+  // intensite non nulle ; une ecriture de niveau qui suit (effet de LevelControl a
+  // l'allumage) la remplace pendant le regroupement.
+  if (p->veut_marche && p->consigne.marche && !p->veut_intensite && p->connu && p->lu.intensite == 0) {
+    p->veut_intensite = true;
+    p->consigne.intensite = arrondir_pour_cent(p->memoire ? p->memoire : LAMPES_INTENSITE_RALLUMAGE);
+  }
   if (!l->mesh_pret) {
     finir(l, lampe, LAMPES_SIGNAL_ABANDON, maintenant_ms);
     return;
@@ -199,6 +220,7 @@ void lampes_trame_recue(lampes_t *l, uint16_t src, const uint8_t trame[TELINK_TA
     p->connu = true;
     p->lu.marche = e.marche;
     p->lu.intensite = e.intensite;
+    if (e.intensite) p->memoire = e.intensite;
   }
   if (p->phase == LAMPE_REPOS) {
     montrer(l, i, false);

@@ -27,7 +27,8 @@ typedef void (*pont_ordre_cb_t)(int lampe, const bool *marche, const uint16_t *i
 // Matter. Les ordres arrivent par ordre().
 esp_err_t pont_demarrer(const amaran_config_t *cfg, pont_ordre_cb_t ordre);
 // Etat d'une lampe dans Matter (attribute::report : aucun rappel, donc aucun
-// echo). etat NULL : jamais lu, seule la joignabilite change.
+// echo). etat NULL : jamais lu, seule la joignabilite change. Intensite 0 (lampe
+// noire jamais vue allumee) : OnOff est publie, CurrentLevel reste ce qu'il est.
 void pont_publier(int lampe, const lampe_etat_t *etat, bool joignable);
 // Au moins une fabrique (Maison ou un autre controleur).
 bool pont_appaire(void);

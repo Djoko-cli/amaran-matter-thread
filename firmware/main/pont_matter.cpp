@@ -282,6 +282,7 @@ void pont_publier(int lampe, const lampe_etat_t *etat, bool joignable) {
   if (!etat) return;
   v = esp_matter_bool(etat->marche);
   attribute::report(ep, OnOff::Id, OnOff::Attributes::OnOff::Id, &v);
+  if (etat->intensite == 0) return;  // lampe noire jamais vue allumee : CurrentLevel reste celui de Matter
   uint8_t niveau = lampes_intensite_vers_niveau(etat->intensite);
   if (niveau < PONT_NIVEAU_PLANCHER) niveau = PONT_NIVEAU_PLANCHER;
   v = esp_matter_nullable_uint8(niveau);

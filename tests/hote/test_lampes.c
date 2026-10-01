@@ -1,6 +1,8 @@
 // Tests sur le Mac du coeur du pont (lampes). Lancer : sh tests/hote/lancer.sh
 // Horloge simulee : chaque test fait avancer le temps par tics de 50 ms, comme
 // la tache lampes du firmware.
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "lampes.h"
@@ -35,20 +37,34 @@ static signal_t g_sigs[64];
 static int g_nb_sigs;
 static bool g_refuser;
 
+#define NB_ELEMENTS(tableau) ((int)(sizeof(tableau) / sizeof((tableau)[0])))
+
+// Un tableau d'enregistrement plein est un echec du test, jamais un depassement
+// silencieux (comportement indefini, ou vert trompeur).
+static void debordement(const char *tableau) {
+  VERIFIE(false, "tableau %s plein : une sortie n'est pas enregistree", tableau);
+}
+
 static bool f_envoyer(void *ctx, uint16_t dst, const uint8_t t[TELINK_TAILLE], uint8_t rep) {
   (void)ctx;
   if (g_refuser) return false;
-  if (g_nb_envois < (int)(sizeof(g_envois) / sizeof(g_envois[0]))) {
-    g_envois[g_nb_envois].dst = dst;
-    memcpy(g_envois[g_nb_envois].t, t, TELINK_TAILLE);
-    g_envois[g_nb_envois].rep = rep;
-    g_nb_envois++;
+  if (g_nb_envois >= NB_ELEMENTS(g_envois)) {
+    debordement("g_envois");
+    return true;
   }
+  g_envois[g_nb_envois].dst = dst;
+  memcpy(g_envois[g_nb_envois].t, t, TELINK_TAILLE);
+  g_envois[g_nb_envois].rep = rep;
+  g_nb_envois++;
   return true;
 }
 
 static void f_publier(void *ctx, int lampe, const lampe_etat_t *e, bool joignable) {
   (void)ctx;
+  if (g_nb_pubs >= NB_ELEMENTS(g_pubs)) {
+    debordement("g_pubs");
+    return;
+  }
   publication_t *p = &g_pubs[g_nb_pubs++];
   p->lampe = lampe;
   p->connu = e != NULL;
@@ -58,6 +74,10 @@ static void f_publier(void *ctx, int lampe, const lampe_etat_t *e, bool joignabl
 
 static void f_signaler(void *ctx, int lampe, lampes_signal_t s) {
   (void)ctx;
+  if (g_nb_sigs >= NB_ELEMENTS(g_sigs)) {
+    debordement("g_sigs");
+    return;
+  }
   g_sigs[g_nb_sigs].lampe = lampe;
   g_sigs[g_nb_sigs].s = s;
   g_nb_sigs++;
@@ -84,6 +104,11 @@ static void demarrer(uint32_t t0, bool pret) {
 }
 
 static void avancer(uint32_t ms) {
+  if (ms % 50 != 0) {  // l'horloge avance par tics de 50 ms : sans cela, la boucle ne finirait jamais
+    fflush(stdout);
+    fprintf(stderr, "avancer(%u) : la duree doit etre un multiple de 50 ms\n", (unsigned)ms);
+    abort();
+  }
   const uint32_t fin = T + ms;
   while (T != fin) {
     T += 50;
@@ -136,6 +161,41 @@ static int intensite_partie_pour(uint16_t demande, bool depuis_matter) {
     if (g_envois[i].dst == 0x0002 && g_envois[i].t[9] == TELINK_CMD_INTENSITE) return intensite_envoyee(&g_envois[i]);
   }
   return -1;
+}
+
+// Trames d'ordre (marche ou intensite) envoyees, a toutes les adresses.
+static int compter_ordres(void) {
+  int n = 0;
+  for (int i = 0; i < g_nb_envois; i++) {
+    if (g_envois[i].t[9] == TELINK_CMD_MARCHE || g_envois[i].t[9] == TELINK_CMD_INTENSITE) n++;
+  }
+  return n;
+}
+
+// Publications d'une lampe : leur nombre, et la derniere (NULL si aucune).
+static int publications_de(int lampe) {
+  int n = 0;
+  for (int i = 0; i < g_nb_pubs; i++) {
+    if (g_pubs[i].lampe == lampe) n++;
+  }
+  return n;
+}
+
+static const publication_t *derniere_pub(int lampe) {
+  const publication_t *r = NULL;
+  for (int i = 0; i < g_nb_pubs; i++) {
+    if (g_pubs[i].lampe == lampe) r = &g_pubs[i];
+  }
+  return r;
+}
+
+// Lampe 1 lue en marche a l'intensite 0 (molette a 0 %), apres avoir ete vue a 300
+// si avec_memoire. Les sorties sont oubliees : le test part de cet etat.
+static void lampe_noire(bool avec_memoire) {
+  demarrer(0, true);
+  if (avec_memoire) recevoir(0x0002, true, 300);
+  recevoir(0x0002, true, 0);
+  oublier_sorties();
 }
 
 // --- Tests
@@ -521,6 +581,156 @@ static void test_intensite_au_pour_cent(void) {
   VERIFIE(g_nb_sigs == 0, "ni confirmation ni abandon");
 }
 
+// --- Lampe noire (banc du 01/10) : molette a 0 %, la lampe reste en marche a
+// l'intensite 0 et n'eclaire pas. Maison la montre eteinte, au dernier niveau non
+// nul lu ; On la rallume a ce niveau ; le pont n'eteint jamais de lui-meme une lampe
+// noire : sa molette resterait sans effet (PROTOCOLE.md).
+
+static void test_noire_montree_eteinte(void) {
+  demarrer(0, true);
+  recevoir(0x0002, true, 0);
+  VERIFIE(g_nb_pubs == 1 && g_pubs[0].lampe == 0 && g_pubs[0].connu && !g_pubs[0].e.marche &&
+              g_pubs[0].e.intensite == 0,
+          "premier etat {marche, 0} : montre eteint, intensite 0 (%d publication(s))", g_nb_pubs);
+  recevoir(0x0002, true, 300);
+  VERIFIE(g_nb_pubs == 2 && g_pubs[1].e.marche && g_pubs[1].e.intensite == 300, "puis {marche, 300} : allumee a 300");
+  recevoir(0x0002, true, 0);
+  VERIFIE(g_nb_pubs == 3 && !g_pubs[2].e.marche && g_pubs[2].e.intensite == 300,
+          "molette a 0 : eteinte, au dernier niveau non nul (300)");
+  recevoir(0x0002, false, 0);
+  recevoir(0x0002, true, 0);
+  VERIFIE(g_nb_pubs == 3, "{arret, 0} puis {marche, 0} : meme vue, rien de plus (%d publications)", g_nb_pubs);
+}
+
+static void test_allumer_une_noire(void) {
+  lampe_noire(true);
+  const bool on = true;
+  ordre_matter(0, &on, NULL);  // On seul : sans intensite, l'ordre serait deja tenu (6.4)
+  avancer(100);
+  VERIFIE(g_nb_envois == 2 && g_envois[0].dst == 0x0002 && g_envois[0].t[9] == TELINK_CMD_INTENSITE &&
+              intensite_envoyee(&g_envois[0]) == 300 && g_envois[1].t[9] == TELINK_CMD_MARCHE &&
+              g_envois[1].t[8] == 1,
+          "2 trames : l'intensite retenue (300), puis la marche (%d trames)", g_nb_envois);
+  avancer(200);
+  VERIFIE(compter(0x0002, TELINK_CMD_ETAT) == 1, "une demande d'etat 200 ms apres les trames");
+  recevoir(0x0002, true, 300);
+  VERIFIE(g_nb_sigs == 1 && g_sigs[0].s == LAMPES_SIGNAL_CONFIRME, "confirme par l'etat relu a 300");
+  VERIFIE(g_nb_pubs == 1 && g_pubs[0].e.marche && g_pubs[0].e.intensite == 300, "Maison voit la lampe allumee a 300");
+}
+
+static void test_allumer_une_noire_avec_l_effet(void) {
+  lampe_noire(true);
+  const bool on = true;
+  const uint16_t mini = lampes_niveau_vers_intensite(1), garde = lampes_niveau_vers_intensite(127);
+  ordre_matter(0, &on, NULL);     // On de Maison,
+  ordre_matter(0, NULL, &mini);   // puis l'effet de LevelControl : minimum,
+  ordre_matter(0, NULL, &garde);  // puis le niveau garde par le controleur (127 : 500)
+  avancer(100);
+  VERIFIE(g_nb_envois == 2 && g_envois[0].t[9] == TELINK_CMD_INTENSITE && intensite_envoyee(&g_envois[0]) == 500 &&
+              g_envois[1].t[9] == TELINK_CMD_MARCHE && g_envois[1].t[8] == 1,
+          "une seule salve : intensite 500, puis marche (%d trames)", g_nb_envois);
+  avancer(200);
+  recevoir(0x0002, true, 500);
+  VERIFIE(g_nb_sigs == 1 && g_sigs[0].s == LAMPES_SIGNAL_CONFIRME, "confirme a {marche, 500}");
+  VERIFIE(g_nb_pubs == 1 && g_pubs[0].e.marche && g_pubs[0].e.intensite == 500, "Maison voit la lampe allumee a 500");
+}
+
+static void test_allumer_une_noire_sans_memoire(void) {
+  lampe_noire(false);  // jamais vue allumee depuis le demarrage
+  const bool on = true;
+  ordre_matter(0, &on, NULL);
+  avancer(100);
+  VERIFIE(g_nb_envois == 2 && g_envois[0].t[9] == TELINK_CMD_INTENSITE &&
+              intensite_envoyee(&g_envois[0]) == LAMPES_INTENSITE_RALLUMAGE && g_envois[1].t[9] == TELINK_CMD_MARCHE,
+          "sans memoire : l'intensite de rallumage (%u), puis la marche", (unsigned)LAMPES_INTENSITE_RALLUMAGE);
+  avancer(200);
+  recevoir(0x0002, true, LAMPES_INTENSITE_RALLUMAGE);
+  VERIFIE(g_nb_sigs == 1 && g_sigs[0].s == LAMPES_SIGNAL_CONFIRME, "confirme a l'intensite de rallumage");
+}
+
+static void test_allumer_eteinte_a_zero(void) {
+  demarrer(0, true);
+  recevoir(0x0002, true, 300);
+  recevoir(0x0002, false, 0);  // eteinte a l'intensite 0 : Maison la montre eteinte a 300
+  oublier_sorties();
+  const bool on = true;
+  ordre_matter(0, &on, NULL);
+  avancer(100);
+  VERIFIE(g_nb_envois == 2 && g_envois[0].t[9] == TELINK_CMD_INTENSITE && intensite_envoyee(&g_envois[0]) == 300 &&
+              g_envois[1].t[9] == TELINK_CMD_MARCHE && g_envois[1].t[8] == 1,
+          "intensite 300 d'abord, puis la marche : pas de lumiere a 0 (%d trames)", g_nb_envois);
+  avancer(200);
+  recevoir(0x0002, true, 300);
+  VERIFIE(g_nb_sigs == 1 && g_sigs[0].s == LAMPES_SIGNAL_CONFIRME, "confirme a {marche, 300}");
+}
+
+static void test_molette_remonte_de_zero(void) {
+  demarrer(0, true);
+  recevoir(0x0002, true, 300);
+  recevoir(0x0002, true, 0);  // la molette descend a 0 %
+  const publication_t *vue = derniere_pub(0);
+  VERIFIE(vue && !vue->e.marche && vue->e.intensite == 300, "Maison voit la lampe eteinte, au niveau 300");
+  oublier_sorties();
+  for (int k = 0; k < 6; k++) {  // 30 s de relectures, toutes repondues {marche, 0}
+    avancer(5000);
+    recevoir(0x0002, true, 0);
+  }
+  VERIFIE(compter_ordres() == 0, "le pont n'eteint ni ne regle jamais une lampe noire (%d trames d'ordre)",
+          compter_ordres());
+  VERIFIE(publications_de(0) == 0, "la vue ne change pas : rien de republie (%d)", publications_de(0));
+  recevoir(0x0002, true, 200);  // la molette remonte
+  const publication_t *apres = derniere_pub(0);
+  VERIFIE(publications_de(0) == 1 && apres && apres->e.marche && apres->e.intensite == 200,
+          "la molette remonte : Maison voit la lampe allumee a 200");
+}
+
+static void test_abandon_d_un_allumage_de_noire(void) {
+  lampe_noire(true);
+  const bool on = true;
+  ordre_matter(0, &on, NULL);
+  avancer(3700);  // trois essais sans reponse : 100 + 3 x (200 + 1000) ms
+  VERIFIE(compter(0x0002, TELINK_CMD_INTENSITE) == 3 && compter(0x0002, TELINK_CMD_MARCHE) == 3,
+          "chaque essai renvoie l'intensite et la marche");
+  VERIFIE(g_nb_sigs == 1 && g_sigs[0].s == LAMPES_SIGNAL_ABANDON, "abandon apres le 3e essai (%d signaux)", g_nb_sigs);
+  const publication_t *p = derniere_pub(0);
+  VERIFIE(p && p->connu && !p->e.marche && p->e.intensite == 300, "Maison revient a eteinte, au niveau retenu (300)");
+}
+
+static void test_niveau_seul_sur_une_noire(void) {
+  lampe_noire(true);
+  const uint16_t v = 500;
+  ordre_matter(0, NULL, &v);  // MoveToLevel sans OnOff : la lampe est deja en marche, elle s'allume
+  avancer(100);
+  VERIFIE(compter(0x0002, TELINK_CMD_INTENSITE) == 1 && compter(0x0002, TELINK_CMD_MARCHE) == 0,
+          "une trame d'intensite, aucune trame de marche (%d trames)", g_nb_envois);
+  avancer(200);
+  recevoir(0x0002, true, 500);
+  VERIFIE(g_nb_sigs == 1 && g_sigs[0].s == LAMPES_SIGNAL_CONFIRME, "confirme a {marche, 500}");
+  VERIFIE(g_nb_pubs == 1 && g_pubs[0].e.marche && g_pubs[0].e.intensite == 500, "Maison voit la lampe allumee a 500");
+}
+
+// Garde-fou de 6.4 : la regle de la lampe noire ne joue pas sur une lampe allumee.
+static void test_on_sur_allumee_n_emet_pas(void) {
+  demarrer(0, true);
+  recevoir(0x0002, true, 300);
+  oublier_sorties();
+  const bool on = true;
+  ordre_matter(0, &on, NULL);
+  avancer(1500);
+  VERIFIE(g_nb_envois == 0, "aucune trame (%d)", g_nb_envois);
+  VERIFIE(g_nb_sigs == 0, "ni confirmation ni abandon");
+}
+
+// Une lampe jamais lue n'est pas connue noire : un On n'invente aucune intensite.
+static void test_on_sur_lampe_jamais_lue(void) {
+  demarrer(0, true);
+  const bool on = true;
+  ordre_matter(0, &on, NULL);
+  avancer(100);
+  VERIFIE(g_nb_envois == 1 && g_envois[0].t[9] == TELINK_CMD_MARCHE && g_envois[0].t[8] == 1,
+          "la seule trame de marche (%d trames)", g_nb_envois);
+}
+
 int main(void) {
   test_conversion();
   test_demarrage_relit_aussitot();
@@ -544,5 +754,15 @@ int main(void) {
   test_mesures_du_banc_c();
   test_delai_depuis_le_dernier_ordre();
   test_intensite_au_pour_cent();
+  test_noire_montree_eteinte();
+  test_allumer_une_noire();
+  test_allumer_une_noire_avec_l_effet();
+  test_allumer_une_noire_sans_memoire();
+  test_allumer_eteinte_a_zero();
+  test_molette_remonte_de_zero();
+  test_abandon_d_un_allumage_de_noire();
+  test_niveau_seul_sur_une_noire();
+  test_on_sur_allumee_n_emet_pas();
+  test_on_sur_lampe_jamais_lue();
   return bilan("lampes");
 }

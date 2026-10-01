@@ -37,6 +37,7 @@ static int cmd_lampes(int argc, char **argv) {
     printf("  lue       : ");
     if (p->connu) {
       imprimer_etat(&p->lu);
+      if (p->lu.marche && p->lu.intensite == 0) printf(" (noire : eteinte pour Maison)");
       printf(" (il y a %" PRIu32 " s)\n", (t - p->reponse_ms) / 1000);
     } else {
       printf("jamais\n");
