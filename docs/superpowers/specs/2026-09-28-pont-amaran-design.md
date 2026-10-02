@@ -420,8 +420,8 @@ Autres règles :
   (une lampe éteinte à l'intensité 0 est montrée de même). Si elle n'en a lu
   aucun depuis le démarrage, le niveau de Matter n'est pas touché. La
   conversion donne bien le niveau 1 pour une intensité de 0 (bornes), mais ce
-  niveau n'est jamais publié. À confirmer au banc : la molette à 0 % doit lire
-  « en marche, 0,0 % » (BANC.md).
+  niveau n'est jamais publié. Vérifié au banc le 02/10/2026 : la molette à
+  0 % se lit « en marche, 0,0 % » (BANC.md).
 - **Plancher de niveau 4 publié** (`PONT_NIVEAU_PLANCHER`). Leçon du Halo :
   sous 4, Maison montre une lampe allumée à fond. Une intensité qui donnerait
   un niveau de 1 à 3 est donc publiée au niveau 4.

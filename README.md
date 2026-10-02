@@ -18,7 +18,7 @@ Projets frères :
 |---|---|---|
 | P0 | Reconnaissance. Un firmware d'écoute rejoint le réseau des lampes et vérifie : IV Index, réponses captées, ordres, molette, groupe, cohabitation avec amaran Desktop | faite (30/09/2026) : 62 ordres sur 62 confirmés par relecture, toutes les demandes d'état ont reçu leur réponse ; aucun état spontané (ni molette, ni bouton, ni coupure) |
 | P1 | Matter sur la même carte, et banc de la radio partagée entre Thread et Bluetooth : une ou deux C6 | faite (30/09/2026) : une seule C6 suffit, avec l'écoute du Mesh à 50 %, l'arrondi au pour cent et la demande d'état doublée ; 96,9 % et 98,3 % des relectures répondues, 47 salves d'ordres de Maison sans échec |
-| P2 | Produit : voyant, bouton, console, fiche produit ; bancs, puis endurance 24 h | en cours : T1 à T9 passés le 01/10/2026 (T5 partiel, T7 non fait) ; endurance 24 h en cours ; lampe noire (molette à 0 %) corrigée, à vérifier au banc |
+| P2 | Produit : voyant, bouton, console, fiche produit ; bancs, puis endurance 24 h | faite (02/10/2026) : T1 à T10 (T5 partiel, T7 non fait) ; 24 h sans redémarrage, 97,9 % et 98,3 % des relectures répondues, 41 salves d'ordres sans échec ; lampe noire (molette à 0 %) corrigée et vérifiée |
 
 Résultats des bancs : [docs/BANC.md](docs/BANC.md). Protocole relevé : [docs/PROTOCOLE.md](docs/PROTOCOLE.md).
 

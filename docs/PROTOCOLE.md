@@ -8,6 +8,7 @@ Relevé le 30/09/2026 (bancs R1 à R6, [BANC.md](BANC.md)), avec le firmware `ec
 **Écarts avec la spec (3.2 et 3.3) :**
 - **Aucun accusé.** Les lampes ne répondent jamais à un ordre (`0x8C`, `0x8F`), ni au nôtre ni à celui de l'app. Seule une demande d'état (`0x0E`) obtient une réponse.
 - **Aucun état spontané.** Ni la molette, ni son bouton, ni une coupure ne font parler une lampe. Pour suivre un réglage fait à la main, il faut relire la lampe (spec 5.7).
+- **Molette à 0 %.** Tournée jusqu'à 0 %, la molette n'éteint pas la lampe : elle reste en marche, à l'intensité 0 (relue `marche 0,0 %`, 02/10). Elle n'éclaire plus, mais sa molette reste vive, contrairement à une lampe éteinte par l'app.
 - **Commandes physiques inertes.** Une lampe éteinte par l'app (ou par le pont) ignore sa molette et le bouton de molette (+20 %). Seule une coupure au bouton d'alimentation la rallume.
 - **Retour de coupure.** Coupée puis remise au bouton, la lampe ne revient pas toujours dans le même état. Quatre retours relevés, de trois sortes :
   - **allumée vers 40 %**, deux fois (41 % et 40 %, banc R4), une fois par lampe, chacune éteinte avant la coupure (à 93 % et à 6 % de niveau retenu) ;

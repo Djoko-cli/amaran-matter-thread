@@ -183,9 +183,23 @@ Remarques :
 - **Maison et Reachable (T5, T9).** Maison ne met pas d'elle-même à jour l'état « joignable » d'une lampe : il faut toucher sa tuile. Le pont, lui, publie chaque changement : l'attribut Reachable, et aussi l'événement ReachableChanged (constat fait dans le code d'esp-matter, pas à l'écoute du réseau). Le comportement vient donc de Maison. La spec (11) acceptait ce risque, qui relève du confort.
 - **Appui de 42 ms (T8).** Juste après l'appui annulé de 6,7 s, la console a noté un appui court de 42 ms, et la carte a redémarré. Ce n'est pas un rebond : l'anti-rebond du bouton exige que chaque niveau tienne 30 ms, ce qu'un rebond électrique ne fait pas, et ce contact en a duré 42. C'était un second contact réel, probablement un doigt qui retouche le bouton en le quittant. Conséquence bénigne : un redémarrage ne rejoue aucun ordre et garde les clés et l'appairage. Aucune garde n'est ajoutée, et le README conseille de relâcher net.
 - **Tuile en chargement (T1).** Une fois, la tuile de la lampe 2 est restée « en chargement » à 100 % après son extinction, alors que le pont avait publié l'état. Non reproduit sur 4 essais.
-- **Molette à 0 %.** Baissée jusqu'à 0 % à la molette, la lampe n'éclaire plus, mais Maison la montrait allumée à 1 %. Corrigé dans le commit `2b2393b` : une lampe lue en marche à l'intensité 0 est montrée éteinte, à son dernier niveau non nul, et la toucher la rallume à ce niveau (spec 6.2 et 6.3). Reste à vérifier au banc, avec Djoko, après T10 :
-  - molette à 0 % : `lampes` lit `marche 0,0 %` et ajoute « (noire : eteinte pour Maison) ». Si la lampe relit 10 (1 %), le seuil « noire » est à revoir ;
-  - Maison montre la lampe éteinte ; toucher sa tuile la rallume à son niveau ;
-  - Siri « éteins » sur la lampe noire : `lampes` ne compte aucun ordre de plus, et la molette remonte la lampe.
+- **Molette à 0 %.** Baissée jusqu'à 0 % à la molette, la lampe n'éclaire plus, mais Maison la montrait allumée à 1 %. Corrigé dans le commit `2b2393b` : une lampe lue en marche à l'intensité 0 est montrée éteinte, à son dernier niveau non nul, et la toucher la rallume à ce niveau (spec 6.2 et 6.3). Vérifié au banc le 02/10 (ci-dessous).
 - **Endurance (T10).** Sur les 24 h : 128 830 messages Mesh vus, 0 NetMIC faux ; 6 émissions Thread perdues après leurs relances (3 `ChannelAccessFailure`, 3 `NoAck`), isolées ; environ 95 avertissements Thread « Duplicated » par heure, réguliers (messages de gestion reçus deux fois) ; 3 reprises d'abonnement échouées vers un contrôleur disparu et 5 messages sur une session inconnue, dans la première heure : bruit du SDK Matter, sans effet.
 - **Pile de la tâche `socle`** : 2 604 o libres au plus bas, relevés après le redémarrage qui suit le désappairage par BOOT. Ce minimum ne couvre donc pas le passage par `factory_reset()`, exécuté dans la tâche `socle` avant ce redémarrage. Ce passage s'est fait sans panique (fabriques retirées, réappairage). Tas libre au plus bas : 178 540 o après le réappairage.
+
+### Contrôle de la vague de correctifs
+
+02/10/2026, après T10. Firmware du commit `7ab7339`, flashé sans effacer. Djoko présent.
+
+- **Démarrage.** 2 fabriques, Thread `child`, 1 abonnement, Bluetooth Mesh prêt. Le journal d'un redémarrage montre `balayage regle : 20 ms sur 40 ms` 5 ms avant `entre dans le reseau` : l'écoute à 50 % est posée avant l'adhésion. Aucun échec d'émission Thread.
+- **Lampe noire.** Lampe 1 allumée depuis Maison, puis molette à 0 % : `lampes` lit `marche 0,0 % (noire : eteinte pour Maison)`, et Maison la montre éteinte, à son dernier niveau lu (7 % ou 12 % selon l'essai).
+- **Siri « éteins » sur la lampe noire.** Le pont reçoit l'arrêt ; la pile Matter répond `On/off already set to new value`, et rien ne part vers la lampe. La molette, remontée ensuite, rallume la lampe, et Maison suit.
+- **Toucher la tuile de la lampe noire.** Une seule commande « allumer » : la lampe se rallume à son dernier niveau (7 %).
+- **Curseur de groupe.** Djoko a regroupé les deux lampes en un seul accessoire de Maison, puis a fait glisser sa luminosité. Les deux lampes suivent ; la lampe 2 avec un léger retard : Maison envoie ses commandes une lampe après l'autre, à 1 ou 2 s d'écart. 0 abandon, 0 refus ; une confirmation à 1 106 ms.
+- **Depuis le flash** (environ 11 h) : relectures répondues 98,3 % et 98,8 % ; 52 écritures, 20 salves confirmées, 0 abandon ; 7 958 messages émis, 0 refus.
+
+Remarques :
+- **Un premier essai de Siri a verrouillé la molette**, sans capture pour en voir la cause. Le plus probable : l'arrêt est parti avant que le pont ait relu la lampe à 0 (spec 6.4). Refait avec une capture : conforme.
+- **Une tuile touchée trop tôt** (avant que le pont ait publié la lampe noire) envoie un arrêt, puis le geste suivant un allumage : c'est le cas décrit au README (« À savoir »).
+- **Intensité changée sur une lampe éteinte par l'app.** Vers 12:52, la lampe 1, éteinte par l'app, a été relue à 100 % puis à 22 %, sans s'allumer ; l'allumage suivant l'a rallumée à 22 %. La cause n'est pas établie : peut-être la molette, qui changerait alors le niveau retenu sans allumer la lampe. À vérifier.
+
