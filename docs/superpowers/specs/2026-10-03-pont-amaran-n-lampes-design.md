@@ -1,6 +1,8 @@
 # Pont amaran : N lampes et catalogue de modèles (plan 3a)
 
-Date : 03/10/2026. Statut : design validé section par section avec Djoko.
+Date : 03/10/2026. Statut : design validé section par section avec Djoko ;
+précisé le même jour par la lecture d'esp-matter et le prototype du plan (5, 4,
+7, 10, 11).
 Prolonge la spec du pont (`2026-09-28-pont-amaran-design.md`), qui reste la
 référence pour tout ce que ce document ne change pas.
 
@@ -102,11 +104,14 @@ départ. Elle remplace `AMARAN_LAMPES_MAX` et `LAMPES_MAX` (aujourd'hui 2), et
 fixe aussi le nombre d'endpoints dynamiques réservés dans la configuration
 Matter, et la taille de la file d'émission.
 
-**Format versionné.** La liste et la table des endpoints prennent un numéro de
-format (2). Au premier démarrage, le firmware lit l'ancien format (deux
-emplacements) et le convertit une fois :
+**Format versionné.** La liste est écrite en un seul enregistrement, avec un
+en-tête : numéro de format (2), nombre de lampes, et **taille d'une lampe**. Une
+capacité relevée plus tard relit donc toujours une liste écrite avant. Une
+liste illisible ou invalide donne une liste vide, et le journal le dit. Au
+premier démarrage, le firmware lit l'ancien format (deux emplacements) et le
+convertit une fois :
 - la lampe 1 garde l'endpoint 2, la lampe 2 l'endpoint 3 ;
-- le compteur d'endpoints part à 4 ;
+- le compteur d'esp-matter est déjà à 4 (5) ;
 - les deux lampes sont marquées vues, et non masquées : leurs tuiles restent ;
 - le code de modèle des lampes converties vaut `40065` : seules des 60d ont pu
   être chargées avant ce plan.
@@ -126,21 +131,32 @@ exposée en intensité seule (6).
 
 ## 5. Numéros d'endpoint stables
 
-Un module pur, `numeros`, attribue les numéros. Règles :
+Règles :
 - une MAC déjà connue garde son numéro, quelle que soit sa place dans la liste ;
-- une MAC nouvelle prend la valeur du compteur, qui avance ;
+- une lampe reçoit son numéro **à sa première exposition** dans Maison (7), et
+  le garde ensuite, même masquée ;
 - **un numéro libéré n'est jamais réattribué**, et le compteur ne recule
   jamais : Maison ne confond pas une nouvelle lampe avec une tuile disparue ;
-- une MAC retirée de la liste perd son entrée dans la table, et son endpoint
-  n'est plus créé.
+- une MAC retirée de la liste perd son numéro avec elle, et son endpoint n'est
+  plus créé.
 
-La table (MAC → numéro) et le compteur vivent en NVS, avec la liste.
+Le numéro de chaque lampe vit en NVS, dans la liste (4).
 
-Côté esp-matter, chaque endpoint est créé avec son numéro imposé. La fonction
-d'esp-matter prévue pour recréer un endpoint pont avec un numéro donné est à
-vérifier dans le commit installé (`c5b9ea8`) lors du plan. Si elle manquait,
-on créerait les endpoints dans l'ordre croissant de leur numéro, en vérifiant
-que le numéro obtenu est le bon, et on refuserait de démarrer Matter sinon.
+**Le compteur est celui d'esp-matter** (lu dans `c5b9ea8`). Il garde en NVS le
+plus petit numéro jamais utilisé (`min_uu_ep_id`), ne le fait jamais reculer,
+et l'a mis à 4 sur le pont en service (EP0 à EP3). Une lampe sans numéro le
+reçoit de `bridged_node::create`. Une lampe qui en a un est recréée avec lui par
+`bridged_node::resume`, qui exige un numéro déjà passé par ce compteur.
+`resume` n'est possible qu'**après** `esp_matter::start()`, qui relit le
+compteur. C'est le schéma des exemples de pont d'esp-matter : endpoints pontés
+recréés juste après le démarrage, puis activés (7).
+
+**Désappairage complet** (`decommission`, BOOT 8 s) : esp-matter efface son
+compteur avec le reste de sa NVS. Au démarrage suivant, les lampes exposées
+sont recréées dans l'ordre croissant de leur numéro. Un numéro devenu trop
+grand pour le compteur repart de lui. Les mêmes numéros reviennent donc s'ils
+se suivaient depuis 2. Sinon, la lampe en prend un neuf, sans conséquence : le
+pont n'est plus dans Maison.
 
 ## 6. Catalogue de modèles
 
@@ -192,6 +208,12 @@ vérifier au banc avec la vraie lampe.
   lampe noire, pas d'écho, démarrage sans ordre rejoué.
 - Une lampe retirée de la liste n'a plus d'endpoint au redémarrage : la liste
   des parties de l'agrégateur change, et Maison retire sa tuile.
+- Au démarrage, les endpoints des lampes exposées sont recréés **juste après**
+  `esp_matter::start()` (5), avant que Thread ne soit rattaché et que les
+  contrôleurs ne se reconnectent. Le banc 1 vérifie, sur plusieurs
+  redémarrages, que Maison garde les tuiles.
+- Une garde de 2 s par lampe, à la création de son endpoint, ignore les valeurs
+  que la pile y pose (leçon du Halo) : ce ne sont pas des ordres.
 - Les noms et la joignabilité suivent les règles actuelles (NodeLabel non
   persistant, Reachable par la règle 7.2 de la spec du pont).
 
@@ -224,35 +246,45 @@ vérifier au banc avec la vraie lampe.
 
 ## 10. Console et outils
 
-- `lampes` : une ligne par lampe (numéro, nom, modèle, état lu, joignable, part
-  de relectures répondues, et « jamais vue » ou « masquée » s'il y a lieu),
-  puis les compteurs d'ordres.
+- `lampes` : une ligne par lampe (numéro, nom, sa place dans Maison : `EP<n>`,
+  « jamais vue » ou « masquée », état lu, joignable, relectures répondues sur
+  relectures), puis les compteurs d'ordres.
 - `mesh lampe <n> masquer | afficher` : retire la lampe de Maison, ou l'y
   remet (7). Effet immédiat, sans redémarrage.
 - `lampe <n> on | off | niveau <0-1000> | releve` : pour `n` de 1 à N. Avec
   `lampe <n>` seul : le détail de la lampe (adresse, MAC, modèle,
   capacités, endpoint, consigne, relectures). La console est locale : la MAC
   n'y est pas un secret, mais ne va jamais dans le dépôt.
-- `mesh lampe <n> <adresse> <mac> <nom> <code>` : déclare ou remplace la lampe
-  `n` ; `mesh lampes <N>` fixe la longueur de la liste (les lampes au-delà sont
-  retirées). Effet au redémarrage, comme aujourd'hui.
+- **Chargement d'une liste, tout ou rien** : `mesh lampes <N>` ouvre une liste
+  de N lampes, puis `mesh lampe <n> <adresse> <mac> <code> <nom>` en donne
+  chacune. Le code passe **avant** le nom, qu'un nombre peut terminer
+  (« Lampe 2 »). Chaque ligne reçoit une seule réponse : `ok lampe <n> 0x<adresse>
+  modele <code> <nom du modèle> [<capacités>] : <nom>`, ou `erreur ...`. La
+  dernière lampe donnée, la liste est validée (doublons) et enregistrée, et sa
+  réponse se termine par `; liste de N lampe(s) enregistree`. Une liste refusée
+  ne change rien. `mesh lampes 0` vide la liste. Effet au redémarrage, comme
+  aujourd'hui.
+- `mesh oublie` efface les clés et **garde la liste** : les tuiles restent dans
+  Maison, en « Pas de réponse », comme au banc T9.
 - `outils/cles_amaran.py` :
   - lit aussi la colonne `code` ;
   - accepte jusqu'à `LAMPES_CAPACITE` lampes, et refuse au-delà ;
-  - envoie `mesh lampes <N>` puis chaque `mesh lampe` ;
+  - envoie `mesh lampes <N>` puis chaque `mesh lampe`, et exige que la
+    dernière réponse dise la liste enregistrée (sinon, pas de redémarrage) ;
   - contrôle `composition_data` : si une lampe déclare Light CTL ou Light HSL
-    alors que le catalogue ne lui donne pas ces capacités, il le signale
-    (« modèle à cataloguer »), sans refuser.
+    alors que le pont, dans sa réponse, ne lui donne pas ces capacités, il le
+    signale (« modèle à cataloguer »), sans refuser. Le catalogue reste dans le
+    firmware : l'outil lit ce que le pont annonce.
 - Le firmware `ecoute` partage le composant `mesh` : il passe à la liste, sans
   autre changement de comportement.
 
 ## 11. Tests sur le Mac
 
 TDD, comme aux plans 1 et 2, dans `tests/hote/` :
-- `numeros` : stabilité par MAC, ordre de la liste indifférent, compteur qui ne
-  recule pas, numéro jamais réattribué, migration (EP2, EP3, compteur à 4) ;
-- conversion de la NVS : ancien format → nouveau, conversion interrompue ;
-- validation de la liste : capacité, doublons, adresses, noms ;
+- `liste` : validation (capacité, doublons, adresses, MAC, noms), fusion d'une
+  nouvelle liste (une MAC connue garde numéro et drapeaux, quelle que soit sa
+  place ; une absente disparaît), format en NVS (aller-retour, en-tête,
+  refus d'un autre format), conversion de l'ancien format (EP2, EP3, vues) ;
 - catalogue : la 60d, un code inconnu (repli) ;
 - exposition (module pur) : jamais vue → pas exposée ; première réponse →
   exposée et marquée vue ; masquée → pas exposée même si elle répond ;
