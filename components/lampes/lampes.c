@@ -127,6 +127,7 @@ void lampes_mesh_pret(lampes_t *l, bool pret, uint32_t maintenant_ms) {
     return;
   }
   for (int i = 0; i < l->n; i++) {
+    l->lampes[i].releve_en_attente = false;  // la relecture partie n'aura pas d'issue a compter
     if (l->lampes[i].phase != LAMPE_REPOS) finir(l, i, LAMPES_SIGNAL_ABANDON, maintenant_ms);
   }
 }
@@ -244,7 +245,8 @@ static void fenetre_sommes(const lampe_t *p, uint32_t *releves, uint32_t *repond
   }
 }
 
-static uint8_t pour_cent(uint32_t part, uint32_t total) { return (uint8_t)((part * 100u + total / 2u) / total); }
+// Tronque : sous le seuil, jamais affiche au seuil.
+static uint8_t pour_cent(uint32_t part, uint32_t total) { return (uint8_t)(part * 100u / total); }
 
 // Issue de la relecture precedente, dans la tranche courante.
 static void compter_releve(const lampes_t *l, lampe_t *p) {
@@ -257,12 +259,14 @@ static void compter_releve(const lampes_t *l, lampe_t *p) {
 static void tourner_fenetre(lampes_t *l, uint32_t maintenant_ms) {
   if (l->fen_pleines < LAMPES_ALERTE_TRANCHES) l->fen_pleines++;
   if (l->fen_pleines >= LAMPES_ALERTE_TRANCHES) {
+    // Relectures attendues sur la fenetre, a la periode courante (10 a 600).
+    const uint32_t attendues = LAMPES_ALERTE_TRANCHES * LAMPES_ALERTE_TRANCHE_MS / l->periode_ms;
     for (int i = 0; i < l->n; i++) {
       lampe_t *p = &l->lampes[i];
       if (!p->joignable) continue;  // une lampe muette releve de 7.2, pas de cette alerte
       uint32_t releves, repondues;
       fenetre_sommes(p, &releves, &repondues);
-      if (!releves) continue;
+      if (!releves || releves * 100u < LAMPES_ALERTE_ECHANTILLON_PC * attendues) continue;
       const bool manque = repondues * 100u < LAMPES_ALERTE_SEUIL_PC * releves;
       if (manque == p->alerte) continue;
       p->alerte = manque;

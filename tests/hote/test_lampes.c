@@ -794,7 +794,9 @@ static void test_forcer_publication(void) {
               g_pubs[0].e.intensite == 300 && g_pubs[0].joignable,
           "republiee telle quelle");
   lampes_forcer_publication(&L, 7);  // hors de la liste : rien
-  VERIFIE(g_nb_pubs == 1, "lampe hors de la liste ignoree");
+  lampes_forcer_publication(&L, 2);  // juste apres la derniere lampe (n = 2)
+  lampes_forcer_publication(&L, -1);
+  VERIFIE(g_nb_pubs == 1, "lampes hors de la liste ignorees (7, n, -1)");
 }
 
 // Avance de ms en repondant aux relectures : la lampe k manque une relecture sur
@@ -824,8 +826,8 @@ static void test_alerte_relectures_manquees(void) {
   avancer_en_repondant(9 * 60000, moitie);
   VERIFIE(g_nb_alertes == 0, "rien avant dix minutes completes");
   avancer_en_repondant(60000 + 50, moitie);
-  VERIFIE(g_nb_alertes == 1 && g_alertes[0].lampe == 1 && g_alertes[0].manque && g_alertes[0].pour_cent == 50,
-          "lampe 2 : relectures manquees, 50 %% (%d alertes)", g_nb_alertes);
+  VERIFIE(g_nb_alertes == 1 && g_alertes[0].lampe == 1 && g_alertes[0].manque && g_alertes[0].pour_cent == 49,
+          "lampe 2 : relectures manquees, 49 %% (tronque ; %d alertes)", g_nb_alertes);
   VERIFIE(lampes_part_repondue(&L, 0) == 100 && lampes_part_repondue(&L, 1) == 50, "parts sur 10 min");
   avancer_en_repondant(5 * 60000, moitie);
   VERIFIE(g_nb_alertes == 1, "pas de repetition tant qu'elle reste dessous");
@@ -850,7 +852,81 @@ static void test_alerte_au_seuil(void) {
   g_releves_vues = 0;
   const int une_sur_dix[2] = {0, 10};
   avancer_en_repondant(10 * 60000 + 50, une_sur_dix);
-  VERIFIE(g_nb_alertes == 1 && g_alertes[0].manque && g_alertes[0].pour_cent == 90, "90 %% : alerte");
+  VERIFIE(g_nb_alertes == 1 && g_alertes[0].manque && g_alertes[0].pour_cent == 89, "90 %% : alerte, 89 %% (tronque)");
+}
+
+// 95 % pile (une sur vingt, la premiere relecture repondue) : pas d'alerte, le seuil est
+// strict ; un peu dessous (une sur dix-huit, 94 %) : alerte.
+static void test_alerte_a_95_pile(void) {
+  demarrer(0, true);
+  recevoir(ADR[0], true, 500);
+  recevoir(ADR[1], true, 500);
+  g_releves_vues = 0;
+  const int une_sur_vingt[2] = {0, 20};
+  avancer_en_repondant(15 * 60000, une_sur_vingt);
+  VERIFIE(g_nb_alertes == 0, "95 %% pile : pas d'alerte (%d)", g_nb_alertes);
+  demarrer(0, true);
+  g_releves_vues = 0;
+  const int une_sur_dix_huit[2] = {0, 18};
+  avancer_en_repondant(10 * 60000 + 50, une_sur_dix_huit);
+  VERIFIE(g_nb_alertes == 1 && g_alertes[0].manque && g_alertes[0].pour_cent == 94, "94 %% : alerte (%d)", g_nb_alertes);
+}
+
+// La relecture partie juste avant une coupure du Mesh n'a pas d'issue : rien n'est compte.
+static void test_alerte_relecture_d_avant_la_coupure(void) {
+  demarrer(0, true);  // la premiere relecture part ; la coupure vient avant la reponse
+  lampes_mesh_pret(&L, false, T);
+  lampes_mesh_pret(&L, true, T);
+  avancer(50);  // relecture aussitot
+  VERIFIE(lampes_part_repondue(&L, 0) == -1 && lampes_part_repondue(&L, 1) == -1,
+          "la relecture d'avant la coupure n'est pas comptee");
+}
+
+// Apres une coupure du Mesh, la fenetre est presque vide : pas de verdict sur quelques
+// relectures, seulement sur la moitie au moins de celles attendues en 10 min.
+static void test_alerte_apres_coupure_du_mesh(void) {
+  demarrer(0, true);
+  g_releves_vues = 0;
+  const int toutes[2] = {0, 0};
+  avancer_en_repondant(10 * 60000 + 50, toutes);
+  VERIFIE(g_nb_alertes == 0, "fenetre pleine, tout repondu : rien");
+  lampes_mesh_pret(&L, false, T);
+  avancer_en_repondant(12 * 60000, toutes);  // rien ne part : les lampes deviennent muettes
+  VERIFIE(lampes_part_repondue(&L, 1) == -1, "fenetre videe par la coupure");
+  lampes_mesh_pret(&L, true, T);
+  const int une_sur_dix[2] = {0, 10};
+  avancer_en_repondant(4 * 60000, une_sur_dix);
+  VERIFIE(g_nb_alertes == 0, "4 min apres le retour : echantillon trop petit, pas de verdict (%d)", g_nb_alertes);
+  avancer_en_repondant(6 * 60000, une_sur_dix);
+  VERIFIE(g_nb_alertes == 1 && g_alertes[0].lampe == 1 && g_alertes[0].manque,
+          "echantillon suffisant : l'alerte vient (%d)", g_nb_alertes);
+}
+
+// Une lampe eteinte a son bouton puis rallumee : meme regle.
+static void test_alerte_lampe_qui_revient(void) {
+  demarrer(0, true);
+  g_releves_vues = 0;
+  const int muette[2] = {0, 1};
+  avancer_en_repondant(15 * 60000, muette);
+  VERIFIE(!L.lampes[1].joignable && g_nb_alertes == 0, "lampe 2 muette, sans alerte de relectures");
+  const int une_sur_dix[2] = {0, 10};
+  avancer_en_repondant(4 * 60000, une_sur_dix);
+  VERIFIE(L.lampes[1].joignable && g_nb_alertes == 0, "revenue depuis 4 min : pas de verdict (%d)", g_nb_alertes);
+  avancer_en_repondant(6 * 60000, une_sur_dix);
+  VERIFIE(g_nb_alertes == 1 && g_alertes[0].lampe == 1 && g_alertes[0].manque, "puis l'alerte (%d)", g_nb_alertes);
+}
+
+// La fenetre suit l'horloge de 32 bits a travers son debordement.
+static void test_alerte_horloge_qui_deborde(void) {
+  demarrer(0u - 5u * 60000u, true);
+  g_releves_vues = 0;
+  const int moitie[2] = {0, 2};
+  avancer_en_repondant(5 * 60000 + 50, moitie);
+  VERIFIE(L.fen_pleines == 5, "une tranche par minute, a travers le debordement (%u)", (unsigned)L.fen_pleines);
+  avancer_en_repondant(4 * 60000 - 50, moitie);
+  VERIFIE(g_nb_alertes == 0, "pas avant dix minutes, malgre le debordement");
+  avancer_en_repondant(60000 + 50, moitie);
+  VERIFIE(g_nb_alertes == 1 && g_alertes[0].manque, "dix minutes apres, a travers le debordement (%d)", g_nb_alertes);
 }
 
 // Une lampe muette (« Pas de reponse ») n'est pas concernee : c'est une autre alerte.
@@ -914,6 +990,11 @@ int main(void) {
   test_forcer_publication();
   test_alerte_relectures_manquees();
   test_alerte_au_seuil();
+  test_alerte_a_95_pile();
+  test_alerte_relecture_d_avant_la_coupure();
+  test_alerte_apres_coupure_du_mesh();
+  test_alerte_lampe_qui_revient();
+  test_alerte_horloge_qui_deborde();
   test_alerte_pas_pour_une_muette();
   test_alerter_peut_manquer();
   return bilan("lampes");

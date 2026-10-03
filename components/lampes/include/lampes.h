@@ -35,6 +35,9 @@ extern "C" {
 #define LAMPES_ALERTE_TRANCHE_MS 60000u
 #define LAMPES_ALERTE_TRANCHES 10u
 #define LAMPES_ALERTE_SEUIL_PC 95u
+// Un verdict demande au moins la moitie des relectures attendues sur 10 min : apres une
+// coupure du Mesh, ou le retour d'une lampe muette, la fenetre n'en contient que quelques-unes.
+#define LAMPES_ALERTE_ECHANTILLON_PC 50u
 
 typedef struct {
   bool marche;
@@ -57,7 +60,8 @@ typedef struct {
   void (*signaler)(void *ctx, int lampe, lampes_signal_t signal);
   // Relectures manquees : manque vrai quand la part des relectures repondues sur 10 min
   // passe sous LAMPES_ALERTE_SEUIL_PC, faux quand elle y revient ; pour_cent : cette
-  // part, arrondie. Une seule fois par passage. Peut etre NULL.
+  // part, tronquee (94 au plus sous le seuil, 95 au moins au-dessus). Une seule fois par
+  // passage, et seulement sur un echantillon suffisant. Peut etre NULL.
   void (*alerter)(void *ctx, int lampe, bool manque, uint8_t pour_cent);
   void *ctx;
 } lampes_sorties_t;
