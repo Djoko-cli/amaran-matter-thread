@@ -16,7 +16,7 @@ extern "C" {
 
 #define LAMPES_MAX 2
 #define LAMPES_GROUPE 0xC000               // groupe « All » : les deux lampes repondent (R5)
-#define LAMPES_RELEVE_DEFAUT_MS 5000u      // relecture periodique (spec 5.7 ; R4 : aucun etat spontane)
+#define LAMPES_RELEVE_DEFAUT_MS 2000u      // relecture periodique (spec 5.7 ; R4 : aucun etat spontane ; 2 s depuis le 03/10)
 #define LAMPES_RELEVE_MIN_MS 1000u
 #define LAMPES_RELEVE_MAX_MS 60000u
 #define LAMPES_REGROUPEMENT_MS 80u         // un ordre attend ce delai : les ecritures d'une meme

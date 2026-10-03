@@ -291,9 +291,11 @@ changent pas.
     8 000 000 où la pile d'ESP-IDF lance d'elle-même une mise à jour d'IV. Cela
     évite la mise à jour d'IV, qui engagerait tout le réseau, amaran Desktop
     compris.
-- Budget, mesuré au banc C : deux demandes d'état de groupe toutes les 5 s
-  (5.6, 5.7) consomment environ 35 000 numéros par jour, ordres compris. Une
-  adresse tient donc environ 7 mois avant de changer d'elle-même.
+- Budget : deux demandes d'état de groupe à chaque relecture (5.6, 5.7). Toutes
+  les 2 s, elles consomment environ 87 000 numéros par jour, ordres compris
+  (mesuré du 02 au 03/10/2026) : une adresse tient environ 2 mois et demi avant
+  de changer d'elle-même. Toutes les 5 s (banc C), c'était environ 35 000 par
+  jour et 7 mois. Les 128 adresses réservées tiennent des décennies.
 
 ### 5.5 Crochet de réception
 
@@ -347,8 +349,9 @@ Autres règles :
 
 ### 5.7 Relecture périodique
 
-- Une demande d'état toutes les 5 s, envoyée 2 fois comme en 5.6, réglable
-  (`mesh releve <s>`).
+- Une demande d'état toutes les 2 s, envoyée 2 fois comme en 5.6, réglable
+  (`mesh releve <s>`, de 1 à 60 s). C'était 5 s jusqu'au 03/10/2026 : 2 s
+  suit mieux la molette, et la radio tient aussi bien (BANC.md).
   - Adressée au groupe `0xC000` si les deux lampes y répondent (R5).
   - Sinon, une demande par lampe, à 2,5 s d'écart.
 - Une lampe devient joignable dès qu'elle répond, et muette après 3
@@ -464,7 +467,7 @@ Autres règles :
 - Un arrêt explicite sur une lampe noire, lui, part bien (`0x8C` à 0) : la
   lampe s'éteint alors « par l'app » et ignore sa molette (PROTOCOLE.md). Trois
   cas : `lampe <n> off` à la console ; un arrêt de Maison avant que le pont ait
-  relu la lampe à 0 (une période de relecture au plus : 5 s par défaut) ; un
+  relu la lampe à 0 (une période de relecture au plus : 2 s par défaut) ; un
   double appui rapide sur sa tuile.
 
 ### 6.5 Démarrage
@@ -506,8 +509,8 @@ et le voyant clignote 3 fois en rouge.
 
 ### 7.2 Lampe muette à la relecture
 
-- Après 3 relectures sans réponse (~15 s), Reachable passe à faux : Maison
-  affiche « Pas de réponse ».
+- Après 3 relectures sans réponse (~6 s à 2 s de période), Reachable passe à
+  faux : Maison affiche « Pas de réponse ».
 - À la première réponse, Reachable repasse à vrai et les attributs prennent
   l'état réel.
 

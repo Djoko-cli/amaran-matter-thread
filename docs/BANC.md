@@ -203,3 +203,19 @@ Remarques :
 - **Une tuile touchée trop tôt** (avant que le pont ait publié la lampe noire) envoie un arrêt, puis le geste suivant un allumage : c'est le cas décrit au README (« À savoir »).
 - **Intensité changée sur une lampe éteinte par l'app.** Vers 12:52, la lampe 1, éteinte par l'app, a été relue à 100 % puis à 22 %, sans s'allumer ; l'allumage suivant l'a rallumée à 22 %. La cause n'est pas établie : peut-être la molette, qui changerait alors le niveau retenu sans allumer la lampe. À vérifier.
 
+### Relecture toutes les 2 s
+
+Du 02/10/2026 13:03 au 03/10/2026 13:26 (24 h 20), firmware `7ab7339`, relecture passée de 5 à 2 s par `mesh releve 2`. Djoko s'est servi des lampes normalement et trouve le délai de 2 s confortable.
+
+| mesure | 2 s | 5 s (T10) |
+|---|---|---|
+| relectures | 43 816 | 17 270 |
+| répondues, lampe 1 | 98,0 % | 97,9 % |
+| répondues, lampe 2 | 98,7 % | 98,3 % |
+| salves d'ordres de Maison | 33, 0 abandon | 41, 0 abandon |
+| confirmations au-delà d'1 s | 1 (1 611 ms) | 0 |
+| messages émis | 44 022, 0 refus, 0 perdu | 17 408, 0 refus, 0 perdu |
+| tas libre (au plus bas) | 186 188 o (179 336 o) | 186 636 o (179 024 o) |
+
+Aucun redémarrage ; Thread attaché, 1 abonnement actif ; pile la plus basse 1 828 o (`lampes`). La séquence Mesh avance d'environ 87 000 numéros par jour. Verdict : 2 s devient la période par défaut (`LAMPES_RELEVE_DEFAUT_MS`). La confirmation à 1,6 s n'a pas été capturée : T2 en avait eu une semblable à 5 s, pendant un glissé du curseur.
+

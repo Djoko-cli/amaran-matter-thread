@@ -229,7 +229,7 @@ static void test_demarrage_relit_aussitot(void) {
           "une demande d'etat au groupe, aussitot");
   VERIFIE(g_nb_pubs == 0 && g_nb_sigs == 0, "rien de publie avant le premier etat lu");
   avancer(LAMPES_RELEVE_DEFAUT_MS);
-  VERIFIE(compter(LAMPES_GROUPE, TELINK_CMD_ETAT) == 2, "relecture suivante 5 s plus tard");
+  VERIFIE(compter(LAMPES_GROUPE, TELINK_CMD_ETAT) == 2, "relecture suivante une periode plus tard");
 }
 
 static void test_premier_etat_publie_doublons_ignores(void) {
@@ -395,11 +395,11 @@ static void test_valeur_egale_n_emet_pas(void) {
 
 static void test_muette_apres_trois_releves(void) {
   demarrer(0, true);  // relecture 1 a 0 ms, deja faite
-  avancer(10000);     // relectures 2 et 3
-  VERIFIE(g_nb_pubs == 0, "encore joignable a 10 s");
-  avancer(5000);  // relecture 4 : trois relectures sans reponse
+  avancer(2 * LAMPES_RELEVE_DEFAUT_MS);  // relectures 2 et 3
+  VERIFIE(g_nb_pubs == 0, "encore joignable apres deux periodes");
+  avancer(LAMPES_RELEVE_DEFAUT_MS);  // relecture 4 : trois relectures sans reponse
   VERIFIE(g_nb_pubs == 2 && !g_pubs[0].joignable && !g_pubs[1].joignable && !g_pubs[0].connu,
-          "les deux lampes muettes a 15 s");
+          "les deux lampes muettes a la quatrieme relecture");
   recevoir(0x0004, false, 60);
   VERIFIE(g_nb_pubs == 3 && g_pubs[2].lampe == 1 && g_pubs[2].joignable && g_pubs[2].connu &&
               g_pubs[2].e.intensite == 60,
@@ -480,10 +480,13 @@ static void test_regler_releve(void) {
   VERIFIE(L.periode_ms == LAMPES_RELEVE_MIN_MS, "borne basse");
   lampes_regler_releve(&L, 100000);
   VERIFIE(L.periode_ms == LAMPES_RELEVE_MAX_MS, "borne haute");
-  lampes_regler_releve(&L, 2000);
-  avancer(5000);  // la periode en cours (5 s) s'acheve, puis 2 s
-  avancer(2000);
-  VERIFIE(compter(LAMPES_GROUPE, TELINK_CMD_ETAT) == 2, "nouvelle periode appliquee");
+  lampes_regler_releve(&L, 7000);
+  avancer(LAMPES_RELEVE_DEFAUT_MS);  // la periode en cours s'acheve, puis 7 s
+  const int avant = compter(LAMPES_GROUPE, TELINK_CMD_ETAT);
+  avancer(6950);
+  VERIFIE(compter(LAMPES_GROUPE, TELINK_CMD_ETAT) == avant, "rien avant la nouvelle periode");
+  avancer(50);
+  VERIFIE(compter(LAMPES_GROUPE, TELINK_CMD_ETAT) == avant + 1, "nouvelle periode appliquee");
 }
 
 static void test_file_refusee(void) {
@@ -505,8 +508,8 @@ static void test_mesures_du_banc_c(void) {
   demarrer(0, true);  // relecture 1 partie a 0 ms
   recevoir(0x0002, false, 500);
   recevoir(0x0002, false, 500);  // copie : une seule reponse comptee
-  avancer(5000);                 // relecture 2 : sans reponse
-  avancer(5000);                 // relecture 3
+  avancer(LAMPES_RELEVE_DEFAUT_MS);  // relecture 2 : sans reponse
+  avancer(LAMPES_RELEVE_DEFAUT_MS);  // relecture 3
   recevoir(0x0002, false, 500);
   VERIFIE(L.releves == 3 && L.lampes[0].releves_repondues == 2 && L.lampes[1].releves_repondues == 0,
           "relectures repondues : %u sur %u (lampe 1)", (unsigned)L.lampes[0].releves_repondues,

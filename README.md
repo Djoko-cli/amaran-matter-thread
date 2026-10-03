@@ -97,7 +97,7 @@ Sur l'USB, en français (`python3 outils/console.py --port <port> "<commande>"`,
 
 - Une lampe éteinte depuis Maison, ou depuis amaran Desktop, ignore sa molette et le bouton de sa molette. Pour la rallumer à la main : couper puis remettre son alimentation. Son état au retour varie : allumée vers 40 %, allumée à son niveau retenu, ou éteinte.
 - Une lampe dont la molette est à 0 % reste en marche, mais n'éclaire pas : Maison la montre éteinte, à son dernier niveau. La toucher dans Maison la rallume à ce niveau (à 40 % seulement sur une installation neuve, quand Maison n'a encore aucun niveau pour elle). Le pont ne l'éteint jamais de lui-même : sa molette reste vive. Mais juste après avoir tourné la molette à 0, Maison la montre encore allumée quelques secondes : l'éteindre à ce moment-là l'éteint « par l'app », et sa molette ne répond plus.
-- Maison suit la molette et amaran Desktop en 5 s environ : les lampes ne signalent rien d'elles-mêmes, et le pont les relit toutes les 5 s.
+- Maison suit la molette et amaran Desktop en 2 s environ : les lampes ne signalent rien d'elles-mêmes, et le pont les relit toutes les 2 s (`mesh releve <s>` pour changer).
 - amaran Desktop, lui, ne suit pas les ordres venus de Maison.
 - Maison ne montre une lampe « Pas de réponse », puis son retour, qu'après avoir touché sa tuile. Le pont publie pourtant chaque changement.
 - Pour la luminosité, taper sur la jauge de Maison est plus fluide que la faire glisser : un glissé envoie une valeur toutes les 150 à 300 ms.
