@@ -461,11 +461,22 @@ static void test_mesh_perdu_pendant_un_ordre(void) {
   ordre_matter(0, &on, NULL);
   avancer(300);
   lampes_mesh_pret(&L, false, T);
-  VERIFIE(g_nb_sigs == 1 && g_sigs[0].s == LAMPES_SIGNAL_ABANDON, "ordre abandonne");
+  VERIFIE(g_nb_sigs == 1 && g_sigs[0].lampe == 0 && g_sigs[0].s == LAMPES_SIGNAL_ABANDON,
+          "ordre de la lampe 1 abandonne");
   lampes_mesh_pret(&L, true, T + 2000);
   oublier_sorties();
   lampes_tic(&L, T + 2000);
   VERIFIE(compter(LAMPES_GROUPE, TELINK_CMD_ETAT) == 1, "relecture aussitot au retour du Mesh");
+}
+
+// La tache redit l'etat du Mesh a chaque tic : seul un changement compte, sinon une
+// relecture partirait a chaque tic.
+static void test_mesh_pret_redit_sans_effet(void) {
+  demarrer(0, true);
+  avancer(500);
+  lampes_mesh_pret(&L, true, T);
+  avancer(50);
+  VERIFIE(compter(LAMPES_GROUPE, TELINK_CMD_ETAT) == 0, "Mesh pret redit : pas de relecture de plus");
 }
 
 static void test_ordre_console(void) {
@@ -929,6 +940,77 @@ static void test_alerte_horloge_qui_deborde(void) {
   VERIFIE(g_nb_alertes == 1 && g_alertes[0].manque, "dix minutes apres, a travers le debordement (%d)", g_nb_alertes);
 }
 
+// Relectures comptees dans la fenetre d'une lampe.
+static uint32_t releves_comptes(int lampe) {
+  uint32_t n = 0;
+  for (unsigned t = 0; t < LAMPES_ALERTE_TRANCHES; t++) n += L.lampes[lampe].fen_releves[t];
+  return n;
+}
+
+// Une lampe qui se tait apres avoir manque la moitie de ses reponses n'est pas concernee :
+// au dixieme tour de fenetre elle est muette, la fenetre est pleine, et rien n'est signale.
+static void test_alerte_pas_pour_une_lampe_devenue_muette(void) {
+  demarrer(0, true);
+  g_releves_vues = 0;
+  const int moitie[2] = {0, 2};
+  avancer_en_repondant(9 * 60000 + 30000, moitie);
+  const int muette[2] = {0, 1};
+  avancer_en_repondant(30000 + 50, muette);
+  VERIFIE(!L.lampes[1].joignable, "lampe 2 devenue muette");
+  VERIFIE(g_nb_alertes == 0, "pas d'alerte de relectures pour une muette (%d)", g_nb_alertes);
+}
+
+// Une coupure breve du Mesh (les lampes restent joignables) ne compte aucune relecture,
+// meme si la derniere relecture d'avant la coupure etait restee sans reponse.
+static void test_alerte_coupure_breve_ne_compte_rien(void) {
+  demarrer(0, true);
+  g_releves_vues = 0;
+  const int toutes[2] = {0, 0};
+  avancer_en_repondant(3 * 60000, toutes);
+  avancer(2000);  // une relecture part, sans reponse
+  const uint32_t avant = releves_comptes(1);
+  lampes_mesh_pret(&L, false, T);
+  avancer(3950);  // des tics de relecture sans Mesh, la lampe reste joignable
+  VERIFIE(L.lampes[1].joignable, "lampe 2 encore joignable pendant la coupure");
+  lampes_mesh_pret(&L, true, T);
+  avancer(50);  // relecture aussitot
+  VERIFIE(releves_comptes(1) == avant, "rien de compte pendant la coupure (%u -> %u)", (unsigned)avant,
+          (unsigned)releves_comptes(1));
+}
+
+// Periode de 1 s : 600 relectures attendues sur 10 min, verdict a 300 au moins.
+static void test_alerte_echantillon_a_une_seconde(void) {
+  demarrer(0, true);
+  lampes_regler_releve(&L, 1000);
+  g_releves_vues = 0;
+  const int toutes[2] = {0, 0};
+  avancer_en_repondant(10 * 60000 + 50, toutes);
+  lampes_mesh_pret(&L, false, T);
+  avancer_en_repondant(12 * 60000, toutes);
+  lampes_mesh_pret(&L, true, T);
+  const int une_sur_dix[2] = {0, 10};
+  avancer_en_repondant(4 * 60000, une_sur_dix);
+  VERIFIE(g_nb_alertes == 0, "1 s, 4 min apres le retour (240 relectures sur 600) : pas de verdict (%d)",
+          g_nb_alertes);
+  avancer_en_repondant(2 * 60000, une_sur_dix);
+  VERIFIE(g_nb_alertes == 1 && g_alertes[0].lampe == 1 && g_alertes[0].manque, "1 s, 6 min apres le retour : verdict (%d)",
+          g_nb_alertes);
+}
+
+// Periode de 60 s : 10 relectures attendues sur 10 min, verdict des 5. La lampe 1 cette
+// fois : chaque lampe est jugee, la premiere aussi.
+static void test_alerte_echantillon_a_soixante_secondes(void) {
+  demarrer(0, true);
+  recevoir(ADR[0], true, 500);
+  recevoir(ADR[1], true, 500);
+  lampes_regler_releve(&L, 60000);
+  g_releves_vues = 0;
+  const int moitie[2] = {2, 0};
+  avancer_en_repondant(10 * 60000 + 50, moitie);
+  VERIFIE(g_nb_alertes == 1 && g_alertes[0].lampe == 0 && g_alertes[0].manque,
+          "60 s : lampe 1, la moitie manquee, alerte au dixieme tour (%d)", g_nb_alertes);
+}
+
 // Une lampe muette (« Pas de reponse ») n'est pas concernee : c'est une autre alerte.
 static void test_alerte_pas_pour_une_muette(void) {
   demarrer(0, true);
@@ -968,6 +1050,7 @@ int main(void) {
   test_trame_non_lue_prouve_la_vie();
   test_mesh_pas_pret();
   test_mesh_perdu_pendant_un_ordre();
+  test_mesh_pret_redit_sans_effet();
   test_ordre_console();
   test_horloge_qui_deborde();
   test_regler_releve();
@@ -995,6 +1078,10 @@ int main(void) {
   test_alerte_apres_coupure_du_mesh();
   test_alerte_lampe_qui_revient();
   test_alerte_horloge_qui_deborde();
+  test_alerte_pas_pour_une_lampe_devenue_muette();
+  test_alerte_coupure_breve_ne_compte_rien();
+  test_alerte_echantillon_a_une_seconde();
+  test_alerte_echantillon_a_soixante_secondes();
   test_alerte_pas_pour_une_muette();
   test_alerter_peut_manquer();
   return bilan("lampes");

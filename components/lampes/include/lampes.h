@@ -140,7 +140,7 @@ void lampes_tic(lampes_t *l, uint32_t maintenant_ms);
 // Republie ce que Matter doit montrer de la lampe, meme inchange : son endpoint vient
 // d'etre cree (premiere reponse, ou `afficher`).
 void lampes_forcer_publication(lampes_t *l, int lampe);
-// Part des relectures repondues sur la fenetre de 10 min, en pour cent arrondi ;
+// Part des relectures repondues sur la fenetre de 10 min, en pour cent tronque ;
 // -1 si aucune relecture n'y est encore comptee.
 int lampes_part_repondue(const lampes_t *l, int lampe);
 
