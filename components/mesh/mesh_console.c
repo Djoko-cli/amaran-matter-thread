@@ -175,7 +175,10 @@ static int mesh_lampe(int argc, char **argv) {
   }
   l.nom[pos] = '\0';
   // Cette lampe seule d'abord (adresse, MAC, nom) : l'erreur vise la bonne ligne.
-  liste_t une = {.n = 1};
+  // Statique : 772 octets, trop pour la pile de la console (4 Ko dans l'ecoute).
+  static liste_t une;
+  memset(&une, 0, sizeof(une));
+  une.n = 1;
   une.lampes[0] = l;
   int fautive = -1;
   const liste_erreur_t e = liste_valider(&une, &fautive);
@@ -201,11 +204,14 @@ static int mesh_lampe(int argc, char **argv) {
       return 1;
     }
   }
+  // La reponse en un seul printf : une ligne d'une autre tache ne peut pas la couper.
+  char fin[80] = "";
+  if (complete) {
+    snprintf(fin, sizeof(fin), " ; liste de %u lampe(s) enregistree (redemarrer pour l'appliquer)", (unsigned)total);
+  }
   const catalogue_modele_t *m = catalogue_trouver(code);
-  printf("ok lampe %" PRIu32 " 0x%04x modele %" PRIu32 " %s [%s] : %s", n, l.adresse, code,
-         catalogue_connu(code) ? m->nom : "non catalogue", catalogue_capacites_texte(m->capacites), l.nom);
-  if (complete) printf(" ; liste de %u lampe(s) enregistree (redemarrer pour l'appliquer)", (unsigned)total);
-  printf("\n");
+  printf("ok lampe %" PRIu32 " 0x%04x modele %" PRIu32 " %s [%s] : %s%s\n", n, l.adresse, code,
+         catalogue_connu(code) ? m->nom : "non catalogue", catalogue_capacites_texte(m->capacites), l.nom, fin);
   return 0;
 }
 

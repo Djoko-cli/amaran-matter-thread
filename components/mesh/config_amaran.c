@@ -24,16 +24,15 @@ static const char *const NOMS_V1[2] = {"lampe0", "lampe1"};
 
 // La liste se lit et s'ecrit en entier : la console (chargement, masquer, afficher),
 // la tache lampes (premiere reponse) et le demarrage (numeros d'endpoint) la mettent
-// a jour chacun son tour, sous ce verrou. Tampons statiques : les piles sont serrees.
+// a jour chacun son tour, sous ce verrou. Il est cree par config_charger, appele au
+// demarrage avant toute autre fonction et avant les taches. Tampons statiques : les
+// piles sont serrees.
 static SemaphoreHandle_t s_verrou;
 static StaticSemaphore_t s_verrou_memoire;
 static liste_t s_actuelle, s_nouvelle;
 static uint8_t s_tampon[sizeof(liste_entete_t) + LISTE_CAPACITE * sizeof(liste_lampe_t)];
 
-static void verrouiller(void) {
-  if (!s_verrou) s_verrou = xSemaphoreCreateMutexStatic(&s_verrou_memoire);  // config_charger, au demarrage
-  xSemaphoreTake(s_verrou, portMAX_DELAY);
-}
+static void verrouiller(void) { xSemaphoreTake(s_verrou, portMAX_DELAY); }
 
 static void deverrouiller(void) { xSemaphoreGive(s_verrou); }
 
@@ -56,11 +55,16 @@ static esp_err_t effacer(nvs_handle_t h, const char *cle) {
 }
 
 // Liste en NVS (sous le verrou). ESP_ERR_NVS_NOT_FOUND : jamais ecrite. Une liste
-// illisible ou invalide donne une liste vide, et le dit au journal.
+// illisible (trop longue : un firmware de plus grande capacite) ou invalide donne une
+// liste vide, et le dit au journal : la suivante l'ecrasera.
 static esp_err_t lire_liste(nvs_handle_t h, liste_t *l) {
   memset(l, 0, sizeof(*l));
   size_t n = sizeof(s_tampon);
   const esp_err_t err = nvs_get_blob(h, CLE_LISTE, s_tampon, &n);
+  if (err == ESP_ERR_NVS_INVALID_LENGTH) {
+    ESP_LOGE(TAG, "liste des lampes illisible (trop longue) : liste vide");
+    return ESP_OK;
+  }
   if (err != ESP_OK) return err;
   int fautive = -1;
   if (!liste_depuis_nvs(l, s_tampon, (uint32_t)n)) {
@@ -79,12 +83,20 @@ static esp_err_t ecrire_liste(nvs_handle_t h, const liste_t *l) {
 
 // Ancien format, converti une fois : l'emplacement i gardait l'endpoint 2 + i.
 // L'ancien n'est efface qu'une fois le nouveau ecrit (coupure : on recommence).
+// Le plan 2 acceptait ce que la liste refuse (adresse reservee, MAC nulle, doublon) :
+// une ancienne liste invalide donne une liste vide, a chaque demarrage, et reste.
 static esp_err_t migrer_v1(nvs_handle_t h, liste_t *l) {
   liste_v1_t v1[2];
   bool lu[2];
   for (int i = 0; i < 2; i++) lu[i] = lire_blob(h, NOMS_V1[i], &v1[i], sizeof(v1[i]));
   liste_migrer_v1(l, v1, lu);
   if (!lu[0] && !lu[1]) return ESP_OK;
+  int fautive = -1;
+  if (liste_valider(l, &fautive) != LISTE_OK) {
+    ESP_LOGE(TAG, "ancienne liste des lampes invalide (lampe %d) : liste vide, recharger les cles", fautive + 1);
+    memset(l, 0, sizeof(*l));
+    return ESP_OK;
+  }
   esp_err_t err = ecrire_liste(h, l);
   if (err == ESP_OK) err = nvs_commit(h);
   for (int i = 0; i < 2 && err == ESP_OK; i++) err = effacer(h, NOMS_V1[i]);
@@ -93,6 +105,7 @@ static esp_err_t migrer_v1(nvs_handle_t h, liste_t *l) {
 }
 
 esp_err_t config_charger(amaran_config_t *c) {
+  if (!s_verrou) s_verrou = xSemaphoreCreateMutexStatic(&s_verrou_memoire);
   memset(c, 0, sizeof(*c));
   nvs_handle_t h;
   esp_err_t err = ouvrir(&h);
@@ -164,6 +177,7 @@ static esp_err_t maj_lampe(const uint8_t mac[6], bool endpoint, uint16_t valeur)
   if (err != ESP_OK) return err;
   verrouiller();
   err = lire_liste(h, &s_actuelle);
+  if (err == ESP_ERR_NVS_NOT_FOUND) err = ESP_ERR_NOT_FOUND;  // aucune liste en NVS : la lampe n'y est pas
   const int i = err == ESP_OK ? liste_chercher_mac(&s_actuelle, mac) : -1;
   if (err == ESP_OK && i < 0) err = ESP_ERR_NOT_FOUND;
   if (err == ESP_OK) {
