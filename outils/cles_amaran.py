@@ -10,7 +10,7 @@ Lit la base locale d'amaran Desktop, puis envoie par la console du pont :
 Les cles ne sont jamais affichees : seulement leurs empreintes (8 premiers
 chiffres hexa du SHA-256), les memes que la commande `mesh` du pont.
 
-Trois controles, pour ne jamais confier les cles a un autre appareil ni les
+Quatre controles, pour ne jamais confier les cles a un autre appareil ni les
 perdre en route :
     - avant les cles, la commande `mesh` doit rendre une ligne `mesh pret :`
       (sinon ce port n'est pas le pont, et rien n'est envoye) ;

@@ -3,6 +3,7 @@
     python3 -m unittest discover -s outils -p "test_*.py" -v
 """
 import os
+import re
 import sqlite3
 import tempfile
 import time
@@ -56,6 +57,11 @@ class TestLecture(unittest.TestCase):
         trois = LAMPES + ((6, "70:3E:97:00:00:03", "Lampe C"),)
         r = ca.lire_reseau(base_factice(self.dossier, lampes=trois))
         self.assertEqual([l["adresse"] for l in r["lampes"]], [2, 4, 6])
+
+    def test_accepte_la_capacite_pile(self):
+        seize = tuple((2 * k + 2, "70:3E:97:00:00:%02X" % k, "Lampe %d" % k) for k in range(ca.CAPACITE))
+        r = ca.lire_reseau(base_factice(self.dossier, lampes=seize))
+        self.assertEqual(len(r["lampes"]), ca.CAPACITE)
 
     def test_refuse_au_dela_de_la_capacite(self):
         trop = tuple((2 * k + 2, "70:3E:97:00:00:%02X" % k, "Lampe %d" % k) for k in range(ca.CAPACITE + 1))
@@ -138,6 +144,29 @@ class TestFictives(unittest.TestCase):
         with self.assertRaises(ca.ErreurCles):
             ca.ajouter_fictives(ca.lire_reseau(base_factice(tempfile.mkdtemp())), ca.CAPACITE - 1)
 
+    def test_fictives_jusqu_a_la_capacite(self):
+        # Banc de capacite : 2 vraies lampes et 14 fictives, 16 en tout, adresses et MAC distinctes.
+        r = ca.ajouter_fictives(ca.lire_reseau(base_factice(tempfile.mkdtemp())), ca.CAPACITE - 2)
+        self.assertEqual(len(r["lampes"]), ca.CAPACITE)
+        self.assertEqual(len({l["adresse"] for l in r["lampes"]}), ca.CAPACITE)
+        self.assertEqual(len({l["mac"] for l in r["lampes"]}), ca.CAPACITE)
+        self.assertEqual(ca.commandes(r)[1], "mesh lampes %d" % ca.CAPACITE)
+
+    def test_nombre_de_fictives_negatif_refuse(self):
+        with self.assertRaises(ca.ErreurCles):
+            ca.ajouter_fictives(ca.lire_reseau(base_factice(tempfile.mkdtemp())), -1)
+
+
+class TestCapacite(unittest.TestCase):
+    def test_meme_capacite_que_le_pont(self):
+        # La capacite vit en trois endroits : LISTE_CAPACITE (liste.h), LAMPES_CAPACITE (egale
+        # par assertion dans le firmware) et celle de l'outil.
+        ici = os.path.dirname(os.path.abspath(__file__))
+        with open(os.path.join(ici, "..", "components", "liste", "include", "liste.h")) as f:
+            m = re.search(r"#define LISTE_CAPACITE (\d+)", f.read())
+        self.assertIsNotNone(m)
+        self.assertEqual(int(m.group(1)), ca.CAPACITE)
+
 
 class TestComposition(unittest.TestCase):
     def test_modeles_de_la_60d(self):
@@ -165,6 +194,21 @@ class TestSortie(unittest.TestCase):
             self.assertNotIn(cle, texte.lower())
         self.assertIn("A8FAED6A", texte)
         self.assertIn("<cle masquee>", texte)
+
+    def test_option_fictives(self):
+        capture = []
+        code = ca.main(["--db", base_factice(tempfile.mkdtemp()), "--fictives", "2"], sortie=capture.append)
+        texte = "\n".join(capture)
+        self.assertEqual(code, 0)
+        self.assertIn("mesh lampes 4", texte)
+        self.assertIn("mesh lampe 4 0x0101 02:00:00:00:00:02 0 Fictive 2", texte)
+
+    def test_option_fictives_au_dela_de_la_capacite(self):
+        capture = []
+        code = ca.main(["--db", base_factice(tempfile.mkdtemp()), "--fictives", str(ca.CAPACITE - 1)],
+                       sortie=capture.append)
+        self.assertEqual(code, 1)
+        self.assertIn("le pont en gere %d" % ca.CAPACITE, capture[-1])
 
     def test_erreur_rend_1(self):
         capture = []
@@ -345,6 +389,17 @@ class TestChargement(unittest.TestCase):
         with self.assertRaises(ca.ErreurCles) as cm:
             self.charger(port, attente=0.3)
         self.assertIn("pas enregistre la liste", str(cm.exception))
+        self.assertNotIn("redemarre\r\n", port.ecrit)
+
+    def test_lampe_refusee_par_le_pont_arrete_tout(self):
+        # Erreur sur la lampe 1, suivie de la ligne de la console d'ESP-IDF : rien d'autre ne part.
+        port = PortFactice(self.reponses()[:7] + [
+            "erreur : lampe 1 : adresse hors de l'unicast, ou dans nos adresses (0x7F00-0x7F7F)",
+            "Command returned non-zero error code: 0x1 (ERROR)"])
+        with self.assertRaises(ca.ErreurCles) as cm:
+            self.charger(port)
+        self.assertIn("lampe 1 : adresse hors de l'unicast", str(cm.exception))
+        self.assertEqual(port.ecrit[-1], "mesh lampe 1 0x0002 70:3E:97:00:00:01 40065 Lampe A\r\n")
         self.assertNotIn("redemarre\r\n", port.ecrit)
 
     def test_liste_refusee_par_le_pont_arrete_tout(self):
