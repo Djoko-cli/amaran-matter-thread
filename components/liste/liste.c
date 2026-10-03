@@ -1,7 +1,17 @@
 // Liste des lampes du pont (voir liste.h).
 #include "liste.h"
 
+#include <stddef.h>
 #include <string.h>
+
+// Le format en NVS est l'image de ces structures : leur disposition ne change pas
+// sans changer LISTE_VERSION (la meme sur l'ESP32-C6 et sur le Mac des tests).
+_Static_assert(sizeof(liste_entete_t) == 4, "en-tete NVS : 4 octets");
+_Static_assert(sizeof(liste_lampe_t) == 48 && offsetof(liste_lampe_t, mac) == 2 && offsetof(liste_lampe_t, nom) == 8 &&
+                   offsetof(liste_lampe_t, code) == 40 && offsetof(liste_lampe_t, endpoint) == 44 &&
+                   offsetof(liste_lampe_t, drapeaux) == 46,
+               "lampe en NVS : 48 octets, disposition fixe");
+_Static_assert(sizeof(liste_v1_t) == 40, "emplacement du plan 2 : 40 octets");
 
 static const uint8_t MAC_NULLE[6] = {0};
 
@@ -13,7 +23,7 @@ static bool nom_valide(const char nom[LISTE_NOM_MAX]) {
   if (nom[0] == '\0') return false;
   for (int i = 0; i < LISTE_NOM_MAX; i++) {
     if (nom[i] == '\0') return true;
-    if ((unsigned char)nom[i] < 0x20) return false;
+    if ((unsigned char)nom[i] < 0x20 || nom[i] == 0x7F) return false;  // caractere de controle
   }
   return false;  // pas de NUL : nom trop long
 }
@@ -82,14 +92,18 @@ void liste_masquer(liste_lampe_t *l) { l->drapeaux |= LISTE_MASQUEE; }
 
 void liste_afficher(liste_lampe_t *l) { l->drapeaux = (uint8_t)((l->drapeaux | LISTE_VUE) & ~LISTE_MASQUEE); }
 
+// n borne a la capacite : meme une liste non validee ne deborde jamais.
+static uint8_t n_borne(const liste_t *l) { return l->n > LISTE_CAPACITE ? LISTE_CAPACITE : l->n; }
+
 uint32_t liste_taille_nvs(const liste_t *l) {
-  return (uint32_t)(sizeof(liste_entete_t) + (size_t)l->n * sizeof(liste_lampe_t));
+  return (uint32_t)(sizeof(liste_entete_t) + (size_t)n_borne(l) * sizeof(liste_lampe_t));
 }
 
 void liste_vers_nvs(const liste_t *l, uint8_t *tampon) {
-  const liste_entete_t e = {LISTE_VERSION, l->n, (uint8_t)sizeof(liste_lampe_t), 0};
+  const uint8_t n = n_borne(l);
+  const liste_entete_t e = {LISTE_VERSION, n, (uint8_t)sizeof(liste_lampe_t), 0};
   memcpy(tampon, &e, sizeof(e));
-  memcpy(tampon + sizeof(e), l->lampes, (size_t)l->n * sizeof(liste_lampe_t));
+  memcpy(tampon + sizeof(e), l->lampes, (size_t)n * sizeof(liste_lampe_t));
 }
 
 bool liste_depuis_nvs(liste_t *l, const uint8_t *tampon, uint32_t taille) {

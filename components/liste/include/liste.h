@@ -52,9 +52,10 @@ liste_erreur_t liste_valider(const liste_t *l, int *fautive);
 const char *liste_erreur_texte(liste_erreur_t e);
 // Index de la lampe de cette MAC, ou -1.
 int liste_chercher_mac(const liste_t *l, const uint8_t mac[6]);
-// Chargement d'une nouvelle liste : une MAC deja connue garde son endpoint et ses
-// drapeaux ; une MAC nouvelle part sans endpoint, ni vue ni masquee ; une MAC
-// absente de la nouvelle liste disparait, avec son numero (jamais reattribue).
+// Chargement d'une nouvelle liste, deja validee (liste_valider : pas de MAC en double) :
+// une MAC deja connue garde son endpoint et ses drapeaux ; une MAC nouvelle part sans
+// endpoint, ni vue ni masquee ; une MAC absente de la nouvelle liste disparait, avec
+// son numero (jamais reattribue).
 void liste_fusionner(liste_t *nouvelle, const liste_t *actuelle);
 
 // Exposition dans Maison (spec N lampes 7).
@@ -73,7 +74,7 @@ typedef struct {
   uint8_t reserve;
 } liste_entete_t;
 
-// Octets a ecrire pour la liste l.
+// Octets a ecrire pour la liste l (n borne a LISTE_CAPACITE).
 uint32_t liste_taille_nvs(const liste_t *l);
 // Ecrit la liste dans tampon (au moins liste_taille_nvs(l) octets).
 void liste_vers_nvs(const liste_t *l, uint8_t *tampon);

@@ -41,9 +41,12 @@ static void test_valider(void) {
     VERIFIE(liste_valider(&l, &fautive) == LISTE_ADRESSE_INVALIDE && fautive == 1, "adresse 0x%04x refusee",
             (unsigned)mauvaises[k]);
   }
-  l = deux_lampes();
-  l.lampes[1].adresse = 0x7F80;  // juste apres nos adresses : une lampe peut l'avoir
-  VERIFIE(liste_valider(&l, &fautive) == LISTE_OK, "0x7F80 acceptee");
+  const uint16_t bonnes[] = {0x0001, 0x7EFF, 0x7F80, 0x7FFF};  // bornes de l'unicast, autour de nos adresses
+  for (unsigned k = 0; k < sizeof(bonnes) / sizeof(bonnes[0]); k++) {
+    l = deux_lampes();
+    l.lampes[1].adresse = bonnes[k];
+    VERIFIE(liste_valider(&l, &fautive) == LISTE_OK, "adresse 0x%04x acceptee", (unsigned)bonnes[k]);
+  }
 
   l = deux_lampes();
   l.lampes[1].adresse = 0x0002;
@@ -64,6 +67,10 @@ static void test_valider(void) {
   l = deux_lampes();
   strcpy(l.lampes[0].nom, "a\r\nredemarre");
   VERIFIE(liste_valider(&l, &fautive) == LISTE_NOM_INVALIDE, "nom avec un retour a la ligne");
+
+  l = deux_lampes();
+  strcpy(l.lampes[0].nom, "a\x7f");
+  VERIFIE(liste_valider(&l, &fautive) == LISTE_NOM_INVALIDE, "nom avec DEL (0x7F)");
 
   l = deux_lampes();
   memset(l.lampes[0].nom, 'x', LISTE_NOM_MAX);  // aucun NUL
@@ -94,17 +101,16 @@ static void test_fusionner(void) {
   liste_t nouvelle;
   memset(&nouvelle, 0, sizeof(nouvelle));
   nouvelle.n = 2;
-  nouvelle.lampes[0] = lampe(0x0006, 0x03, "Lampe C");  // nouvelle
-  nouvelle.lampes[1] = lampe(0x0008, 0x02, "Lampe B renommee");  // B, autre adresse, autre place
-  nouvelle.lampes[1].endpoint = 77;  // ce que dit le chargement ne compte pas
-  nouvelle.lampes[1].drapeaux = 0;
+  nouvelle.lampes[0] = lampe(0x0008, 0x02, "Lampe B renommee");  // B : autre adresse, et place 2 -> 1
+  nouvelle.lampes[0].endpoint = 77;  // ce que dit le chargement ne compte pas
+  nouvelle.lampes[1] = lampe(0x0006, 0x03, "Lampe C");  // nouvelle
   liste_fusionner(&nouvelle, &actuelle);
 
-  VERIFIE(nouvelle.lampes[0].endpoint == 0 && nouvelle.lampes[0].drapeaux == 0, "C : sans numero, jamais vue");
-  VERIFIE(nouvelle.lampes[1].endpoint == 3 && nouvelle.lampes[1].drapeaux == (LISTE_VUE | LISTE_MASQUEE),
-          "B garde EP3 et son masquage");
-  VERIFIE(nouvelle.lampes[1].adresse == 0x0008 && !strcmp(nouvelle.lampes[1].nom, "Lampe B renommee"),
+  VERIFIE(nouvelle.lampes[0].endpoint == 3 && nouvelle.lampes[0].drapeaux == (LISTE_VUE | LISTE_MASQUEE),
+          "B, changee de place, garde EP3 et son masquage");
+  VERIFIE(nouvelle.lampes[0].adresse == 0x0008 && !strcmp(nouvelle.lampes[0].nom, "Lampe B renommee"),
           "B prend sa nouvelle adresse et son nouveau nom");
+  VERIFIE(nouvelle.lampes[1].endpoint == 0 && nouvelle.lampes[1].drapeaux == 0, "C : sans numero, jamais vue");
   VERIFIE(liste_chercher_mac(&nouvelle, actuelle.lampes[0].mac) == -1, "A a disparu");
 }
 
@@ -122,10 +128,17 @@ static void test_exposition(void) {
   liste_masquer(&fictive);
   liste_afficher(&fictive);
   VERIFIE(liste_exposee(&fictive), "afficher expose meme une lampe jamais entendue");
+
+  liste_lampe_t c = lampe(0x0012, 0x12, "Masquee avant d'etre vue");
+  liste_masquer(&c);
+  liste_marquer_vue(&c);  // elle repond ensuite
+  VERIFIE(!liste_exposee(&c), "masquee, meme si elle repond : pas exposee");
 }
 
 static void test_nvs_aller_retour(void) {
   liste_t l = deux_lampes();
+  l.lampes[0].endpoint = 2;
+  l.lampes[0].drapeaux = LISTE_VUE | LISTE_MASQUEE;
   l.lampes[1].endpoint = 3;
   l.lampes[1].drapeaux = LISTE_VUE;
   uint8_t tampon[sizeof(liste_entete_t) + LISTE_CAPACITE * sizeof(liste_lampe_t)];
@@ -133,9 +146,10 @@ static void test_nvs_aller_retour(void) {
   VERIFIE(n == sizeof(liste_entete_t) + 2 * sizeof(liste_lampe_t), "taille : en-tete et deux lampes");
   liste_vers_nvs(&l, tampon);
   liste_t relue;
-  VERIFIE(liste_depuis_nvs(&relue, tampon, n) && relue.n == 2 && !memcmp(&relue.lampes[1], &l.lampes[1],
-                                                                           sizeof(liste_lampe_t)),
-          "aller-retour exact");
+  VERIFIE(liste_depuis_nvs(&relue, tampon, n) && relue.n == 2 &&
+              !memcmp(&relue.lampes[0], &l.lampes[0], sizeof(liste_lampe_t)) &&
+              !memcmp(&relue.lampes[1], &l.lampes[1], sizeof(liste_lampe_t)),
+          "aller-retour exact, masquage compris");
 
   VERIFIE(!liste_depuis_nvs(&relue, tampon, n - 1) && relue.n == 0, "tronquee : refusee, liste vide");
   VERIFIE(!liste_depuis_nvs(&relue, tampon, 3), "plus courte que l'en-tete");
@@ -146,9 +160,28 @@ static void test_nvs_aller_retour(void) {
   memcpy(autre, tampon, n);
   autre[2] = (uint8_t)(sizeof(liste_lampe_t) + 4);  // lampe d'une autre taille
   VERIFIE(!liste_depuis_nvs(&relue, autre, n), "autre taille de lampe refusee");
-  memcpy(autre, tampon, n);
-  autre[1] = LISTE_CAPACITE + 1;
-  VERIFIE(!liste_depuis_nvs(&relue, autre, n), "plus longue que la capacite refusee");
+  // Plus longue que la capacite, avec une longueur coherente : seul le plafond la refuse.
+  uint8_t trop[sizeof(liste_entete_t) + (LISTE_CAPACITE + 1) * sizeof(liste_lampe_t)];
+  memset(trop, 0, sizeof(trop));
+  const liste_entete_t e = {LISTE_VERSION, LISTE_CAPACITE + 1, (uint8_t)sizeof(liste_lampe_t), 0};
+  memcpy(trop, &e, sizeof(e));
+  VERIFIE(!liste_depuis_nvs(&relue, trop, sizeof(trop)) && relue.n == 0, "plus longue que la capacite refusee");
+
+  // Une liste non validee trop longue n'ecrit jamais au-dela de la capacite.
+  liste_t longue;
+  memset(&longue, 0, sizeof(longue));
+  longue.n = LISTE_CAPACITE + 1;
+  VERIFIE(liste_taille_nvs(&longue) == sizeof(liste_entete_t) + LISTE_CAPACITE * sizeof(liste_lampe_t),
+          "taille bornee a la capacite");
+  liste_vers_nvs(&longue, tampon);
+  VERIFIE(tampon[1] == LISTE_CAPACITE, "en-tete borne a la capacite");
+
+  // Un nom sans fin relu de la NVS est termine.
+  l.n = 1;
+  memset(l.lampes[0].nom, 'z', LISTE_NOM_MAX);
+  liste_vers_nvs(&l, tampon);
+  VERIFIE(liste_depuis_nvs(&relue, tampon, liste_taille_nvs(&l)) && strlen(relue.lampes[0].nom) == LISTE_NOM_MAX - 1,
+          "nom sans fin relu : termine");
 
   l.n = 0;
   liste_vers_nvs(&l, tampon);
@@ -205,6 +238,12 @@ static void test_catalogue(void) {
           "texte : intensite+cct");
   VERIFIE(!strcmp(catalogue_capacites_texte(CATALOGUE_INTENSITE | CATALOGUE_COULEUR), "intensite+couleur"),
           "texte : intensite+couleur");
+  VERIFIE(!strcmp(catalogue_capacites_texte(CATALOGUE_INTENSITE | CATALOGUE_CCT | CATALOGUE_COULEUR),
+                  "intensite+cct+couleur"),
+          "texte : intensite+cct+couleur");
+  VERIFIE(!strcmp(catalogue_capacites_texte(0), "aucune"), "texte : aucune");
+  VERIFIE(LISTE_CODE_V1 == CATALOGUE_CODE_COB_60D && catalogue_connu(LISTE_CODE_V1),
+          "les lampes converties du plan 2 sont des 60d cataloguees");
 }
 
 int main(void) {
