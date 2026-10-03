@@ -51,6 +51,9 @@ static uint16_t s_numero[LISTE_CAPACITE];
 static char s_nom_lampe[LISTE_CAPACITE][LISTE_NOM_MAX];
 // Exposer et masquer : une lampe a la fois (console, tache lampes, demarrage).
 static SemaphoreHandle_t s_verrou_exposition;
+// Expositions du demarrage finies (pont_demarrer) : la console et la tache des lampes
+// peuvent exposer et masquer sans croiser la boucle de demarrage.
+static volatile bool s_pret;
 static pont_ordre_cb_t s_ordre;
 // Avant cette echeance, ce qui arrive sur l'endpoint d'une lampe vient de la pile
 // (valeurs posees a sa creation), pas d'un controleur (lecon du Halo : 2 s).
@@ -234,7 +237,19 @@ static esp_err_t ajouter_type(endpoint_t *ep, const catalogue_modele_t *m) {
   }
 }
 
-esp_err_t pont_exposer(int lampe, const liste_lampe_t *l) {
+// Une lampe a la fois (s_verrou_exposition). Garde de 2 s, puis endpoint::enable, qui
+// prend le verrou de la pile : rappels d'init des clusters, liste des parties de
+// l'agregateur annoncee aux abonnes (Maison montre la tuile).
+static uint16_t activer(int lampe, endpoint_t *ep) {
+  const uint16_t id = endpoint::get_id(ep);
+  s_ordres_des_us[lampe] = esp_timer_get_time() + 2000000;
+  endpoint::enable(ep);
+  s_ep_lampe[lampe] = id;
+  s_numero[lampe] = id;
+  return id;
+}
+
+static esp_err_t exposer_lampe(int lampe, const liste_lampe_t *l) {
   if (lampe < 0 || lampe >= LISTE_CAPACITE || !l) return ESP_ERR_INVALID_ARG;
   if (!esp_matter::is_started() || !s_verrou_exposition) return ESP_ERR_INVALID_STATE;
   xSemaphoreTake(s_verrou_exposition, portMAX_DELAY);
@@ -244,6 +259,17 @@ esp_err_t pont_exposer(int lampe, const liste_lampe_t *l) {
   }
   const catalogue_modele_t *m = catalogue_trouver(l->code);
   endpoint_t *ep = NULL;
+  // Masquee depuis le demarrage : son endpoint est reste, desactive (pont_masquer).
+  if (s_numero[lampe]) {
+    lock::ScopedChipStackLock verrou(portMAX_DELAY);
+    ep = endpoint::get(s_noeud, s_numero[lampe]);
+  }
+  if (ep) {
+    const uint16_t id = activer(lampe, ep);
+    xSemaphoreGive(s_verrou_exposition);
+    ESP_LOGI(TAG, "lampe %d de nouveau dans Maison : EP%u", lampe + 1, id);
+    return ESP_OK;
+  }
   bool pret = false;
   {
     lock::ScopedChipStackLock verrou(portMAX_DELAY);
@@ -273,18 +299,13 @@ esp_err_t pont_exposer(int lampe, const liste_lampe_t *l) {
     }
   }
   if (!pret) {
+    // Jamais active : aucune ecriture differee en cours sur ses attributs.
     if (ep) endpoint::destroy(s_noeud, ep);  // prend le verrou de la pile lui-meme
     xSemaphoreGive(s_verrou_exposition);
     ESP_LOGE(TAG, "lampe %d : endpoint non cree", lampe + 1);
     return ESP_FAIL;
   }
-  const uint16_t id = endpoint::get_id(ep);
-  s_ordres_des_us[lampe] = esp_timer_get_time() + 2000000;
-  // Prend le verrou de la pile : rappels d'init des clusters, liste des parties de
-  // l'agregateur annoncee aux abonnes (Maison montre la tuile).
-  endpoint::enable(ep);
-  s_ep_lampe[lampe] = id;
-  s_numero[lampe] = id;
+  const uint16_t id = activer(lampe, ep);
   if (id != l->endpoint) {
     const esp_err_t err = config_maj_endpoint(l->mac, id);
     if (err != ESP_OK) ESP_LOGE(TAG, "lampe %d : numero EP%u non sauve (%s)", lampe + 1, id, esp_err_to_name(err));
@@ -295,9 +316,14 @@ esp_err_t pont_exposer(int lampe, const liste_lampe_t *l) {
   return ESP_OK;
 }
 
+esp_err_t pont_exposer(int lampe, const liste_lampe_t *l) {
+  if (!s_pret) return ESP_ERR_INVALID_STATE;
+  return exposer_lampe(lampe, l);
+}
+
 esp_err_t pont_masquer(int lampe) {
   if (lampe < 0 || lampe >= LISTE_CAPACITE) return ESP_ERR_INVALID_ARG;
-  if (!esp_matter::is_started() || !s_verrou_exposition) return ESP_ERR_INVALID_STATE;
+  if (!s_pret) return ESP_ERR_INVALID_STATE;
   xSemaphoreTake(s_verrou_exposition, portMAX_DELAY);
   const uint16_t id = s_ep_lampe[lampe];
   esp_err_t err = ESP_OK;
@@ -310,9 +336,16 @@ esp_err_t pont_masquer(int lampe) {
     s_ep_lampe[lampe] = 0;  // plus de publication, plus d'ordre
     s_identifie = s_identifie & ~(1u << (2 + lampe));
     s_effet_fin[2 + lampe] = 0;
-    // Prend le verrou de la pile : la liste des parties change, Maison retire la tuile.
-    if (ep) err = endpoint::destroy(s_noeud, ep);
-    ESP_LOGI(TAG, "lampe %d retiree de Maison (EP%u)", lampe + 1, id);
+    // Desactive, pas detruit : esp-matter garde des pointeurs vers ses attributs
+    // (ecriture differee de CurrentLevel, 3 s), et sa place dans la liste des
+    // endpoints indexe l'etat des grappes des autres lampes. Prend le verrou de la
+    // pile : la liste des parties change, Maison retire la tuile.
+    if (ep) err = endpoint::disable(ep);
+    if (err == ESP_OK) {
+      ESP_LOGI(TAG, "lampe %d retiree de Maison (EP%u)", lampe + 1, id);
+    } else {
+      ESP_LOGE(TAG, "lampe %d : EP%u non desactive (%s)", lampe + 1, id, esp_err_to_name(err));
+    }
   }
   xSemaphoreGive(s_verrou_exposition);
   return err;
@@ -384,7 +417,8 @@ esp_err_t pont_demarrer(const amaran_config_t *cfg, pont_ordre_cb_t ordre) {
     }
     ordre_ep[b + 1] = i;
   }
-  for (int k = 0; k < n; k++) pont_exposer(ordre_ep[k], &cfg->liste.lampes[ordre_ep[k]]);
+  for (int k = 0; k < n; k++) exposer_lampe(ordre_ep[k], &cfg->liste.lampes[ordre_ep[k]]);
+  s_pret = true;
   return ESP_OK;
 }
 

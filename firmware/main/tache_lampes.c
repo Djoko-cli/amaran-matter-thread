@@ -72,6 +72,9 @@ static void sortie_alerter(void *ctx, int lampe, bool manque, uint8_t pour_cent)
   }
 }
 
+// Lampes dont l'endpoint existe, vues au dernier tic (publier_les_apparues).
+static bool s_montree[LAMPES_CAPACITE];
+
 // Lampe i : la faire entrer dans Maison, puis y publier son etat (son endpoint est
 // neuf). Sous s_verrou.
 static esp_err_t exposer(int i) {
@@ -79,8 +82,20 @@ static esp_err_t exposer(int i) {
   if (err == ESP_OK) {
     s_liste.lampes[i].endpoint = pont_endpoint(i);
     lampes_forcer_publication(&s_lampes, i);
+    s_montree[i] = true;
   }
   return err;
+}
+
+// Un endpoint apparu sans passer par exposer() : les expositions du demarrage
+// (pont_demarrer). Ce que le coeur a publie avant qu'il n'existe s'est perdu (une
+// lampe muette resterait joignable dans Maison) : le republier. Sous s_verrou.
+static void publier_les_apparues(void) {
+  for (int i = 0; i < s_lampes.n; i++) {
+    const bool montree = pont_endpoint(i) != 0;
+    if (montree && !s_montree[i]) lampes_forcer_publication(&s_lampes, i);
+    s_montree[i] = montree;
+  }
 }
 
 // Premiere reponse d'une lampe jamais vue : elle entre dans Maison (spec N lampes 7).
@@ -148,6 +163,7 @@ static void tache(void *arg) {
     }
     xSemaphoreTake(s_verrou, portMAX_DELAY);
     exposer_les_nouvelles();
+    publier_les_apparues();
     lampes_mesh_pret(&s_lampes, mesh_pret(), maintenant_ms());
     lampes_tic(&s_lampes, maintenant_ms());
     xSemaphoreGive(s_verrou);
@@ -220,15 +236,19 @@ void tache_lampes_lire_liste(liste_t *copie) {
 esp_err_t tache_lampes_exposition(int lampe, bool afficher) {
   if (!s_verrou || lampe < 0 || lampe >= s_liste.n) return ESP_ERR_INVALID_ARG;
   xSemaphoreTake(s_verrou, portMAX_DELAY);
-  liste_lampe_t *a = &s_liste.lampes[lampe];
+  // Sur une copie : les drapeaux ne changent qu'une fois la NVS a jour.
+  liste_lampe_t copie = s_liste.lampes[lampe];
   if (afficher) {
-    liste_afficher(a);
+    liste_afficher(&copie);
   } else {
-    liste_masquer(a);
+    liste_masquer(&copie);
   }
   // Une liste chargee depuis le demarrage sans cette lampe : ESP_ERR_NOT_FOUND.
-  esp_err_t err = config_maj_drapeaux(a->mac, a->drapeaux);
-  if (err == ESP_OK) err = afficher ? exposer(lampe) : pont_masquer(lampe);
+  esp_err_t err = config_maj_drapeaux(copie.mac, copie.drapeaux);
+  if (err == ESP_OK) {
+    s_liste.lampes[lampe] = copie;
+    err = afficher ? exposer(lampe) : pont_masquer(lampe);
+  }
   xSemaphoreGive(s_verrou);
   return err;
 }

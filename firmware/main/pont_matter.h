@@ -30,10 +30,12 @@ typedef void (*pont_ordre_cb_t)(int lampe, const bool *marche, const uint16_t *i
 esp_err_t pont_demarrer(const amaran_config_t *cfg, pont_ordre_cb_t ordre);
 // Fait entrer la lampe dans Maison : son endpoint, avec son numero s'il en a un (le
 // suivant du compteur d'esp-matter sinon, sauve en NVS), et le type d'appareil que
-// donne le catalogue. Sans effet si elle y est deja. Apres pont_demarrer, hors de
-// la tache CHIP : prend le verrou de la pile.
+// donne le catalogue ; masquee depuis le demarrage, son endpoint est reactive. Sans
+// effet si elle y est deja. Une fois pont_demarrer fini (sinon ESP_ERR_INVALID_STATE),
+// hors de la tache CHIP : prend le verrou de la pile.
 esp_err_t pont_exposer(int lampe, const liste_lampe_t *l);
-// Retire l'endpoint de la lampe : Maison retire sa tuile. La lampe garde son numero.
+// Desactive l'endpoint de la lampe, sans le detruire : Maison retire sa tuile, et la
+// lampe garde son numero. Memes conditions que pont_exposer.
 esp_err_t pont_masquer(int lampe);
 // Numero d'endpoint de la lampe ; 0 si elle n'est pas exposee.
 uint16_t pont_endpoint(int lampe);

@@ -10,9 +10,10 @@ CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
 # Tic de 1 ms : bouton BOOT et voyant repris du Halo (Arduino tourne a 1000 Hz).
 CONFIG_FREERTOS_HZ=1000
-# app_main demarre Matter puis le Bluetooth Mesh (mesh_demarrer) : meme pile que
-# la tache principale du firmware d'ecoute.
-CONFIG_ESP_MAIN_TASK_STACK_SIZE=4096
+# app_main demarre Matter puis le Bluetooth Mesh (mesh_demarrer). 6 Ko : au
+# demarrage, pont_demarrer y expose les lampes (endpoint::enable fait tourner les
+# rappels d'init des clusters sur cette pile). La tache se termine ensuite.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=6144
 
 # Bluetooth : NimBLE. La pile Matter demarre l'hote et le garde apres la mise en
 # service (USE_BLE_ONLY_FOR_COMMISSIONING=n, sinon le Mesh meurt a l'appairage).
