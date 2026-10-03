@@ -3,7 +3,10 @@
 Date : 28/09/2026. Statut : design validé section par section avec Djoko, à
 relire avant le plan d'implémentation. Mis à jour le 01/10/2026 avec ce que
 les plans 1 et 2, leurs bancs et la revue finale ont établi (2.5, 4.2, 4.3,
-5.1, 5.4 à 5.8, 6.1 à 6.6, 7.3 à 7.5, 8.3, 8.4, 9, 10, 11).
+5.1, 5.4 à 5.8, 6.1 à 6.6, 7.3 à 7.5, 8.3, 8.4, 9, 10, 11). Puis le 04/10/2026
+pour le plan 3a, N lampes (4.1, 5.2, 6.1, 7.3, 7.5, 7.7, 9, 10) : pour la liste des
+lampes, leur entrée dans Maison et la console, la spec
+`2026-10-03-pont-amaran-n-lampes-design.md` prime.
 
 Deux amaran COB 60d pilotées depuis Maison (Apple Home) par un ESP32-C6 : un
 nœud Matter sur Thread qui rejoint le réseau Bluetooth Mesh qu'amaran Desktop a
@@ -191,6 +194,9 @@ Maison ─Thread─► ┌──────────────── ESP32
   - Il décide quoi envoyer, confirme, relit et abandonne (5.6, 5.7, 7).
   - C pur, sans ESP-IDF ni Matter, avec une horloge injectée : testé sur le
     Mac.
+- **`liste`** (plan 3a) : la liste des lampes, son format en NVS, les règles
+  d'entrée dans Maison et le catalogue des modèles (spec N lampes 3 à 7). C pur,
+  testé sur le Mac.
 - **`matter`** : le pont (6), et la traduction entre les attributs Matter et
   `lampes`.
 - **Le socle** : console série, voyant WS2812, bouton BOOT, NVS, fiche
@@ -255,11 +261,13 @@ changent pas.
 ### 5.2 Clés et liste des lampes
 
 - Rangées en NVS, dans l'espace `amaran` : clé réseau, AppKey, IV Index,
-  adresse, clé d'appareil, et les lampes (adresse, MAC, nom ; 2 au plus en
-  v1).
+  adresse, clé d'appareil, et la liste des lampes (adresse, MAC, nom, code du
+  modèle, numéro d'endpoint, drapeaux ; 16 au plus depuis le plan 3a, spec
+  N lampes 4).
 - `outils/cles_amaran.py --port <port>` les charge :
   - il trouve la base d'amaran Desktop, ou la prend dans `--db` ;
-  - il envoie les commandes `mesh cles …` et `mesh lampe …` ;
+  - il envoie `mesh cles …`, puis la liste : `mesh lampes <N>` et une ligne
+    `mesh lampe …` par lampe, tout ou rien (spec N lampes 10) ;
   - il n'affiche que des empreintes, jamais les clés.
 - À relancer si le réseau est recréé dans amaran Desktop. Le cas est détecté
   (7.3).
@@ -395,13 +403,13 @@ Autres règles :
 |---|---|---|
 | 0 | nœud | Basic Information : « Djoko-CLI », « Pont amaran », série `AMARAN-<MAC en 12 hexa>`, matériel « ESP32-C6 SuperMini », version `0.1.0-<commit>` (`-dirty` si modifié) ; VID/PID de test `0xFFF1`/`0x8000` |
 | 1 | agrégateur | |
-| 2 | lampe 1 | Bridged Node + Dimmable Light : grappes créées par esp-matter pour ce type (Identify, Groups, OnOff, LevelControl…) ; Bridged Device Basic Information : NodeLabel = nom de la base, Reachable, UniqueID = MAC |
-| 3 | lampe 2 | idem |
+| 2, 3… | une lampe exposée chacun | Bridged Node + Dimmable Light : grappes créées par esp-matter pour ce type (Identify, Groups, OnOff, LevelControl…) ; Bridged Device Basic Information : NodeLabel = nom de la base, Reachable, UniqueID = MAC |
 
 - Depuis le plan 3a (spec `2026-10-03-pont-amaran-n-lampes-design.md`, 5 et
   7) : un endpoint par lampe exposée, jusqu'à 16, avec un numéro stable par
   MAC. Les deux lampes du plan 2 gardent EP2 et EP3. Une lampe jamais vue n'est
-  pas exposée ; son retrait de Maison est un geste explicite.
+  pas exposée ; une lampe vue le reste, même absente (7.2) ; la retirer de
+  Maison est un geste explicite (`mesh lampe <n> masquer`).
 - Maison reprend les noms (T1). Il affiche « Pas de réponse » pour une lampe
   non joignable, mais seulement après qu'on a touché sa tuile (T5, T9), bien
   que le pont publie l'attribut Reachable et l'événement ReachableChanged. Ce
@@ -527,7 +535,7 @@ clignotant prime), et la console affiche le message.
 | notre NID, mais NetMIC faux | IV Index faux | `mesh iv` ou `mesh iv cherche` |
 
 `mesh_pret` ne repasse jamais à non une fois le réseau rejoint : c'est le
-diagnostic qui signale la panne. Dans tous les cas, les deux lampes passent à
+diagnostic qui signale la panne. Dans tous les cas, les lampes passent à
 « Pas de réponse » par la règle 7.2.
 
 ### 7.4 Voyant (WS2812, IO8) : signature du Halo
@@ -548,8 +556,12 @@ Priorités et intensités comme sur le Halo ; `led test` joue chaque motif.
 
 ### 7.5 Console série, en français
 
-- `lampes` : pour chaque lampe, la consigne, l'état lu, l'âge de la dernière
-  réponse et si elle est joignable.
+- `lampes` : une ligne par lampe (numéro, nom, sa place dans Maison : `EP<n>`,
+  « jamais vue », « masquee » ou « hors de Maison » ; état lu, joignable,
+  relectures répondues), puis les compteurs d'ordres et la relecture (plan 3a,
+  spec N lampes 10).
+- `lampe <n>` : le détail d'une lampe (adresse, MAC, modèle et capacités, place
+  dans Maison, état lu et son âge, consigne, relectures sur 10 min).
 - `lampe <n> on | off | niveau <0-1000> | releve` : pilotage manuel, pour les
   bancs, Djoko présent. Le niveau est arrondi au pour cent, comme pour Maison
   (6.2).
@@ -672,6 +684,10 @@ Sur le Mac, sans carte :
   avec un déchiffrement simulé.
 - **`outils/cles_amaran.py`** : base SQLite factice, empreintes, aucune clé
   affichée. Tests avec unittest de Python, sans dépendance à installer.
+- **Plan 3a** : `liste` (liste des lampes, format NVS et conversion de
+  l'ancien, exposition, catalogue des modèles), l'alerte de relectures dans
+  `lampes`, et l'outil à N lampes (colonnes `code` et `composition_data`,
+  lampes fictives).
 
 Sur la carte :
 - `mesh autotest` passe les exemples chiffrés de la spécification Bluetooth
@@ -719,6 +735,7 @@ Arborescence prévue :
 components/          composants ; telink et mesh servent aux deux firmwares
   telink/            trames 0x26 (C pur)
   lampes/            le cœur (C pur)
+  liste/             liste des lampes et catalogue des modèles (C pur, plan 3a)
   mesh/              ESP-BLE-MESH, crochet --wrap, file d'émission
   socle/             voyant et bouton BOOT : logique pure copiée du Halo
 firmware/            produit : pont Matter et socle (idf.py)

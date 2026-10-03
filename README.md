@@ -25,7 +25,7 @@ Résultats des bancs : [docs/BANC.md](docs/BANC.md). Protocole relevé : [docs/P
 
 ## Ce que fait le pont
 
-- Il montre chaque 60d dans Maison comme une lampe à intensité variable, avec
+- Il montre chaque lampe dans Maison comme une lampe à intensité variable, avec
   marche/arrêt et luminosité.
 - Il suit l'état réel des lampes, qu'on les règle dans Maison, dans amaran
   Desktop ou à la molette.
@@ -33,7 +33,7 @@ Résultats des bancs : [docs/BANC.md](docs/BANC.md). Protocole relevé : [docs/P
 
 ## Comment
 
-**Côté lampes.** Les 60d forment un réseau **Bluetooth Mesh**, créé par amaran
+**Côté lampes.** Les lampes forment un réseau **Bluetooth Mesh**, créé par amaran
 Desktop.
 - L'ESP32 en devient membre avec **sa propre adresse**, grâce aux clés du
   réseau qu'un script lit dans la base locale de l'app.
@@ -44,7 +44,7 @@ Desktop.
   Desktop, et il les capte.
 
 **Côté Maison.** C'est un pont Matter sur Thread (ESP-IDF + esp-matter) : un
-agrégateur, et une lampe « pontée » par 60d.
+agrégateur, et une lampe « pontée » par lampe.
 
 ## Installer
 
@@ -88,10 +88,10 @@ Bouton BOOT : appui court, redémarrage ; de 2 à 8 s, rien ; 8 s ou plus, désa
 ## Console
 
 Sur l'USB, en français (`python3 outils/console.py --port <port> "<commande>"`, ou tout terminal série) :
-- `lampes` : une ligne par lampe (sa place dans Maison : `EP<n>`, « jamais vue » ou « masquee » ; état lu, joignabilité, relectures répondues), puis les ordres ;
+- `lampes` : une ligne par lampe (sa place dans Maison : `EP<n>`, « jamais vue », « masquee » ou « hors de Maison » ; état lu, joignabilité, relectures répondues), puis les ordres ;
 - `lampe <n>` : le détail d'une lampe (adresse, MAC, modèle et capacités, consigne, relectures sur 10 min) ;
 - `lampe <n> on|off|niveau <0-1000>|releve` : le niveau est arrondi au pour cent (la lampe ne garde pas mieux) ;
-- `mesh lampe <n> masquer|afficher` : retirer la lampe de Maison, ou l'y remettre, avec le même numéro ;
+- `mesh lampe <n> masquer|afficher` : retirer la lampe de Maison, ou l'y remettre, avec le même numéro (`afficher` y fait aussi entrer une lampe jamais vue) ;
 - `mesh` : réseau, empreintes des clés, compteurs ; `mesh releve <s>`, `mesh balayage`, `mesh ecoute on|off`, `mesh autotest`, etc. ;
 - `mesh lampes <N>`, puis `mesh lampe <n> <adresse> <mac> <code> <nom>` : la liste des lampes, tout ou rien (c'est ce qu'envoie `outils/cles_amaran.py`) ;
 - `matter` : mise en service, Thread, abonnements, codes, identité ;
@@ -106,10 +106,10 @@ Sur l'USB, en français (`python3 outils/console.py --port <port> "<commande>"`,
 - Maison ne montre une lampe « Pas de réponse », puis son retour, qu'après avoir touché sa tuile. Le pont publie pourtant chaque changement.
 - Pour la luminosité, taper sur la jauge de Maison est plus fluide que la faire glisser : un glissé envoie une valeur toutes les 150 à 300 ms.
 - Une lampe n'entre dans Maison qu'à sa première réponse, puis y reste : absente, elle y est « Pas de réponse », et garde sa tuile, sa pièce et ses scènes. Pour la retirer de Maison : `mesh lampe <n> masquer` (`afficher` la remet, avec le même numéro).
-- Retirer une lampe dans amaran Desktop, puis recharger les clés, lui fait perdre son numéro : remise plus tard, elle revient comme une lampe nouvelle.
-- `mesh oublie` efface les clés, mais garde la liste des lampes : leurs tuiles restent, en « Pas de réponse », jusqu'au rechargement des clés.
+- Retirer une lampe dans amaran Desktop, puis recharger la liste (`outils/cles_amaran.py`), lui fait perdre son numéro : remise plus tard, elle revient comme une lampe nouvelle.
+- `mesh oublie` efface les clés, mais garde la liste des lampes : leurs tuiles restent, en « Pas de réponse », jusqu'au rechargement des clés. `mesh lampes 0` vide la liste.
 - Un modèle que le pont ne connaît pas encore est piloté en marche et intensité seulement. `outils/cles_amaran.py` signale une lampe qui déclare la température de couleur ou la couleur : modèle à cataloguer.
-- Si une lampe manque plus de 5 % de ses relectures sur 10 minutes, la console le dit (`!! lampe <n> : relectures manquees`) : allonger la période (`mesh releve`).
+- Si une lampe joignable manque plus de 5 % de ses relectures sur 10 minutes, la console le dit (`!! lampe <n> : relectures manquees, <p> % repondues sur 10 min`) : allonger la période (`mesh releve`). Le premier verdict vient au plus tôt 10 minutes après le démarrage, ou 5 minutes après une coupure du Mesh ou le retour d'une lampe.
 - Bouton BOOT : juste après un appui annulé (tenu de 2 à 8 s, donc sans effet), relâcher net ; un effleurement redémarre le pont, sans conséquence (les clés et l'appairage restent).
 
 ## Clés du réseau
