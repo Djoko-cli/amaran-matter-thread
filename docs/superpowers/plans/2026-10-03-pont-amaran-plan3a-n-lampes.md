@@ -4558,7 +4558,7 @@ Pourquoi : la spec N lampes, section 12. Le banc 1 vérifie la migration sur le 
 Run: `git status --short && sh tests/hote/lancer.sh && python3 -m unittest discover -s outils -p "test_*.py" 2>&1 | tail -1 && export PATH="/opt/homebrew/bin:$PATH" && source ~/esp/esp-idf/export.sh >/dev/null && source ~/esp/esp-matter/export.sh >/dev/null && cd firmware && idf.py build | tail -2 && cd ..`
 Expected : `git status` vide ; tout vert ; `OK` ; `Project build complete.`
 
-Reconnaître la carte par son `SER=` (finissant par `3C:5A`), puis demander à Djoko : « Je flashe le firmware du plan 3a sur la C6 du pont (`<port>`), sans effacer ? ».
+Reconnaître la carte par son `SER=` (comme au plan 2, Task 8, Step 2 ; ce numéro n'est écrit nulle part dans le dépôt), puis demander à Djoko : « Je flashe le firmware du plan 3a sur la C6 du pont (`<port>`), sans effacer ? ».
 
 Run: `export PATH="/opt/homebrew/bin:$PATH" && source ~/esp/esp-idf/export.sh >/dev/null && source ~/esp/esp-matter/export.sh >/dev/null && cd firmware && idf.py -p <port> flash && cd ..`
 
