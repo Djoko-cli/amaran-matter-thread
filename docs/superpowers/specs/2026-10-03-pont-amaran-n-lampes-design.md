@@ -15,12 +15,15 @@ Dans le périmètre :
 - une liste de lampes au lieu de deux emplacements, jusqu'à une capacité de
   compilation (16 au départ) ;
 - des numéros d'endpoint Matter stables, gardés par MAC ;
+- l'exposition dans Maison : une lampe jamais vue n'y apparaît pas, et le
+  retrait de Maison est un geste explicite (7) ;
 - un catalogue de modèles dans le firmware, dont seule la COB 60d est réalisée ;
 - la migration du pont en service sans perdre ses tuiles dans Maison ;
 - l'alerte de relectures manquées par lampe ;
 - la console, `outils/cles_amaran.py`, le firmware `ecoute` et les tests,
   adaptés à N ;
-- les bancs de migration, de liste modifiée et de capacité.
+- les bancs de migration, de retrait et retour, de lampe jamais vue et de
+  capacité.
 
 Hors périmètre :
 - l'app compagnon, le mode JSON, le canal UDP sur Thread (plan 3b) ;
@@ -28,8 +31,11 @@ Hors périmètre :
 - tout réglage autre que marche/arrêt et intensité : le CCT, la couleur et les
   effets d'un autre modèle viendront quand ce modèle sera catalogué et vérifié
   avec la vraie lampe ;
-- l'ajout d'une lampe à chaud : changer la liste demande un redémarrage, comme
-  aujourd'hui ;
+- changer la liste à chaud : charger une nouvelle liste demande un
+  redémarrage, comme aujourd'hui (l'exposition d'une lampe de la liste, elle,
+  se fait à chaud : 7) ;
+- le masquage automatique d'une lampe absente : seulement en option, et
+  seulement si le banc 2 montre que Maison garde tout au retour (12) ;
 - les groupes Mesh configurés dans les lampes (piste notée en 9).
 
 ## 2. Décisions de Djoko (03/10/2026)
@@ -45,6 +51,14 @@ Hors périmètre :
    niveau), avec une note.
 5. **Horizon inconnu : viser le maximum raisonnable, mesuré.** Capacité de 16
    au départ, relevée si le banc le permet.
+6. **Lampes absentes.** Une lampe jamais vue n'est jamais exposée dans Maison ;
+   une lampe déjà vue reste exposée, en « Pas de réponse » quand elle est
+   absente ; le retrait de Maison est un geste explicite. Retirer
+   automatiquement une lampe muette depuis 5 minutes (idée de Djoko) ferait
+   très probablement perdre à Maison sa pièce, ses groupes, ses scènes et ses
+   automatisations, à chaque extinction au bouton d'alimentation : ce masquage
+   ne viendra qu'en option par lampe, si le banc 2 montre que Maison garde
+   tout au retour.
 
 ## 3. Faits établis (03/10/2026)
 
@@ -80,6 +94,8 @@ Du banc :
 | nom | NodeLabel dans Matter, 32 caractères au plus |
 | code de modèle | code produit Sidus (`40065` pour la 60d) |
 | endpoint | numéro d'endpoint Matter, attribué une fois (5) |
+| vue | la lampe a répondu au moins une fois (7) |
+| masquée | retirée de Maison par un geste explicite (7) |
 
 **Capacité.** `LAMPES_CAPACITE`, une constante de compilation, vaut 16 au
 départ. Elle remplace `AMARAN_LAMPES_MAX` et `LAMPES_MAX` (aujourd'hui 2), et
@@ -91,6 +107,7 @@ format (2). Au premier démarrage, le firmware lit l'ancien format (deux
 emplacements) et le convertit une fois :
 - la lampe 1 garde l'endpoint 2, la lampe 2 l'endpoint 3 ;
 - le compteur d'endpoints part à 4 ;
+- les deux lampes sont marquées vues, et non masquées : leurs tuiles restent ;
 - le code de modèle des lampes converties vaut `40065` : seules des 60d ont pu
   être chargées avant ce plan.
 
@@ -150,15 +167,31 @@ vérifier au banc avec la vraie lampe.
 
 ## 7. Matter
 
-- Au démarrage, le pont crée un endpoint pont par lampe de la liste, avec son
-  numéro (5) et le type que donne le catalogue (6). Le code de création est
-  organisé par capacité : ajouter le CCT plus tard ne touchera qu'à la partie
-  CCT.
+- **Exposée** = vue et non masquée. Au démarrage, le pont crée un endpoint pont
+  par lampe exposée, avec son numéro (5) et le type que donne le catalogue (6).
+  Le code de création est organisé par capacité : ajouter le CCT plus tard ne
+  touchera qu'à la partie CCT.
+- **Une lampe jamais vue n'est pas exposée.** À sa première réponse, le pont la
+  marque vue en NVS et crée son endpoint **à chaud** : sa tuile apparaît dans
+  Maison. Une lampe déclarée dans amaran Desktop mais absente d'ici (autre
+  studio, lampe prêtée) n'encombre donc jamais Maison.
+- **Une lampe déjà vue reste exposée**, en « Pas de réponse » quand elle est
+  absente (règle 7.2 de la spec du pont). Elle garde sa tuile, sa pièce, ses
+  groupes, ses scènes et ses automatisations.
+- **Retrait explicite.** `mesh lampe <n> masquer` retire l'endpoint à chaud et
+  marque la lampe masquée ; `mesh lampe <n> afficher` la ré-expose avec le même
+  numéro, même si elle n'a jamais été vue (c'est ce qui sert au banc de
+  capacité). Un masquage survit aux redémarrages et aux rechargements de la
+  liste. L'app compagnon (3b) offrira le même geste.
+- La création et le retrait à chaud suivent les exemples de pont d'esp-matter
+  (création, puis activation de l'endpoint ; retrait qui met à jour la liste
+  des parties de l'agrégateur). Le détail des appels est à vérifier dans le
+  commit installé lors du plan.
 - Seul le type Dimmable Light est réalisé. Tout le reste du comportement
   d'une lampe est celui de la spec du pont (6.2 à 6.5) : conversion linéaire,
   lampe noire, pas d'écho, démarrage sans ordre rejoué.
-- Une lampe retirée de la liste n'a plus d'endpoint : la liste des parties de
-  l'agrégateur change, et Maison retire sa tuile.
+- Une lampe retirée de la liste n'a plus d'endpoint au redémarrage : la liste
+  des parties de l'agrégateur change, et Maison retire sa tuile.
 - Les noms et la joignabilité suivent les règles actuelles (NodeLabel non
   persistant, Reachable par la règle 7.2 de la spec du pont).
 
@@ -192,7 +225,10 @@ vérifier au banc avec la vraie lampe.
 ## 10. Console et outils
 
 - `lampes` : une ligne par lampe (numéro, nom, modèle, état lu, joignable, part
-  de relectures répondues), puis les compteurs d'ordres.
+  de relectures répondues, et « jamais vue » ou « masquée » s'il y a lieu),
+  puis les compteurs d'ordres.
+- `mesh lampe <n> masquer | afficher` : retire la lampe de Maison, ou l'y
+  remet (7). Effet immédiat, sans redémarrage.
 - `lampe <n> on | off | niveau <0-1000> | releve` : pour `n` de 1 à N. Avec
   `lampe <n>` seul : le détail de la lampe (adresse, MAC, modèle,
   capacités, endpoint, consigne, relectures). La console est locale : la MAC
@@ -218,6 +254,10 @@ TDD, comme aux plans 1 et 2, dans `tests/hote/` :
 - conversion de la NVS : ancien format → nouveau, conversion interrompue ;
 - validation de la liste : capacité, doublons, adresses, noms ;
 - catalogue : la 60d, un code inconnu (repli) ;
+- exposition (module pur) : jamais vue → pas exposée ; première réponse →
+  exposée et marquée vue ; masquée → pas exposée même si elle répond ;
+  afficher → exposée, même jamais vue ; le tout survit à un redémarrage
+  simulé ;
 - `lampes` à N : relecture de groupe, joignabilité par lampe, ordres sur
   plusieurs lampes, et l'alerte sous 95 % sur 10 minutes (entrée, sortie, pas de
   répétition) ;
@@ -230,15 +270,23 @@ TDD, comme aux plans 1 et 2, dans `tests/hote/` :
    tuiles, leur pièce, le groupe d'accessoires et les automatisations restent
    identiques dans Maison ; EP2 et EP3 inchangés (`matter`) ; un T1 rapide
    (allumer, régler, éteindre chaque lampe).
-2. **Liste modifiée.** Charger une liste sans la lampe 2, puis la remettre.
+2. **Retrait et retour : ce que Maison garde.** Masquer la lampe 2, puis
+   l'afficher ; ensuite, charger une liste sans elle, puis la remettre.
    Attendu : sa tuile disparaît, puis revient avec **EP3** ; la lampe 1 n'a pas
-   bougé.
-3. **Capacité, avec l'accord de Djoko le moment venu.** Ajouter des lampes
-   fictives (adresses qui ne répondent jamais, MAC inventées) jusqu'à 16.
+   bougé. **On relève ce que Maison a gardé au retour** : la pièce, le groupe
+   d'accessoires, une scène et une automatisation de test qui la contiennent.
+   - Si Maison garde tout : on ajoute l'option par lampe « masquer quand
+     absente depuis 5 min » (décision 6), avec son propre test.
+   - Sinon : on en reste au geste explicite, et le constat va dans BANC.md.
+3. **Lampe jamais vue.** Déclarer une lampe fictive (adresse qui ne répond
+   jamais) : aucune tuile n'apparaît, et `lampes` la dit « jamais vue ».
+4. **Capacité, avec l'accord de Djoko le moment venu.** Ajouter des lampes
+   fictives (adresses qui ne répondent jamais, MAC inventées) jusqu'à 16, et
+   les exposer avec `afficher`.
    Mesurer : tas libre et piles, temps jusqu'à `mesh pret`, tenue de Maison
-   (16 tuiles, abonnements), ordres sur les deux vraies lampes. Puis retirer les
-   fictives : leurs tuiles disparaissent. Ce banc est intrusif (tuiles
-   « Pas de réponse » le temps de la mesure). La charge radio réelle à N lampes
+   (16 tuiles, abonnements), ordres sur les deux vraies lampes. Puis masquer
+   et retirer les fictives : leurs tuiles disparaissent. Ce banc est intrusif
+   (tuiles « Pas de réponse » le temps de la mesure). La charge radio réelle à N lampes
    ne se mesurera qu'avec de vraies lampes en plus.
 
 ## 13. Risques et questions ouvertes
@@ -246,7 +294,9 @@ TDD, comme aux plans 1 et 2, dans `tests/hote/` :
 | risque ou question | parade | tranché par |
 |---|---|---|
 | fonction d'esp-matter pour imposer le numéro d'endpoint absente ou différente | repli décrit en 5 | plan (lecture d'esp-matter) |
-| mémoire insuffisante pour 16 endpoints | capacité abaissée à ce que mesure le banc | banc 3 |
+| mémoire insuffisante pour 16 endpoints | capacité abaissée à ce que mesure le banc | banc 4 |
+| création ou retrait d'endpoint à chaud mal suivi par Maison | retour au comportement « au démarrage seulement » (exposition au redémarrage suivant) | bancs 2 et 3 |
+| Maison oublie pièce, groupes et scènes d'une lampe retirée puis revenue | retrait seulement par geste explicite ; pas de masquage automatique | banc 2 |
 | Maison réordonne ou recrée les tuiles à la migration | numéros et UniqueID inchangés ; sinon, retour au firmware précédent (flash) | banc 1 |
 | réponses télescopées au-delà de quelques lampes | alerte sous 95 %, période allongée à la main | banc réel, plus tard |
 | autres modèles : trames `0x8C`/`0x8F` différentes | repli en intensité seule à vérifier avec la vraie lampe ; entrée de catalogue | à l'arrivée d'un nouveau modèle |
@@ -259,7 +309,8 @@ TDD, comme aux plans 1 et 2, dans `tests/hote/` :
   par Thread. Pour les clés, elle lit amaran Desktop sans jamais y écrire, et
   garde une copie dans le trousseau iCloud, mise à jour seulement sur un geste
   de Djoko. Les clés ne sont chargées dans le pont que par l'USB, et l'app
-  compare les empreintes base / trousseau / pont. Sa spec viendra après ce
+  compare les empreintes base / trousseau / pont. Elle offre aussi le geste
+  « retirer de Maison » / « remettre » par lampe (7). Sa spec viendra après ce
   plan, bâtie sur N lampes et sur le catalogue.
 - **Essai de provisionnement** (indépendant) : capture PacketLogger pendant
   qu'amaran Desktop rajoute une lampe réinitialisée, déchiffrée hors ligne avec
