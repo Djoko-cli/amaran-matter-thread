@@ -18,6 +18,7 @@ extern "C" {
 
 #define PONT_PLAFOND_ABONNEMENT_S 20  // lecon du Halo : Apple se reabonne quand l'intervalle expire
 #define PONT_NIVEAU_PLANCHER 4        // lecon du Halo : sous 4, Maison montre une lampe allumee a fond
+#define PONT_EMPLACEMENTS 2           // EP2 et EP3, crees au demarrage (plan 2)
 
 // Ordre d'un controleur pour une lampe (appele dans la tache CHIP, sans bloquer) :
 // marche et/ou intensite 0..1000 (NULL : inchange).

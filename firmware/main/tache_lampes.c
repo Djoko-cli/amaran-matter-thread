@@ -120,16 +120,16 @@ esp_err_t tache_lampes_demarrer(const amaran_config_t *cfg) {
   s_file = xQueueCreate(FILE_ORDRES, sizeof(message_t));
   s_verrou = xSemaphoreCreateMutex();
   if (!s_file || !s_verrou) return ESP_ERR_NO_MEM;
-  uint16_t adresses[LAMPES_MAX];
-  for (int i = 0; i < LAMPES_MAX; i++) adresses[i] = cfg->lampes[i].adresse;
-  const lampes_sorties_t sorties = {sortie_envoyer, sortie_publier, sortie_signaler, NULL};
-  lampes_init(&s_lampes, adresses, LAMPES_MAX, &sorties, maintenant_ms());
+  uint16_t adresses[PONT_EMPLACEMENTS];
+  for (int i = 0; i < PONT_EMPLACEMENTS; i++) adresses[i] = cfg->lampes[i].adresse;
+  const lampes_sorties_t sorties = {sortie_envoyer, sortie_publier, sortie_signaler, NULL, NULL};
+  lampes_init(&s_lampes, adresses, PONT_EMPLACEMENTS, &sorties, maintenant_ms());
   if (cfg->releve_ms) lampes_regler_releve(&s_lampes, cfg->releve_ms);
   return xTaskCreate(tache, "lampes", 4096, NULL, 4, NULL) == pdPASS ? ESP_OK : ESP_ERR_NO_MEM;
 }
 
 void tache_lampes_ordre(int lampe, const bool *marche, const uint16_t *intensite, bool depuis_matter) {
-  if (!s_file || lampe < 0 || lampe >= LAMPES_MAX) return;
+  if (!s_file || lampe < 0 || lampe >= PONT_EMPLACEMENTS) return;
   message_t m = {.type = MSG_ORDRE, .lampe = (int8_t)lampe, .depuis_matter = depuis_matter};
   if (marche) {
     m.a_marche = true;

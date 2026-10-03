@@ -33,8 +33,8 @@ using namespace chip::app::Clusters;
 
 static const char *TAG = "pont";
 
-static uint16_t s_ep_lampe[LAMPES_MAX];  // EP2 et EP3 ; 0 = pas encore cree
-static char s_nom_lampe[LAMPES_MAX][AMARAN_NOM_MAX];
+static uint16_t s_ep_lampe[PONT_EMPLACEMENTS];  // EP2 et EP3 ; 0 = pas encore cree
+static char s_nom_lampe[PONT_EMPLACEMENTS][AMARAN_NOM_MAX];
 static pont_ordre_cb_t s_ordre;
 static int64_t s_ordres_des_us;  // avant : valeurs posees par la pile au demarrage, pas des ordres
 static volatile bool s_ble_annonce;
@@ -46,7 +46,7 @@ static volatile uint32_t s_abo_demandes, s_abo_plafonnes, s_abo_etablis, s_abo_t
 // Identify : endpoints en IdentifyTime (bits), et fin d'effet par endpoint (ms,
 // 0 = aucun) : la pile n'envoie jamais de STOP apres un effet (lecon du Halo).
 static volatile uint32_t s_identifie;
-static volatile uint32_t s_effet_fin[LAMPES_MAX + 2];
+static volatile uint32_t s_effet_fin[PONT_EMPLACEMENTS + 2];
 
 // --- Abonnements : intervalle maximal plafonne (lecon du Halo : apres un
 // redemarrage du noeud, Apple ne se reabonne que quand cet intervalle expire).
@@ -76,7 +76,7 @@ static PlafondAbonnements s_plafond;
 // --- Rappels de la pile (tache CHIP : jamais bloquer)
 
 static int lampe_de(uint16_t ep) {
-  for (int i = 0; i < LAMPES_MAX; i++) {
+  for (int i = 0; i < PONT_EMPLACEMENTS; i++) {
     if (s_ep_lampe[i] == ep) return i;
   }
   return -1;
@@ -109,7 +109,7 @@ static esp_err_t rappel_identification(identification::callback_type_t type, uin
                                        uint8_t variante, void *priv) {
   (void)variante;
   (void)priv;
-  if (ep >= LAMPES_MAX + 2) return ESP_OK;
+  if (ep >= PONT_EMPLACEMENTS + 2) return ESP_OK;
   switch (type) {
     case identification::callback_type_t::START:
       s_identifie = s_identifie | (1u << ep);
@@ -205,7 +205,7 @@ esp_err_t pont_demarrer(const amaran_config_t *cfg, pont_ordre_cb_t ordre) {
 
   // Une lampe pontee par emplacement, toujours les deux : les numeros d'endpoint
   // (2 et 3) suivent l'ordre de creation et ne changent jamais (spec 6.1).
-  for (int i = 0; i < LAMPES_MAX; i++) {
+  for (int i = 0; i < PONT_EMPLACEMENTS; i++) {
     const amaran_lampe_t *l = &cfg->lampes[i];
     endpoint::bridged_node::config_t cfg_pontee;
     char *uid = cfg_pontee.bridged_device_basic_information.unique_id;
@@ -267,7 +267,7 @@ esp_err_t pont_demarrer(const amaran_config_t *cfg, pont_ordre_cb_t ordre) {
   }
   // Un emplacement sans lampe n'est jamais joignable. Les autres partent
   // joignables (spec 6.5) et se calent au premier etat lu.
-  for (int i = 0; i < LAMPES_MAX; i++) {
+  for (int i = 0; i < PONT_EMPLACEMENTS; i++) {
     if (!cfg->lampes[i].adresse) pont_publier(i, NULL, false);
   }
   return ESP_OK;
@@ -276,7 +276,7 @@ esp_err_t pont_demarrer(const amaran_config_t *cfg, pont_ordre_cb_t ordre) {
 void pont_publier(int lampe, const lampe_etat_t *etat, bool joignable) {
   // Si esp_matter::start() a echoue, app_main garde la console : la pile n'existe pas, et
   // attribute::report y prendrait le verrou et marquerait des attributs. Rien a publier.
-  if (lampe < 0 || lampe >= LAMPES_MAX || !s_ep_lampe[lampe] || !esp_matter::is_started()) return;
+  if (lampe < 0 || lampe >= PONT_EMPLACEMENTS || !s_ep_lampe[lampe] || !esp_matter::is_started()) return;
   const uint16_t ep = s_ep_lampe[lampe];
   esp_matter_attr_val_t v = esp_matter_bool(joignable);
   attribute::report(ep, BridgedDeviceBasicInformation::Id, BridgedDeviceBasicInformation::Attributes::Reachable::Id,
@@ -311,7 +311,7 @@ void pont_desappairer(void) {
 bool pont_identifie(void) {
   if (s_identifie) return true;
   const uint32_t t = (uint32_t)(esp_timer_get_time() / 1000);
-  for (int ep = 0; ep < LAMPES_MAX + 2; ep++) {
+  for (int ep = 0; ep < PONT_EMPLACEMENTS + 2; ep++) {
     if (statusled::effectPending(s_effet_fin[ep], t)) return true;
   }
   return false;
@@ -362,5 +362,5 @@ void pont_afficher(void) {
   }
   printf("  identite        : %s, %s, n/s %s\n", fabricant, produit, serie);
   printf("  version         : %s\n", esp_app_get_description()->version);
-  for (int i = 0; i < LAMPES_MAX; i++) printf("  EP%u             : %s\n", (unsigned)s_ep_lampe[i], s_nom_lampe[i]);
+  for (int i = 0; i < PONT_EMPLACEMENTS; i++) printf("  EP%u             : %s\n", (unsigned)s_ep_lampe[i], s_nom_lampe[i]);
 }

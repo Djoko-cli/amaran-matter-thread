@@ -14,8 +14,8 @@
 extern "C" {
 #endif
 
-#define LAMPES_MAX 2
-#define LAMPES_GROUPE 0xC000               // groupe « All » : les deux lampes repondent (R5)
+#define LAMPES_CAPACITE 16                // lampes au plus (spec N lampes 4 : LISTE_CAPACITE)
+#define LAMPES_GROUPE 0xC000               // groupe « All » : toutes les lampes repondent (R5)
 #define LAMPES_RELEVE_DEFAUT_MS 2000u      // relecture periodique (spec 5.7 ; R4 : aucun etat spontane ; 2 s depuis le 03/10)
 #define LAMPES_RELEVE_MIN_MS 1000u
 #define LAMPES_RELEVE_MAX_MS 60000u
@@ -30,6 +30,11 @@ extern "C" {
 #define LAMPES_PAS_INTENSITE 10            // une 60d ne garde que le pour cent entier (banc C : 433 relu 430)
 #define LAMPES_INTENSITE_RALLUMAGE 400u    // rallumer une lampe noire jamais vue allumee : 40 %, comme la lampe
                                            // d'elle-meme apres une coupure (banc R4)
+// Alerte de relectures manquees (spec N lampes 8) : part des relectures repondues
+// sur une fenetre glissante de 10 tranches d'une minute, sous le seuil de la regle 5.8.
+#define LAMPES_ALERTE_TRANCHE_MS 60000u
+#define LAMPES_ALERTE_TRANCHES 10u
+#define LAMPES_ALERTE_SEUIL_PC 95u
 
 typedef struct {
   bool marche;
@@ -50,6 +55,10 @@ typedef struct {
   // intensite 0 : aucune encore, le niveau de Matter reste ce qu'il est.
   void (*publier)(void *ctx, int lampe, const lampe_etat_t *etat, bool joignable);
   void (*signaler)(void *ctx, int lampe, lampes_signal_t signal);
+  // Relectures manquees : manque vrai quand la part des relectures repondues sur 10 min
+  // passe sous LAMPES_ALERTE_SEUIL_PC, faux quand elle y revient ; pour_cent : cette
+  // part, arrondie. Une seule fois par passage. Peut etre NULL.
+  void (*alerter)(void *ctx, int lampe, bool manque, uint8_t pour_cent);
   void *ctx;
 } lampes_sorties_t;
 
@@ -63,6 +72,7 @@ typedef enum {
 typedef struct {
   uint16_t adresse;
   // Etat lu
+  bool entendue;                 // une trame de la lampe depuis le demarrage (lue ou non)
   bool connu;                    // un etat a ete lu depuis le demarrage
   lampe_etat_t lu;
   uint16_t memoire;              // derniere intensite non nulle lue (0 : aucune depuis le demarrage)
@@ -71,6 +81,10 @@ typedef struct {
   uint8_t releves_sans_reponse;
   bool repondu;                  // une trame depuis la derniere relecture
   uint32_t releves_repondues;    // relectures suivies d'une reponse (banc C, regle 5.8)
+  bool releve_en_attente;        // une relecture est partie, son issue n'est pas encore comptee
+  uint16_t fen_releves[LAMPES_ALERTE_TRANCHES];   // relectures par tranche d'une minute
+  uint16_t fen_repondues[LAMPES_ALERTE_TRANCHES];
+  bool alerte;                   // relectures manquees signalees
   // Consigne : seuls les champs marques comptent
   bool veut_marche, veut_intensite;
   lampe_etat_t consigne;
@@ -87,7 +101,7 @@ typedef struct {
 } lampe_t;
 
 typedef struct {
-  lampe_t lampes[LAMPES_MAX];
+  lampe_t lampes[LAMPES_CAPACITE];
   int n;
   bool mesh_pret;
   uint32_t periode_ms;
@@ -96,6 +110,9 @@ typedef struct {
   uint32_t ordres, confirmes, abandons, releves, trames_recues;
   uint32_t delai_total_ms, delai_max_ms;  // ordre -> confirmation (banc C, regle 5.8 : 1 s)
   uint32_t lents;                         // confirmations en plus d'une seconde
+  uint8_t fen_tranche;                    // tranche courante (0..LAMPES_ALERTE_TRANCHES-1)
+  uint8_t fen_pleines;                    // tranches achevees, jusqu'a LAMPES_ALERTE_TRANCHES
+  uint32_t fen_echeance_ms;               // fin de la tranche courante
 } lampes_t;
 
 void lampes_init(lampes_t *l, const uint16_t adresses[], int n, const lampes_sorties_t *sorties,
@@ -116,6 +133,12 @@ void lampes_ordre(lampes_t *l, int lampe, const bool *marche, const uint16_t *in
 void lampes_trame_recue(lampes_t *l, uint16_t src, const uint8_t trame[TELINK_TAILLE], uint32_t maintenant_ms);
 // A appeler souvent (toutes les 50 ms) : echeances des ordres et relecture.
 void lampes_tic(lampes_t *l, uint32_t maintenant_ms);
+// Republie ce que Matter doit montrer de la lampe, meme inchange : son endpoint vient
+// d'etre cree (premiere reponse, ou `afficher`).
+void lampes_forcer_publication(lampes_t *l, int lampe);
+// Part des relectures repondues sur la fenetre de 10 min, en pour cent arrondi ;
+// -1 si aucune relecture n'y est encore comptee.
+int lampes_part_repondue(const lampes_t *l, int lampe);
 
 // Conversions lineaires (spec 6.2), arrondi au plus proche, demi vers le haut.
 uint16_t lampes_niveau_vers_intensite(uint8_t niveau);     // 1..254 -> 0..1000

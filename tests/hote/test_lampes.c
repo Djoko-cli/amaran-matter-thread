@@ -29,12 +29,20 @@ typedef struct {
   lampes_signal_t s;
 } signal_t;
 
+typedef struct {
+  int lampe;
+  bool manque;
+  uint8_t pour_cent;
+} alerte_t;
+
 static envoi_t g_envois[512];
 static int g_nb_envois;
 static publication_t g_pubs[128];
 static int g_nb_pubs;
 static signal_t g_sigs[64];
 static int g_nb_sigs;
+static alerte_t g_alertes[16];
+static int g_nb_alertes;
 static bool g_refuser;
 
 #define NB_ELEMENTS(tableau) ((int)(sizeof(tableau) / sizeof((tableau)[0])))
@@ -83,8 +91,20 @@ static void f_signaler(void *ctx, int lampe, lampes_signal_t s) {
   g_nb_sigs++;
 }
 
+static void f_alerter(void *ctx, int lampe, bool manque, uint8_t pour_cent) {
+  (void)ctx;
+  if (g_nb_alertes >= NB_ELEMENTS(g_alertes)) {
+    debordement("g_alertes");
+    return;
+  }
+  g_alertes[g_nb_alertes].lampe = lampe;
+  g_alertes[g_nb_alertes].manque = manque;
+  g_alertes[g_nb_alertes].pour_cent = pour_cent;
+  g_nb_alertes++;
+}
+
 static void oublier_sorties(void) {
-  g_nb_envois = g_nb_pubs = g_nb_sigs = 0;
+  g_nb_envois = g_nb_pubs = g_nb_sigs = g_nb_alertes = 0;
   g_refuser = false;
 }
 
@@ -95,7 +115,7 @@ static lampes_t L;
 static uint32_t T;  // horloge simulee
 
 static void demarrer(uint32_t t0, bool pret) {
-  const lampes_sorties_t s = {f_envoyer, f_publier, f_signaler, NULL};
+  const lampes_sorties_t s = {f_envoyer, f_publier, f_signaler, f_alerter, NULL};
   T = t0;
   lampes_init(&L, ADR, 2, &s, T);
   if (pret) lampes_mesh_pret(&L, true, T);
@@ -218,7 +238,7 @@ static void test_conversion(void) {
 }
 
 static void test_demarrage_relit_aussitot(void) {
-  const lampes_sorties_t s = {f_envoyer, f_publier, f_signaler, NULL};
+  const lampes_sorties_t s = {f_envoyer, f_publier, f_signaler, f_alerter, NULL};
   oublier_sorties();
   T = 1000;
   lampes_init(&L, ADR, 2, &s, T);
@@ -734,6 +754,128 @@ static void test_on_sur_lampe_jamais_lue(void) {
           "la seule trame de marche (%d trames)", g_nb_envois);
 }
 
+// --- Plan 3a : N lampes, lampe entendue, publication forcee, alerte de relectures
+
+static void test_capacite(void) {
+  uint16_t adresses[LAMPES_CAPACITE + 4];
+  for (int i = 0; i < LAMPES_CAPACITE + 4; i++) adresses[i] = (uint16_t)(0x0010 + i);
+  const lampes_sorties_t s = {f_envoyer, f_publier, f_signaler, f_alerter, NULL};
+  T = 0;
+  lampes_init(&L, adresses, LAMPES_CAPACITE + 4, &s, T);
+  VERIFIE(L.n == LAMPES_CAPACITE, "au plus LAMPES_CAPACITE lampes (%d)", L.n);
+  lampes_mesh_pret(&L, true, T);
+  oublier_sorties();
+  lampes_tic(&L, T);
+  VERIFIE(compter(LAMPES_GROUPE, TELINK_CMD_ETAT) == 1, "une seule demande au groupe, pour toutes les lampes");
+  recevoir((uint16_t)(0x0010 + LAMPES_CAPACITE - 1), true, 500);
+  VERIFIE(g_nb_pubs == 1 && g_pubs[0].lampe == LAMPES_CAPACITE - 1 && g_pubs[0].e.intensite == 500,
+          "la derniere lampe est lue et publiee");
+}
+
+// Toute trame prouve que la lampe est la, meme une trame que l'on ne lit pas.
+static void test_entendue(void) {
+  demarrer(0, true);
+  VERIFIE(!L.lampes[0].entendue && !L.lampes[1].entendue, "personne d'entendu au demarrage");
+  const uint8_t alim[TELINK_TAILLE] = {0x86, 0, 0, 0, 0, 0, 0, 0x31, 0x4B, 0x0A};  // releve au banc
+  lampes_trame_recue(&L, 0x0002, alim, T);
+  VERIFIE(L.lampes[0].entendue && !L.lampes[0].connu, "entendue, mais pas d'etat lu");
+  VERIFIE(!L.lampes[1].entendue, "l'autre lampe, non");
+}
+
+// L'endpoint d'une lampe vient d'etre cree : ce qu'il doit montrer part, meme inchange.
+static void test_forcer_publication(void) {
+  demarrer(0, true);
+  recevoir(0x0004, true, 300);
+  oublier_sorties();
+  recevoir(0x0004, true, 300);
+  VERIFIE(g_nb_pubs == 0, "inchange : rien de publie");
+  lampes_forcer_publication(&L, 1);
+  VERIFIE(g_nb_pubs == 1 && g_pubs[0].lampe == 1 && g_pubs[0].connu && g_pubs[0].e.marche &&
+              g_pubs[0].e.intensite == 300 && g_pubs[0].joignable,
+          "republiee telle quelle");
+  lampes_forcer_publication(&L, 7);  // hors de la liste : rien
+  VERIFIE(g_nb_pubs == 1, "lampe hors de la liste ignoree");
+}
+
+// Avance de ms en repondant aux relectures : la lampe k manque une relecture sur
+// manque_une_sur[k] (0 : jamais ; 1 : toutes, elle se tait).
+static int g_releves_vues;
+static void avancer_en_repondant(uint32_t ms, const int manque_une_sur[2]) {
+  const uint32_t fin = T + ms;
+  while (T != fin) {
+    T += 50;
+    const int avant = compter(LAMPES_GROUPE, TELINK_CMD_ETAT);
+    lampes_tic(&L, T);
+    if (compter(LAMPES_GROUPE, TELINK_CMD_ETAT) == avant) continue;
+    g_releves_vues++;
+    for (int k = 0; k < 2; k++) {
+      const int m = manque_une_sur[k];
+      if (m == 1 || (m > 1 && g_releves_vues % m == 0)) continue;
+      recevoir(ADR[k], true, 500);
+    }
+    g_nb_envois = 0;  // dix minutes de relectures depasseraient le tableau
+  }
+}
+
+static void test_alerte_relectures_manquees(void) {
+  demarrer(0, true);
+  g_releves_vues = 0;
+  const int moitie[2] = {0, 2};  // lampe 2 : une relecture sur deux sans reponse
+  avancer_en_repondant(9 * 60000, moitie);
+  VERIFIE(g_nb_alertes == 0, "rien avant dix minutes completes");
+  avancer_en_repondant(60000 + 50, moitie);
+  VERIFIE(g_nb_alertes == 1 && g_alertes[0].lampe == 1 && g_alertes[0].manque && g_alertes[0].pour_cent == 50,
+          "lampe 2 : relectures manquees, 50 %% (%d alertes)", g_nb_alertes);
+  VERIFIE(lampes_part_repondue(&L, 0) == 100 && lampes_part_repondue(&L, 1) == 50, "parts sur 10 min");
+  avancer_en_repondant(5 * 60000, moitie);
+  VERIFIE(g_nb_alertes == 1, "pas de repetition tant qu'elle reste dessous");
+
+  const int toutes[2] = {0, 0};
+  avancer_en_repondant(11 * 60000, toutes);
+  VERIFIE(g_nb_alertes == 2 && g_alertes[1].lampe == 1 && !g_alertes[1].manque && g_alertes[1].pour_cent >= 95,
+          "lampe 2 revenue au-dessus de 95 %% (%d alertes)", g_nb_alertes);
+  avancer_en_repondant(5 * 60000, toutes);
+  VERIFIE(g_nb_alertes == 2, "pas de repetition au-dessus");
+}
+
+// Une relecture manquee sur vingt-cinq (96 %) : au-dessus du seuil, pas d'alerte ;
+// une sur dix (90 %) : alerte.
+static void test_alerte_au_seuil(void) {
+  demarrer(0, true);
+  g_releves_vues = 0;
+  const int une_sur_vingt_cinq[2] = {0, 25};
+  avancer_en_repondant(10 * 60000 + 50, une_sur_vingt_cinq);
+  VERIFIE(g_nb_alertes == 0, "96 %% : pas d'alerte");
+  demarrer(0, true);
+  g_releves_vues = 0;
+  const int une_sur_dix[2] = {0, 10};
+  avancer_en_repondant(10 * 60000 + 50, une_sur_dix);
+  VERIFIE(g_nb_alertes == 1 && g_alertes[0].manque && g_alertes[0].pour_cent == 90, "90 %% : alerte");
+}
+
+// Une lampe muette (« Pas de reponse ») n'est pas concernee : c'est une autre alerte.
+static void test_alerte_pas_pour_une_muette(void) {
+  demarrer(0, true);
+  g_releves_vues = 0;
+  const int muette[2] = {0, 1};
+  avancer_en_repondant(12 * 60000, muette);
+  VERIFIE(!L.lampes[1].joignable, "lampe 2 muette");
+  VERIFIE(g_nb_alertes == 0, "aucune alerte de relectures pour elle");
+}
+
+static void test_alerter_peut_manquer(void) {
+  const lampes_sorties_t s = {f_envoyer, f_publier, f_signaler, NULL, NULL};
+  T = 0;
+  lampes_init(&L, ADR, 2, &s, T);
+  lampes_mesh_pret(&L, true, T);
+  lampes_tic(&L, T);
+  oublier_sorties();
+  g_releves_vues = 0;
+  const int moitie[2] = {0, 2};
+  avancer_en_repondant(11 * 60000, moitie);
+  VERIFIE(L.lampes[1].alerte, "l'alerte est notee, sans sortie pour la signaler");
+}
+
 int main(void) {
   test_conversion();
   test_demarrage_relit_aussitot();
@@ -767,5 +909,12 @@ int main(void) {
   test_niveau_seul_sur_une_noire();
   test_on_sur_allumee_n_emet_pas();
   test_on_sur_lampe_jamais_lue();
+  test_capacite();
+  test_entendue();
+  test_forcer_publication();
+  test_alerte_relectures_manquees();
+  test_alerte_au_seuil();
+  test_alerte_pas_pour_une_muette();
+  test_alerter_peut_manquer();
   return bilan("lampes");
 }

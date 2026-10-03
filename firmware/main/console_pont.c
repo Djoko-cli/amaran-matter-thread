@@ -64,8 +64,8 @@ static int cmd_lampes(int argc, char **argv) {
 
 static int cmd_lampe(int argc, char **argv) {
   uint32_t n = 0;
-  if (argc < 3 || !texte_lire_nombre(argv[1], &n) || n < 1 || n > LAMPES_MAX || !s_cfg->lampes[n - 1].adresse) {
-    printf("erreur : lampe <1-%d> on|off|niveau <0-1000>|releve (lampe declaree ?)\n", LAMPES_MAX);
+  if (argc < 3 || !texte_lire_nombre(argv[1], &n) || n < 1 || n > PONT_EMPLACEMENTS || !s_cfg->lampes[n - 1].adresse) {
+    printf("erreur : lampe <1-%d> on|off|niveau <0-1000>|releve (lampe declaree ?)\n", PONT_EMPLACEMENTS);
     return 1;
   }
   const int i = (int)n - 1;

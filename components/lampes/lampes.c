@@ -24,7 +24,7 @@ uint8_t lampes_intensite_vers_niveau(uint16_t intensite) {
 void lampes_init(lampes_t *l, const uint16_t adresses[], int n, const lampes_sorties_t *sorties,
                  uint32_t maintenant_ms) {
   memset(l, 0, sizeof(*l));
-  l->n = n < 0 ? 0 : (n > LAMPES_MAX ? LAMPES_MAX : n);
+  l->n = n < 0 ? 0 : (n > LAMPES_CAPACITE ? LAMPES_CAPACITE : n);
   for (int i = 0; i < l->n; i++) {
     l->lampes[i].adresse = adresses[i];
     l->lampes[i].joignable = true;         // 6.5 : pas de « Pas de reponse » fugace au demarrage
@@ -33,6 +33,7 @@ void lampes_init(lampes_t *l, const uint16_t adresses[], int n, const lampes_sor
   l->sorties = *sorties;
   l->periode_ms = LAMPES_RELEVE_DEFAUT_MS;
   l->prochaine_releve_ms = maintenant_ms;  // premiere relecture aussitot (6.5)
+  l->fen_echeance_ms = maintenant_ms + LAMPES_ALERTE_TRANCHE_MS;
 }
 
 void lampes_regler_releve(lampes_t *l, uint32_t periode_ms) {
@@ -207,6 +208,7 @@ void lampes_trame_recue(lampes_t *l, uint16_t src, const uint8_t trame[TELINK_TA
   l->trames_recues++;
   // Toute trame de la lampe prouve qu'elle vit, y compris celles que l'on ne lit
   // pas (0x0A, reponses aux questions d'amaran Desktop).
+  p->entendue = true;
   p->reponse_ms = maintenant_ms;
   p->releves_sans_reponse = 0;
   p->joignable = true;
@@ -233,7 +235,62 @@ void lampes_trame_recue(lampes_t *l, uint16_t src, const uint8_t trame[TELINK_TA
   }
 }
 
+// Relectures et reponses de la fenetre de 10 min.
+static void fenetre_sommes(const lampe_t *p, uint32_t *releves, uint32_t *repondues) {
+  *releves = *repondues = 0;
+  for (unsigned t = 0; t < LAMPES_ALERTE_TRANCHES; t++) {
+    *releves += p->fen_releves[t];
+    *repondues += p->fen_repondues[t];
+  }
+}
+
+static uint8_t pour_cent(uint32_t part, uint32_t total) { return (uint8_t)((part * 100u + total / 2u) / total); }
+
+// Issue de la relecture precedente, dans la tranche courante.
+static void compter_releve(const lampes_t *l, lampe_t *p) {
+  if (p->fen_releves[l->fen_tranche] < UINT16_MAX) p->fen_releves[l->fen_tranche]++;
+  if (p->repondu && p->fen_repondues[l->fen_tranche] < UINT16_MAX) p->fen_repondues[l->fen_tranche]++;
+}
+
+// Fin d'une tranche d'une minute : une fois 10 tranches achevees, verdict sur les 10
+// dernieres minutes (alerte, spec N lampes 8) ; puis la plus ancienne repart a zero.
+static void tourner_fenetre(lampes_t *l, uint32_t maintenant_ms) {
+  if (l->fen_pleines < LAMPES_ALERTE_TRANCHES) l->fen_pleines++;
+  if (l->fen_pleines >= LAMPES_ALERTE_TRANCHES) {
+    for (int i = 0; i < l->n; i++) {
+      lampe_t *p = &l->lampes[i];
+      if (!p->joignable) continue;  // une lampe muette releve de 7.2, pas de cette alerte
+      uint32_t releves, repondues;
+      fenetre_sommes(p, &releves, &repondues);
+      if (!releves) continue;
+      const bool manque = repondues * 100u < LAMPES_ALERTE_SEUIL_PC * releves;
+      if (manque == p->alerte) continue;
+      p->alerte = manque;
+      if (l->sorties.alerter) l->sorties.alerter(l->sorties.ctx, i, manque, pour_cent(repondues, releves));
+    }
+  }
+  l->fen_tranche = (uint8_t)((l->fen_tranche + 1u) % LAMPES_ALERTE_TRANCHES);
+  for (int i = 0; i < l->n; i++) {
+    l->lampes[i].fen_releves[l->fen_tranche] = 0;
+    l->lampes[i].fen_repondues[l->fen_tranche] = 0;
+  }
+  l->fen_echeance_ms = maintenant_ms + LAMPES_ALERTE_TRANCHE_MS;
+}
+
+void lampes_forcer_publication(lampes_t *l, int lampe) {
+  if (lampe < 0 || lampe >= l->n) return;
+  montrer(l, lampe, true);
+}
+
+int lampes_part_repondue(const lampes_t *l, int lampe) {
+  if (lampe < 0 || lampe >= l->n) return -1;
+  uint32_t releves, repondues;
+  fenetre_sommes(&l->lampes[lampe], &releves, &repondues);
+  return releves ? (int)pour_cent(repondues, releves) : -1;
+}
+
 void lampes_tic(lampes_t *l, uint32_t maintenant_ms) {
+  if (atteint(maintenant_ms, l->fen_echeance_ms)) tourner_fenetre(l, maintenant_ms);
   for (int i = 0; i < l->n; i++) {
     lampe_t *p = &l->lampes[i];
     if (p->phase == LAMPE_TRAMES) {
@@ -274,7 +331,13 @@ void lampes_tic(lampes_t *l, uint32_t maintenant_ms) {
       if (p->phase == LAMPE_REPOS) montrer(l, i, false);
     }
     if (p->releves_sans_reponse < 255) p->releves_sans_reponse++;
-    if (l->mesh_pret) p->repondu = false;  // la relecture qui part attend sa reponse
+    if (l->mesh_pret) {
+      // Issue de la relecture precedente, comptee si la lampe est joignable (alerte, spec
+      // N lampes 8), puis la relecture qui part attend sa reponse.
+      if (p->releve_en_attente && p->joignable) compter_releve(l, p);
+      p->repondu = false;
+      p->releve_en_attente = true;
+    }
   }
   // Mesh pas pret : rien ne part, mais les periodes comptent, et les lampes
   // deviennent muettes au bout de trois (7.3).
