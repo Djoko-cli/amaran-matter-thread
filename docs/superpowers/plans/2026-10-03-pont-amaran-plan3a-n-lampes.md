@@ -4572,7 +4572,8 @@ Expected, dans le journal :
 - `lampe 1 dans Maison : EP2, amaran COB 60d` et `lampe 2 dans Maison : EP3, amaran COB 60d` ;
 - `matter` : 2 fabriques, `Thread : child (attache)`, `EP2 : <nom de la lampe 1>`, `EP3 : <nom de la lampe 2>` ;
 - `lampes` : `lampe 1 : <nom> [EP2] ...` et `lampe 2 : <nom> [EP3] ...`, joignables ;
-- `taches` : `lampes` au-dessus de 2 Ko libres (6 Ko de pile), aucune tâche sous 512 o.
+- `taches` : `lampes` au-dessus de 2 Ko libres (6 Ko de pile), aucune tâche sous 512 o ;
+- la ligne `pile de main : <N> o libres au plus bas` : au moins 1 Ko. La pile de main fait 6 Ko depuis le correctif de la Task 4 : les expositions du démarrage y tournent.
 
 Djoko regarde Maison : les deux tuiles, leur pièce, son groupe d'accessoires et ses automatisations sont **identiques**. Puis T1 rapide : allumer, régler, éteindre chaque lampe depuis Maison.
 
@@ -4591,6 +4592,19 @@ Expected : `ok lampe 2 dans Maison (EP3)` ; `matter` : `EP3`.
 Djoko relève, pour la lampe 2 revenue : la pièce, le groupe d'accessoires, la scène de test, l'automatisation de test. Pour chacun : gardé ou perdu. **C'est ce relevé qui décide la Task 8** :
 - tout gardé : la Task 8 se fera ;
 - sinon : la Task 8 est sautée, et Djoko remet la lampe 2 dans sa pièce et son groupe.
+
+Puis la lampe 1, qui n'est pas le dernier endpoint (relecture de la Task 4 : les grappes de chaque lampe sont rangées par position dans la liste des endpoints) :
+
+Run: `python3 outils/console.py --port <port> "mesh lampe 1 masquer" "@10" "lampes"`
+Expected : `ok lampe 1 retiree de Maison (...)`. Djoko pilote la lampe 2 depuis Maison (allumer, régler, éteindre, rallumer) : elle obéit.
+
+Run: `python3 outils/console.py --port <port> "mesh lampe 1 afficher" "@10" "lampes"`
+Expected : `ok lampe 1 dans Maison (EP2)`. Djoko pilote les deux lampes : chacune obéit, sans effet sur l'autre.
+
+Enfin, afficher puis masquer sans attendre (une écriture différée du niveau est encore en cours) :
+
+Run: `python3 outils/console.py --port <port> "mesh lampe 2 masquer" "mesh lampe 2 afficher" "mesh lampe 2 masquer" "mesh lampe 2 afficher" "@10" "cause" "lampes"`
+Expected : quatre `ok`, et la carte ne redémarre pas : aucun journal de démarrage dans la capture, et `cause` ne dit ni panique ni chien de garde ; `lampes` : `lampe 2 : <nom> [EP3] ...`.
 
 - [ ] **Step 4 : banc 3, une lampe jamais vue.**
 
@@ -4875,8 +4889,8 @@ static void cacher_ou_rendre(uint32_t t) {
 ````c
     xSemaphoreTake(s_verrou, portMAX_DELAY);
     exposer_les_nouvelles();
+    publier_les_apparues();
     lampes_mesh_pret(&s_lampes, mesh_pret(), maintenant_ms());
-    lampes_tic(&s_lampes, maintenant_ms());
 ````
 
 par :
@@ -4885,8 +4899,8 @@ par :
     xSemaphoreTake(s_verrou, portMAX_DELAY);
     exposer_les_nouvelles();
     cacher_ou_rendre(maintenant_ms());
+    publier_les_apparues();
     lampes_mesh_pret(&s_lampes, mesh_pret(), maintenant_ms());
-    lampes_tic(&s_lampes, maintenant_ms());
 ````
 
 `firmware/main/tache_lampes.c`, bloc 4 sur 5. Remplacer :
@@ -4911,8 +4925,11 @@ par :
 `firmware/main/tache_lampes.c`, bloc 5 sur 5. Remplacer :
 
 ````c
-  esp_err_t err = config_maj_drapeaux(a->mac, a->drapeaux);
-  if (err == ESP_OK) err = afficher ? exposer(lampe) : pont_masquer(lampe);
+  esp_err_t err = config_maj_drapeaux(copie.mac, copie.drapeaux);
+  if (err == ESP_OK) {
+    s_liste.lampes[lampe] = copie;
+    err = afficher ? exposer(lampe) : pont_masquer(lampe);
+  }
   xSemaphoreGive(s_verrou);
   return err;
 ````
@@ -4920,8 +4937,11 @@ par :
 par :
 
 ````c
-  esp_err_t err = config_maj_drapeaux(a->mac, a->drapeaux);
-  if (err == ESP_OK) err = afficher ? exposer(lampe) : pont_masquer(lampe);
+  esp_err_t err = config_maj_drapeaux(copie.mac, copie.drapeaux);
+  if (err == ESP_OK) {
+    s_liste.lampes[lampe] = copie;
+    err = afficher ? exposer(lampe) : pont_masquer(lampe);
+  }
   if (err == ESP_OK) s_cachee[lampe] = false;  // un geste explicite prime sur l'option
   xSemaphoreGive(s_verrou);
   return err;
@@ -4930,9 +4950,11 @@ par :
 esp_err_t tache_lampes_auto(int lampe, bool oui) {
   if (!s_verrou || lampe < 0 || lampe >= s_liste.n) return ESP_ERR_INVALID_ARG;
   xSemaphoreTake(s_verrou, portMAX_DELAY);
-  liste_lampe_t *a = &s_liste.lampes[lampe];
-  a->drapeaux = (uint8_t)(oui ? (a->drapeaux | LISTE_AUTO) : (a->drapeaux & ~LISTE_AUTO));
-  esp_err_t err = config_maj_drapeaux(a->mac, a->drapeaux);
+  // Sur une copie, comme tache_lampes_exposition : les drapeaux apres la NVS.
+  liste_lampe_t copie = s_liste.lampes[lampe];
+  copie.drapeaux = (uint8_t)(oui ? (copie.drapeaux | LISTE_AUTO) : (copie.drapeaux & ~LISTE_AUTO));
+  esp_err_t err = config_maj_drapeaux(copie.mac, copie.drapeaux);
+  if (err == ESP_OK) s_liste.lampes[lampe] = copie;
   if (err == ESP_OK && !oui && s_cachee[lampe]) {  // option retiree : la lampe revient dans Maison
     err = exposer(lampe);
     if (err == ESP_OK) s_cachee[lampe] = false;
