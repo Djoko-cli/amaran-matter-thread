@@ -5,7 +5,7 @@ cd "$(dirname "$0")/../.."
 SORTIE="${TMPDIR:-/tmp}/amaran-tests-hote"
 mkdir -p "$SORTIE"
 CC="${CC:-clang}"
-CFLAGS="-std=c11 -Wall -Wextra -Werror -Icomponents/telink/include -Icomponents/mesh/include -Icomponents/mesh -Icomponents/lampes/include -Itests/hote"
+CFLAGS="-std=c11 -Wall -Wextra -Werror -Icomponents/telink/include -Icomponents/mesh/include -Icomponents/mesh -Icomponents/lampes/include -Icomponents/liste/include -Itests/hote"
 
 compiler_et_lancer() {
   nom="$1"
@@ -21,6 +21,7 @@ compiler_et_lancer test_crochet_tri components/telink/telink.c components/mesh/t
 compiler_et_lancer test_plancher components/mesh/plancher.c tests/hote/test_plancher.c
 compiler_et_lancer test_lampes components/telink/telink.c components/lampes/lampes.c tests/hote/test_lampes.c
 compiler_et_lancer test_diagnostic components/mesh/diagnostic.c tests/hote/test_diagnostic.c
+compiler_et_lancer test_liste components/liste/liste.c components/liste/catalogue.c tests/hote/test_liste.c
 
 # Socle repris du Halo : C++17, comme ses tests d'origine.
 "${CXX:-clang++}" -std=c++17 -Wall -Wextra -Werror -Icomponents/socle/include components/socle/status_led.cpp \
