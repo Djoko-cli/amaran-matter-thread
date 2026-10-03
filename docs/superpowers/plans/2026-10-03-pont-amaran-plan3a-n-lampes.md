@@ -3247,10 +3247,11 @@ par :
 static void sortie_alerter(void *ctx, int lampe, bool manque, uint8_t pour_cent) {
   (void)ctx;
   if (manque) {
-    printf("!! lampe %d : relectures manquees (%u %% sur 10 min) : allonger la periode (mesh releve)\n", lampe + 1,
-           (unsigned)pour_cent);
+    printf("!! lampe %d : relectures manquees, %u %% repondues sur 10 min : allonger la periode (mesh releve)\n",
+           lampe + 1, (unsigned)pour_cent);
   } else {
-    printf("[lampes] lampe %d : relectures de nouveau a %u %% sur 10 min\n", lampe + 1, (unsigned)pour_cent);
+    printf("[lampes] lampe %d : relectures de nouveau repondues a %u %% sur 10 min\n", lampe + 1,
+           (unsigned)pour_cent);
   }
 }
 

@@ -227,9 +227,13 @@ vérifier au banc avec la vraie lampe.
 - **Alerte de relectures manquées.** Pour chaque lampe, le pont suit la part des
   relectures répondues sur une fenêtre glissante de 10 minutes. Sous 95 % (le
   seuil de la règle 5.8), la console affiche
-  `!! lampe <n> : relectures manquees (<p> % sur 10 min) : allonger la periode (mesh releve)`,
-  une fois, puis de nouveau seulement après être repassée au-dessus. Une lampe
-  muette (« Pas de réponse », 7.2) n'est pas concernée : c'est une autre alerte.
+  `!! lampe <n> : relectures manquees, <p> % repondues sur 10 min : allonger la periode (mesh releve)`
+  (`<p>` tronqué : 94 au plus sous le seuil), une fois, puis de nouveau
+  seulement après être repassée au-dessus. Le verdict demande au moins la
+  moitié des relectures attendues sur la fenêtre : après une coupure du Mesh,
+  ou au retour d'une lampe muette, il attend que la fenêtre se remplisse. Une
+  lampe muette (« Pas de réponse », 7.2) n'est pas concernée : c'est une autre
+  alerte.
 - Pas d'adaptation automatique de la période tant qu'on n'en a pas vu le besoin
   avec de vraies lampes.
 
@@ -292,7 +296,8 @@ TDD, comme aux plans 1 et 2, dans `tests/hote/` :
   simulé ;
 - `lampes` à N : relecture de groupe, joignabilité par lampe, ordres sur
   plusieurs lampes, et l'alerte sous 95 % sur 10 minutes (entrée, sortie, pas de
-  répétition) ;
+  répétition, 95 % pile sans alerte, pas de verdict sur un échantillon trop
+  petit) ;
 - `cles_amaran.py` : N lampes, colonne `code`, refus au-delà de la capacité,
   contrôle de `composition_data` (base SQLite factice).
 
