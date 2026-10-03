@@ -1,6 +1,8 @@
 // Cote Matter du pont (voir pont_matter.h). Modeles : l'exemple light
-// d'esp-matter (demarrage, Thread), le pont Halo (plafond des abonnements,
-// identite, fenetre rouverte quand la derniere fabrique part).
+// d'esp-matter (demarrage, Thread), ses exemples de pont (endpoints pontes recrees
+// juste apres esp_matter::start, avec leur numero, puis actives), le pont Halo
+// (plafond des abonnements, identite, fenetre rouverte quand la derniere fabrique
+// part).
 #include "pont_matter.h"
 
 #include <inttypes.h>
@@ -25,6 +27,7 @@
 #include <platform/DeviceInstanceInfoProvider.h>
 #include <setup_payload/OnboardingCodesUtil.h>
 
+#include "catalogue.h"
 #include "mesh_amaran.h"
 #include "status_led.h"
 
@@ -33,20 +36,37 @@ using namespace chip::app::Clusters;
 
 static const char *TAG = "pont";
 
-static uint16_t s_ep_lampe[PONT_EMPLACEMENTS];  // EP2 et EP3 ; 0 = pas encore cree
-static char s_nom_lampe[PONT_EMPLACEMENTS][LISTE_NOM_MAX];
+// EP0 (noeud), EP1 (agregateur), puis une lampe par endpoint dynamique.
+static_assert(CONFIG_ESP_MATTER_MAX_DYNAMIC_ENDPOINT_COUNT >= LISTE_CAPACITE + 2,
+              "CONFIG_ESP_MATTER_MAX_DYNAMIC_ENDPOINT_COUNT : noeud, agregateur et LISTE_CAPACITE lampes");
+
+static node_t *s_noeud;
+static endpoint_t *s_agregateur;
+static uint16_t s_ep_lampe[LISTE_CAPACITE];  // numero d'endpoint ; 0 = lampe non exposee
+// Dernier numero de chaque lampe, garde quand elle est masquee : la liste de
+// l'appelant peut dater d'avant un renumerotage (desappairage complet).
+static uint16_t s_numero[LISTE_CAPACITE];
+static char s_nom_lampe[LISTE_CAPACITE][LISTE_NOM_MAX];
+// Exposer et masquer : une lampe a la fois (console, tache lampes, demarrage).
+static SemaphoreHandle_t s_verrou_exposition;
 static pont_ordre_cb_t s_ordre;
-static int64_t s_ordres_des_us;  // avant : valeurs posees par la pile au demarrage, pas des ordres
+// Avant cette echeance, ce qui arrive sur l'endpoint d'une lampe vient de la pile
+// (valeurs posees a sa creation), pas d'un controleur (lecon du Halo : 2 s).
+static int64_t s_ordres_des_us[LISTE_CAPACITE];
 static volatile bool s_ble_annonce;
 static volatile int s_role = OT_DEVICE_ROLE_DISABLED;
 // Fabriques, relues dans la tache CHIP (evenements, et apres start) : lues sans
 // le verrou de la pile depuis nos taches (spec 4.3).
 static volatile uint8_t s_fabriques;
 static volatile uint32_t s_abo_demandes, s_abo_plafonnes, s_abo_etablis, s_abo_termines;
-// Identify : endpoints en IdentifyTime (bits), et fin d'effet par endpoint (ms,
-// 0 = aucun) : la pile n'envoie jamais de STOP apres un effet (lecon du Halo).
+// Identify, par emplacement : 0 et 1 pour le noeud et l'agregateur, 2 + i pour la
+// lampe i (les numeros d'endpoint, eux, croissent sans fin). Emplacements en
+// IdentifyTime (bits), et fin d'effet (ms, 0 = aucun) : la pile n'envoie jamais de
+// STOP apres un effet (lecon du Halo).
+#define EMPLACEMENTS (LISTE_CAPACITE + 2)
+static_assert(EMPLACEMENTS <= 32, "s_identifie : un bit par emplacement");
 static volatile uint32_t s_identifie;
-static volatile uint32_t s_effet_fin[PONT_EMPLACEMENTS + 2];
+static volatile uint32_t s_effet_fin[EMPLACEMENTS];
 
 // --- Abonnements : intervalle maximal plafonne (lecon du Halo : apres un
 // redemarrage du noeud, Apple ne se reabonne que quand cet intervalle expire).
@@ -76,10 +96,17 @@ static PlafondAbonnements s_plafond;
 // --- Rappels de la pile (tache CHIP : jamais bloquer)
 
 static int lampe_de(uint16_t ep) {
-  for (int i = 0; i < PONT_EMPLACEMENTS; i++) {
+  if (ep < 2) return -1;
+  for (int i = 0; i < LISTE_CAPACITE; i++) {
     if (s_ep_lampe[i] == ep) return i;
   }
   return -1;
+}
+
+static int emplacement_de(uint16_t ep) {
+  if (ep < 2) return ep;
+  const int i = lampe_de(ep);
+  return i < 0 ? -1 : 2 + i;
 }
 
 // POST_UPDATE : la valeur est posee. Nos propres publications passent par
@@ -90,7 +117,7 @@ static esp_err_t rappel_attribut(attribute::callback_type_t type, uint16_t ep, u
   (void)priv;
   if (type != attribute::POST_UPDATE || !s_ordre) return ESP_OK;
   const int lampe = lampe_de(ep);
-  if (lampe < 0 || esp_timer_get_time() < s_ordres_des_us) return ESP_OK;
+  if (lampe < 0 || esp_timer_get_time() < s_ordres_des_us[lampe]) return ESP_OK;
   if (cluster == OnOff::Id && attr == OnOff::Attributes::OnOff::Id) {
     const bool marche = val->val.b;
     s_ordre(lampe, &marche, NULL);
@@ -109,16 +136,17 @@ static esp_err_t rappel_identification(identification::callback_type_t type, uin
                                        uint8_t variante, void *priv) {
   (void)variante;
   (void)priv;
-  if (ep >= PONT_EMPLACEMENTS + 2) return ESP_OK;
+  const int e = emplacement_de(ep);
+  if (e < 0) return ESP_OK;
   switch (type) {
     case identification::callback_type_t::START:
-      s_identifie = s_identifie | (1u << ep);
+      s_identifie = s_identifie | (1u << e);
       break;
     case identification::callback_type_t::STOP:
-      s_identifie = s_identifie & ~(1u << ep);
+      s_identifie = s_identifie & ~(1u << e);
       break;
     case identification::callback_type_t::EFFECT:
-      s_effet_fin[ep] = statusled::effectEnd(s_effet_fin[ep], effet, (uint32_t)(esp_timer_get_time() / 1000));
+      s_effet_fin[e] = statusled::effectEnd(s_effet_fin[e], effet, (uint32_t)(esp_timer_get_time() / 1000));
       break;
   }
   return ESP_OK;
@@ -183,61 +211,134 @@ static void ecrire_numero_de_serie(void) {
   nvs_close(h);
 }
 
+// --- Lampes dans Maison (spec N lampes 5 et 7)
+
+// Le type d'appareil que donne le catalogue. Seule la lampe a intensite variable
+// est realisee : un modele CCT ou couleur s'ajoutera ici, une fois verifie avec la
+// vraie lampe.
+static esp_err_t ajouter_type(endpoint_t *ep, const catalogue_modele_t *m) {
+  switch (m->type) {
+    case CATALOGUE_LAMPE_VARIABLE:
+    case CATALOGUE_LAMPE_TEMPERATURE:
+    case CATALOGUE_LAMPE_COULEUR:
+    default: {
+      endpoint::dimmable_light::config_t cfg_lampe;
+      // Defauts d'esp-matter a 0 : ils eteindraient les lampes, ou les baisseraient
+      // au minimum, a chaque demarrage. Nuls : rien ne change (spec 6.5).
+      cfg_lampe.on_off_lighting.start_up_on_off = nullptr;
+      cfg_lampe.level_control_lighting.start_up_current_level = nullptr;
+      return endpoint::dimmable_light::add(ep, &cfg_lampe);
+    }
+  }
+}
+
+esp_err_t pont_exposer(int lampe, const liste_lampe_t *l) {
+  if (lampe < 0 || lampe >= LISTE_CAPACITE || !l) return ESP_ERR_INVALID_ARG;
+  if (!esp_matter::is_started() || !s_verrou_exposition) return ESP_ERR_INVALID_STATE;
+  xSemaphoreTake(s_verrou_exposition, portMAX_DELAY);
+  if (s_ep_lampe[lampe]) {
+    xSemaphoreGive(s_verrou_exposition);
+    return ESP_OK;
+  }
+  const catalogue_modele_t *m = catalogue_trouver(l->code);
+  endpoint_t *ep = NULL;
+  bool pret = false;
+  {
+    lock::ScopedChipStackLock verrou(portMAX_DELAY);
+    endpoint::bridged_node::config_t cfg_pontee;
+    snprintf(cfg_pontee.bridged_device_basic_information.unique_id,
+             sizeof(cfg_pontee.bridged_device_basic_information.unique_id), "%02X%02X%02X%02X%02X%02X", l->mac[0],
+             l->mac[1], l->mac[2], l->mac[3], l->mac[4], l->mac[5]);
+    // Son numero s'il en a un, deja passe par le compteur d'esp-matter (resume) ;
+    // sinon, ou si ce compteur est reparti (desappairage complet), le suivant.
+    const uint16_t numero = s_numero[lampe] ? s_numero[lampe] : l->endpoint;
+    if (numero) ep = endpoint::bridged_node::resume(s_noeud, &cfg_pontee, ENDPOINT_FLAG_BRIDGE, numero, NULL);
+    if (!ep) ep = endpoint::bridged_node::create(s_noeud, &cfg_pontee, ENDPOINT_FLAG_BRIDGE, NULL);
+    if (ep) pret = ajouter_type(ep, m) == ESP_OK && endpoint::set_parent_endpoint(ep, s_agregateur) == ESP_OK;
+    if (pret) {
+      snprintf(s_nom_lampe[lampe], sizeof(s_nom_lampe[lampe]), "%s", l->nom);
+      cluster_t *pontee = cluster::get(ep, BridgedDeviceBasicInformation::Id);
+      if (pontee) {
+        // Sans NONVOLATILE (create_node_label le mettrait en NVS, et ce premier nom
+        // resterait) : le nom de la base prime a chaque demarrage.
+        attribute::create(pontee, BridgedDeviceBasicInformation::Attributes::NodeLabel::Id,
+                          ATTRIBUTE_FLAG_WRITABLE, esp_matter_char_str(s_nom_lampe[lampe], strlen(s_nom_lampe[lampe])),
+                          32);
+      }
+      // Les etats relus changent CurrentLevel souvent : ecriture en flash differee.
+      attribute::set_deferred_persistence(
+          attribute::get(endpoint::get_id(ep), LevelControl::Id, LevelControl::Attributes::CurrentLevel::Id));
+    }
+  }
+  if (!pret) {
+    if (ep) endpoint::destroy(s_noeud, ep);  // prend le verrou de la pile lui-meme
+    xSemaphoreGive(s_verrou_exposition);
+    ESP_LOGE(TAG, "lampe %d : endpoint non cree", lampe + 1);
+    return ESP_FAIL;
+  }
+  const uint16_t id = endpoint::get_id(ep);
+  s_ordres_des_us[lampe] = esp_timer_get_time() + 2000000;
+  // Prend le verrou de la pile : rappels d'init des clusters, liste des parties de
+  // l'agregateur annoncee aux abonnes (Maison montre la tuile).
+  endpoint::enable(ep);
+  s_ep_lampe[lampe] = id;
+  s_numero[lampe] = id;
+  if (id != l->endpoint) {
+    const esp_err_t err = config_maj_endpoint(l->mac, id);
+    if (err != ESP_OK) ESP_LOGE(TAG, "lampe %d : numero EP%u non sauve (%s)", lampe + 1, id, esp_err_to_name(err));
+  }
+  xSemaphoreGive(s_verrou_exposition);
+  ESP_LOGI(TAG, "lampe %d dans Maison : EP%u, %s", lampe + 1, id,
+           catalogue_connu(l->code) ? m->nom : "modele non catalogue, intensite seule");
+  return ESP_OK;
+}
+
+esp_err_t pont_masquer(int lampe) {
+  if (lampe < 0 || lampe >= LISTE_CAPACITE) return ESP_ERR_INVALID_ARG;
+  if (!esp_matter::is_started() || !s_verrou_exposition) return ESP_ERR_INVALID_STATE;
+  xSemaphoreTake(s_verrou_exposition, portMAX_DELAY);
+  const uint16_t id = s_ep_lampe[lampe];
+  esp_err_t err = ESP_OK;
+  if (id) {
+    endpoint_t *ep;
+    {
+      lock::ScopedChipStackLock verrou(portMAX_DELAY);
+      ep = endpoint::get(s_noeud, id);
+    }
+    s_ep_lampe[lampe] = 0;  // plus de publication, plus d'ordre
+    s_identifie = s_identifie & ~(1u << (2 + lampe));
+    s_effet_fin[2 + lampe] = 0;
+    // Prend le verrou de la pile : la liste des parties change, Maison retire la tuile.
+    if (ep) err = endpoint::destroy(s_noeud, ep);
+    ESP_LOGI(TAG, "lampe %d retiree de Maison (EP%u)", lampe + 1, id);
+  }
+  xSemaphoreGive(s_verrou_exposition);
+  return err;
+}
+
+uint16_t pont_endpoint(int lampe) { return lampe >= 0 && lampe < LISTE_CAPACITE ? s_ep_lampe[lampe] : 0; }
+
 // --- API
 
 esp_err_t pont_demarrer(const amaran_config_t *cfg, pont_ordre_cb_t ordre) {
   s_ordre = ordre;
+  s_verrou_exposition = xSemaphoreCreateMutex();
+  if (!s_verrou_exposition) return ESP_ERR_NO_MEM;
   ecrire_numero_de_serie();
 
   node::config_t cfg_noeud;
   snprintf(cfg_noeud.root_node.basic_information.node_label,
            sizeof(cfg_noeud.root_node.basic_information.node_label), "%s", "Pont amaran");
   // Identify reste sans effet sur la lampe (Maison ne le propose pas, spec 6.1).
-  node_t *noeud = node::create(&cfg_noeud, rappel_attribut, rappel_identification);
-  if (!noeud) return ESP_FAIL;
+  s_noeud = node::create(&cfg_noeud, rappel_attribut, rappel_identification);
+  if (!s_noeud) return ESP_FAIL;
   // SerialNumber est facultatif : cree vide, la pile le lit dans chip-factory.
-  cluster_t *infos = cluster::get(endpoint::get(noeud, 0), BasicInformation::Id);
+  cluster_t *infos = cluster::get(endpoint::get(s_noeud, 0), BasicInformation::Id);
   if (infos) cluster::basic_information::attribute::create_serial_number(infos, NULL, 0);
 
   endpoint::aggregator::config_t cfg_agregateur;
-  endpoint_t *agregateur = endpoint::aggregator::create(noeud, &cfg_agregateur, ENDPOINT_FLAG_NONE, NULL);
-  if (!agregateur) return ESP_FAIL;
-
-  // Une lampe pontee par emplacement, toujours les deux : les numeros d'endpoint
-  // (2 et 3) suivent l'ordre de creation et ne changent jamais (spec 6.1).
-  for (int i = 0; i < PONT_EMPLACEMENTS; i++) {
-    const liste_lampe_t *l = i < cfg->liste.n ? &cfg->liste.lampes[i] : NULL;
-    endpoint::bridged_node::config_t cfg_pontee;
-    char *uid = cfg_pontee.bridged_device_basic_information.unique_id;
-    const size_t tuid = sizeof(cfg_pontee.bridged_device_basic_information.unique_id);
-    if (l) {
-      snprintf(uid, tuid, "%02X%02X%02X%02X%02X%02X", l->mac[0], l->mac[1], l->mac[2], l->mac[3], l->mac[4],
-               l->mac[5]);
-    } else {
-      snprintf(uid, tuid, "amaran-%d", i + 1);
-    }
-    endpoint_t *ep = endpoint::bridged_node::create(noeud, &cfg_pontee, ENDPOINT_FLAG_NONE, NULL);
-    if (!ep) return ESP_FAIL;
-    endpoint::dimmable_light::config_t cfg_lampe;
-    // Defauts d'esp-matter a 0 : ils eteindraient les lampes, ou les baisseraient
-    // au minimum, a chaque demarrage. Nuls : rien ne change (spec 6.5).
-    cfg_lampe.on_off_lighting.start_up_on_off = nullptr;
-    cfg_lampe.level_control_lighting.start_up_current_level = nullptr;
-    if (endpoint::dimmable_light::add(ep, &cfg_lampe) != ESP_OK) return ESP_FAIL;
-    if (endpoint::set_parent_endpoint(ep, agregateur) != ESP_OK) return ESP_FAIL;
-    snprintf(s_nom_lampe[i], sizeof(s_nom_lampe[i]), "%s", l ? l->nom : "lampe absente");
-    cluster_t *pontee = cluster::get(ep, BridgedDeviceBasicInformation::Id);
-    if (pontee) {
-      // Sans NONVOLATILE (create_node_label le mettrait en NVS, et ce premier nom
-      // resterait) : le nom de la base prime a chaque demarrage.
-      attribute::create(pontee, BridgedDeviceBasicInformation::Attributes::NodeLabel::Id, ATTRIBUTE_FLAG_WRITABLE,
-                        esp_matter_char_str(s_nom_lampe[i], strlen(s_nom_lampe[i])), 32);
-    }
-    s_ep_lampe[i] = endpoint::get_id(ep);
-    // Les etats relus changent CurrentLevel souvent : ecriture en flash differee.
-    attribute::set_deferred_persistence(
-        attribute::get(s_ep_lampe[i], LevelControl::Id, LevelControl::Attributes::CurrentLevel::Id));
-  }
+  s_agregateur = endpoint::aggregator::create(s_noeud, &cfg_agregateur, ENDPOINT_FLAG_NONE, NULL);
+  if (!s_agregateur) return ESP_FAIL;
 
   // Thread sur la radio du C6 (exemple light d'esp-matter).
   esp_openthread_platform_config_t ot = {};
@@ -254,29 +355,41 @@ esp_err_t pont_demarrer(const amaran_config_t *cfg, pont_ordre_cb_t ordre) {
   if (boucle != ESP_OK && boucle != ESP_ERR_INVALID_STATE) return boucle;
   esp_event_handler_register(OPENTHREAD_EVENT, OPENTHREAD_EVENT_ROLE_CHANGED, rappel_role, NULL);
 
-  // start() attend la fin de l'init de la pile : les valeurs qu'elle pose alors
-  // (CurrentLevel ramene au minimum au premier demarrage...) ne sont pas des ordres.
-  s_ordres_des_us = INT64_MAX;
   const esp_err_t err = esp_matter::start(rappel_evenement);
   if (err != ESP_OK) return err;
-  s_ordres_des_us = esp_timer_get_time() + 2000000;  // lecon du Halo : ce qui arrive avant vient de la pile
   {
     lock::ScopedChipStackLock verrou(portMAX_DELAY);
     chip::app::InteractionModelEngine::GetInstance()->RegisterReadHandlerAppCallback(&s_plafond);
     s_fabriques = chip::Server::GetInstance().GetFabricTable().FabricCount();
   }
-  // Un emplacement sans lampe n'est jamais joignable. Les autres partent
-  // joignables (spec 6.5) et se calent au premier etat lu.
-  for (int i = 0; i < PONT_EMPLACEMENTS; i++) {
-    if (i >= cfg->liste.n) pont_publier(i, NULL, false);
+  // Les lampes exposees, juste apres start (le compteur d'esp-matter vient d'etre
+  // relu) : dans l'ordre croissant de leur numero, pour qu'apres un desappairage
+  // complet (compteur reparti) les memes numeros reviennent. Sans numero : a la fin.
+  int ordre_ep[LISTE_CAPACITE];
+  int n = 0;
+  for (int i = 0; i < cfg->liste.n; i++) {
+    if (liste_exposee(&cfg->liste.lampes[i])) ordre_ep[n++] = i;
   }
+  for (int a = 1; a < n; a++) {
+    const int i = ordre_ep[a];
+    const uint32_t cle = cfg->liste.lampes[i].endpoint ? cfg->liste.lampes[i].endpoint : UINT32_MAX;
+    int b = a - 1;
+    while (b >= 0) {
+      const uint16_t eb = cfg->liste.lampes[ordre_ep[b]].endpoint;
+      if ((eb ? eb : UINT32_MAX) <= cle) break;
+      ordre_ep[b + 1] = ordre_ep[b];
+      b--;
+    }
+    ordre_ep[b + 1] = i;
+  }
+  for (int k = 0; k < n; k++) pont_exposer(ordre_ep[k], &cfg->liste.lampes[ordre_ep[k]]);
   return ESP_OK;
 }
 
 void pont_publier(int lampe, const lampe_etat_t *etat, bool joignable) {
   // Si esp_matter::start() a echoue, app_main garde la console : la pile n'existe pas, et
   // attribute::report y prendrait le verrou et marquerait des attributs. Rien a publier.
-  if (lampe < 0 || lampe >= PONT_EMPLACEMENTS || !s_ep_lampe[lampe] || !esp_matter::is_started()) return;
+  if (lampe < 0 || lampe >= LISTE_CAPACITE || !s_ep_lampe[lampe] || !esp_matter::is_started()) return;
   const uint16_t ep = s_ep_lampe[lampe];
   esp_matter_attr_val_t v = esp_matter_bool(joignable);
   attribute::report(ep, BridgedDeviceBasicInformation::Id, BridgedDeviceBasicInformation::Attributes::Reachable::Id,
@@ -311,8 +424,8 @@ void pont_desappairer(void) {
 bool pont_identifie(void) {
   if (s_identifie) return true;
   const uint32_t t = (uint32_t)(esp_timer_get_time() / 1000);
-  for (int ep = 0; ep < PONT_EMPLACEMENTS + 2; ep++) {
-    if (statusled::effectPending(s_effet_fin[ep], t)) return true;
+  for (int e = 0; e < EMPLACEMENTS; e++) {
+    if (statusled::effectPending(s_effet_fin[e], t)) return true;
   }
   return false;
 }
@@ -362,5 +475,7 @@ void pont_afficher(void) {
   }
   printf("  identite        : %s, %s, n/s %s\n", fabricant, produit, serie);
   printf("  version         : %s\n", esp_app_get_description()->version);
-  for (int i = 0; i < PONT_EMPLACEMENTS; i++) printf("  EP%u             : %s\n", (unsigned)s_ep_lampe[i], s_nom_lampe[i]);
+  for (int i = 0; i < LISTE_CAPACITE; i++) {
+    if (s_ep_lampe[i]) printf("  EP%u             : %s\n", (unsigned)s_ep_lampe[i], s_nom_lampe[i]);
+  }
 }

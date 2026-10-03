@@ -81,6 +81,9 @@ CONFIG_ENABLE_PERSIST_SUBSCRIPTIONS=y
 CONFIG_ENABLE_CHIP_SHELL=n
 CONFIG_ENABLE_OTA_REQUESTOR=n
 CONFIG_SUPPORT_GROUPCAST_CLUSTER=n
+# Endpoints dynamiques : noeud (EP0), agregateur (EP1) et 16 lampes (LISTE_CAPACITE,
+# plan 3a). Un pont deja compile garde l'ancienne valeur : supprimer firmware/sdkconfig.
+CONFIG_ESP_MATTER_MAX_DYNAMIC_ENDPOINT_COUNT=18
 CONFIG_MBEDTLS_HKDF_C=y
 
 # AES logiciel : l'AES materiel fait une allocation DMA par bloc, et la pile

@@ -1,7 +1,7 @@
-// Cote Matter du pont (spec 6) : noeud (EP0), agregateur (EP1) et une lampe
-// pontee par emplacement (EP2, EP3), ordres des controleurs, etat des lampes
-// publie sans echo, abonnements plafonnes, identite. Ecrit en C++ (esp-matter),
-// appele depuis le C.
+// Cote Matter du pont (spec 6 ; spec N lampes 5 et 7) : noeud (EP0), agregateur
+// (EP1) et un endpoint ponte par lampe exposee, avec son numero ; ordres des
+// controleurs, etat des lampes publie sans echo, abonnements plafonnes, identite.
+// Ecrit en C++ (esp-matter), appele depuis le C.
 #pragma once
 
 #include <stdbool.h>
@@ -11,6 +11,7 @@
 
 #include "config_amaran.h"
 #include "lampes.h"
+#include "liste.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -18,19 +19,28 @@ extern "C" {
 
 #define PONT_PLAFOND_ABONNEMENT_S 20  // lecon du Halo : Apple se reabonne quand l'intervalle expire
 #define PONT_NIVEAU_PLANCHER 4        // lecon du Halo : sous 4, Maison montre une lampe allumee a fond
-#define PONT_EMPLACEMENTS 2           // EP2 et EP3, crees au demarrage (plan 2)
 
 // Ordre d'un controleur pour une lampe (appele dans la tache CHIP, sans bloquer) :
 // marche et/ou intensite 0..1000 (NULL : inchange).
 typedef void (*pont_ordre_cb_t)(int lampe, const bool *marche, const uint16_t *intensite);
 
-// Cree les endpoints (noms et adresses : cfg), ecrit l'identite, puis demarre
-// Matter. Les ordres arrivent par ordre().
+// Cree le noeud et l'agregateur, ecrit l'identite, demarre Matter, puis cree
+// l'endpoint de chaque lampe exposee de cfg (pont_exposer). Les ordres arrivent par
+// ordre().
 esp_err_t pont_demarrer(const amaran_config_t *cfg, pont_ordre_cb_t ordre);
+// Fait entrer la lampe dans Maison : son endpoint, avec son numero s'il en a un (le
+// suivant du compteur d'esp-matter sinon, sauve en NVS), et le type d'appareil que
+// donne le catalogue. Sans effet si elle y est deja. Apres pont_demarrer, hors de
+// la tache CHIP : prend le verrou de la pile.
+esp_err_t pont_exposer(int lampe, const liste_lampe_t *l);
+// Retire l'endpoint de la lampe : Maison retire sa tuile. La lampe garde son numero.
+esp_err_t pont_masquer(int lampe);
+// Numero d'endpoint de la lampe ; 0 si elle n'est pas exposee.
+uint16_t pont_endpoint(int lampe);
 // Etat d'une lampe dans Matter (attribute::report : aucun rappel, donc aucun
 // echo). etat NULL : jamais lu, seule la joignabilite change. Intensite 0 (lampe
 // noire jamais vue allumee) : OnOff est publie, CurrentLevel reste ce qu'il est.
-// Sans effet tant que Matter n'est pas demarre.
+// Sans effet tant que Matter n'est pas demarre, ou pour une lampe non exposee.
 void pont_publier(int lampe, const lampe_etat_t *etat, bool joignable);
 // Au moins une fabrique (Maison ou un autre controleur).
 bool pont_appaire(void);

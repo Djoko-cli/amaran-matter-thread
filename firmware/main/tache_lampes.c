@@ -30,8 +30,9 @@ typedef struct {
 } message_t;
 
 static QueueHandle_t s_file;
-static SemaphoreHandle_t s_verrou;  // s_lampes, lu en copie par la console
+static SemaphoreHandle_t s_verrou;  // s_lampes et s_liste, lus en copie par la console
 static lampes_t s_lampes;
+static liste_t s_liste;             // liste du demarrage ; drapeaux tenus a jour
 static volatile bool s_ecoute;
 static volatile uint32_t s_confirmes, s_abandons;
 static bool s_cles;                  // cles du reseau presentes au demarrage
@@ -56,6 +57,45 @@ static void sortie_signaler(void *ctx, int lampe, lampes_signal_t signal) {
     s_confirmes++;
   } else {
     s_abandons++;
+  }
+}
+
+// Relectures manquees (spec N lampes 8) : une ligne a l'entree, une a la sortie.
+static void sortie_alerter(void *ctx, int lampe, bool manque, uint8_t pour_cent) {
+  (void)ctx;
+  if (manque) {
+    printf("!! lampe %d : relectures manquees, %u %% repondues sur 10 min : allonger la periode (mesh releve)\n",
+           lampe + 1, (unsigned)pour_cent);
+  } else {
+    printf("[lampes] lampe %d : relectures de nouveau repondues a %u %% sur 10 min\n", lampe + 1,
+           (unsigned)pour_cent);
+  }
+}
+
+// Lampe i : la faire entrer dans Maison, puis y publier son etat (son endpoint est
+// neuf). Sous s_verrou.
+static esp_err_t exposer(int i) {
+  const esp_err_t err = pont_exposer(i, &s_liste.lampes[i]);
+  if (err == ESP_OK) {
+    s_liste.lampes[i].endpoint = pont_endpoint(i);
+    lampes_forcer_publication(&s_lampes, i);
+  }
+  return err;
+}
+
+// Premiere reponse d'une lampe jamais vue : elle entre dans Maison (spec N lampes 7).
+// Marquee vue d'abord : si l'endpoint echoue, le prochain demarrage la remettra.
+static void exposer_les_nouvelles(void) {
+  for (int i = 0; i < s_lampes.n; i++) {
+    liste_lampe_t *a = &s_liste.lampes[i];
+    if (!s_lampes.lampes[i].entendue || !liste_a_exposer_a_l_ecoute(a)) continue;
+    liste_marquer_vue(a);
+    if (config_maj_drapeaux(a->mac, a->drapeaux) != ESP_OK) printf("!! lampe %d : vue, mais NVS non mise a jour\n", i + 1);
+    if (exposer(i) == ESP_OK) {
+      printf("[lampes] lampe %d entendue : dans Maison (EP%u)\n", i + 1, (unsigned)pont_endpoint(i));
+    } else {
+      printf("!! lampe %d entendue, mais pas dans Maison (endpoint Matter)\n", i + 1);
+    }
   }
 }
 
@@ -107,6 +147,7 @@ static void tache(void *arg) {
       mesh_console_evenement(&ev, s_ecoute);
     }
     xSemaphoreTake(s_verrou, portMAX_DELAY);
+    exposer_les_nouvelles();
     lampes_mesh_pret(&s_lampes, mesh_pret(), maintenant_ms());
     lampes_tic(&s_lampes, maintenant_ms());
     xSemaphoreGive(s_verrou);
@@ -120,12 +161,16 @@ esp_err_t tache_lampes_demarrer(const amaran_config_t *cfg) {
   s_file = xQueueCreate(FILE_ORDRES, sizeof(message_t));
   s_verrou = xSemaphoreCreateMutex();
   if (!s_file || !s_verrou) return ESP_ERR_NO_MEM;
+  _Static_assert(LAMPES_CAPACITE == LISTE_CAPACITE, "une lampe de la liste par lampe du coeur");
+  s_liste = cfg->liste;
   uint16_t adresses[LAMPES_CAPACITE];
-  for (int i = 0; i < cfg->liste.n; i++) adresses[i] = cfg->liste.lampes[i].adresse;
-  const lampes_sorties_t sorties = {sortie_envoyer, sortie_publier, sortie_signaler, NULL, NULL};
-  lampes_init(&s_lampes, adresses, cfg->liste.n, &sorties, maintenant_ms());
+  for (int i = 0; i < s_liste.n; i++) adresses[i] = s_liste.lampes[i].adresse;
+  const lampes_sorties_t sorties = {sortie_envoyer, sortie_publier, sortie_signaler, sortie_alerter, NULL};
+  lampes_init(&s_lampes, adresses, s_liste.n, &sorties, maintenant_ms());
   if (cfg->releve_ms) lampes_regler_releve(&s_lampes, cfg->releve_ms);
-  return xTaskCreate(tache, "lampes", 4096, NULL, 4, NULL) == pdPASS ? ESP_OK : ESP_ERR_NO_MEM;
+  // 6 Ko : exposer une lampe (pont_exposer) fait tourner ici les rappels d'init des
+  // clusters Matter (endpoint::enable), sur cette pile.
+  return xTaskCreate(tache, "lampes", 6144, NULL, 4, NULL) == pdPASS ? ESP_OK : ESP_ERR_NO_MEM;
 }
 
 void tache_lampes_ordre(int lampe, const bool *marche, const uint16_t *intensite, bool depuis_matter) {
@@ -160,6 +205,32 @@ void tache_lampes_lire(lampes_t *copie) {
   xSemaphoreTake(s_verrou, portMAX_DELAY);
   *copie = s_lampes;
   xSemaphoreGive(s_verrou);
+}
+
+void tache_lampes_lire_liste(liste_t *copie) {
+  if (!s_verrou) {
+    memset(copie, 0, sizeof(*copie));
+    return;
+  }
+  xSemaphoreTake(s_verrou, portMAX_DELAY);
+  *copie = s_liste;
+  xSemaphoreGive(s_verrou);
+}
+
+esp_err_t tache_lampes_exposition(int lampe, bool afficher) {
+  if (!s_verrou || lampe < 0 || lampe >= s_liste.n) return ESP_ERR_INVALID_ARG;
+  xSemaphoreTake(s_verrou, portMAX_DELAY);
+  liste_lampe_t *a = &s_liste.lampes[lampe];
+  if (afficher) {
+    liste_afficher(a);
+  } else {
+    liste_masquer(a);
+  }
+  // Une liste chargee depuis le demarrage sans cette lampe : ESP_ERR_NOT_FOUND.
+  esp_err_t err = config_maj_drapeaux(a->mac, a->drapeaux);
+  if (err == ESP_OK) err = afficher ? exposer(lampe) : pont_masquer(lampe);
+  xSemaphoreGive(s_verrou);
+  return err;
 }
 
 void tache_lampes_ecoute(bool oui) { s_ecoute = oui; }

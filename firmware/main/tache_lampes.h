@@ -1,6 +1,7 @@
 // Tache du coeur du pont (spec 4.3) : la seule qui touche l'etat des lampes.
-// Elle recoit les ordres (Matter, console) et les evenements du crochet, et fait
-// tourner lampes_tic() toutes les 50 ms.
+// Elle recoit les ordres (Matter, console) et les evenements du crochet, fait
+// tourner lampes_tic() toutes les 50 ms, et fait entrer dans Maison une lampe
+// jamais vue a sa premiere reponse (spec N lampes 7).
 #pragma once
 
 #include <stdbool.h>
@@ -10,6 +11,7 @@
 
 #include "config_amaran.h"
 #include "lampes.h"
+#include "liste.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -23,6 +25,11 @@ void tache_lampes_ordre(int lampe, const bool *marche, const uint16_t *intensite
 void tache_lampes_regler_releve(uint32_t releve_ms);
 // Copie coherente de l'etat, pour la console.
 void tache_lampes_lire(lampes_t *copie);
+// Copie de la liste du demarrage, drapeaux a jour (vue, masquee).
+void tache_lampes_lire_liste(liste_t *copie);
+// Retire la lampe de Maison (afficher faux), ou l'y remet (vrai, meme jamais vue) ;
+// le choix est sauve en NVS. Depuis la console (pas la tache CHIP).
+esp_err_t tache_lampes_exposition(int lampe, bool afficher);
 // Ecoute detaillee : imprimer aussi chaque etat recu des lampes.
 void tache_lampes_ecoute(bool oui);
 // Ordres confirmes et abandonnes depuis le demarrage (ne font que croitre).
