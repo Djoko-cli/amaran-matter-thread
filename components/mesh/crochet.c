@@ -26,7 +26,7 @@
 #error "components/mesh depend des internes d'ESP-IDF v5.5.4 : a reverifier avant de changer de version"
 #endif
 
-#define FILE_EVENEMENTS 32
+#define FILE_EVENEMENTS (4 * LISTE_CAPACITE)  // toutes les lampes repondent a la meme relecture
 #define PDU_MIN 18  // plancher de la pile (net.c) : le plus court message reseau qu'elle accepte
 #define PDU_MAX 32
 #define BALISE_MAX 24
@@ -35,13 +35,13 @@
 #define IV_CHERCHE_MAX 0xFFFFFF  // plage documentee de crochet_chercher_iv (crochet.h)
 
 static QueueHandle_t s_file;
-static uint16_t s_lampes[AMARAN_LAMPES_MAX];
+static uint16_t s_lampes[LISTE_CAPACITE];
 static volatile bool s_detail;
 static mesh_stats_t s_st;
 static uint32_t s_iv_connu;
 // Dernier message retenu de chaque lampe : ecarte les copies reseau (1 a 3 par
 // reponse au banc) et les rejeux. En RAM seulement : repart a zero au demarrage.
-static tri_dernier_t s_dernier[AMARAN_LAMPES_MAX];
+static tri_dernier_t s_dernier[LISTE_CAPACITE];
 
 // Messages de notre reseau au NetMIC faux : matiere de `mesh iv cherche`. La
 // tache Bluetooth les remplace (garder_echantillon), la tache de la console les
@@ -61,7 +61,7 @@ static bool publier(const mesh_evenement_t *ev) {
 }
 
 esp_err_t crochet_demarrer(const amaran_config_t *cfg) {
-  for (int i = 0; i < AMARAN_LAMPES_MAX; i++) s_lampes[i] = cfg->lampes[i].adresse;
+  for (int i = 0; i < LISTE_CAPACITE; i++) s_lampes[i] = i < cfg->liste.n ? cfg->liste.lampes[i].adresse : 0;
   s_iv_connu = cfg->iv;
   s_file = xQueueCreate(FILE_EVENEMENTS, sizeof(mesh_evenement_t));
   return s_file ? ESP_OK : ESP_ERR_NO_MEM;
@@ -146,7 +146,7 @@ static void traiter_acces(const tri_entete_t *e, uint32_t iv, const uint8_t *acc
   };
   memcpy(ev.acces, acces, n);
   uint8_t trame[TELINK_TAILLE];
-  const int l = tri_etat_lampe(e->src, acces, n, s_lampes, AMARAN_LAMPES_MAX, trame);
+  const int l = tri_etat_lampe(e->src, acces, n, s_lampes, LISTE_CAPACITE, trame);
   if (l >= 0) {
     if (!tri_plus_recent(&s_dernier[l], iv, e->seq)) {
       s_st.doublons++;

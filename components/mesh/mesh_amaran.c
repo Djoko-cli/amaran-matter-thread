@@ -85,7 +85,7 @@ static const char *TAG = "mesh";
 #define ECART_MS 70          // entre deux messages et entre deux repetitions
 // vTaskDelay(n) dort entre n-1 et n ticks (60 a 70 ms a 100 Hz) : un tick de plus tient ECART_MS au moins.
 #define ECART_TICKS (pdMS_TO_TICKS(ECART_MS) + 1)
-#define FILE_TX 16
+#define FILE_TX (3 * LISTE_CAPACITE + 4)  // une salve par lampe (3 trames au plus), et la relecture
 
 typedef struct {
   uint16_t dst;

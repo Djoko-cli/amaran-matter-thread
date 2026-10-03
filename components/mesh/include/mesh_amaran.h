@@ -34,7 +34,7 @@ typedef struct {
   int64_t quand_us;
   uint16_t src;
   uint16_t dst;
-  int8_t lampe;       // index 0..AMARAN_LAMPES_MAX-1, ou -1
+  int8_t lampe;       // index dans la liste des lampes (0..LISTE_CAPACITE-1), ou -1
   uint8_t len;        // octets utiles de acces
   uint8_t acces[16];  // opcode puis charge
   uint32_t iv;        // IV Index du message, de la balise, ou le nouveau (MESH_EV_IV_CHANGE)
@@ -59,7 +59,7 @@ typedef struct {
   int64_t derniere_balise_us;
   uint32_t derniere_balise_iv;
   uint8_t derniere_balise_flags;
-  int64_t derniere_reponse_us[AMARAN_LAMPES_MAX];
+  int64_t derniere_reponse_us[LISTE_CAPACITE];
 } mesh_stats_t;
 
 // Entre dans le reseau des lampes. L'hote NimBLE doit etre demarre, par

@@ -34,7 +34,7 @@ using namespace chip::app::Clusters;
 static const char *TAG = "pont";
 
 static uint16_t s_ep_lampe[PONT_EMPLACEMENTS];  // EP2 et EP3 ; 0 = pas encore cree
-static char s_nom_lampe[PONT_EMPLACEMENTS][AMARAN_NOM_MAX];
+static char s_nom_lampe[PONT_EMPLACEMENTS][LISTE_NOM_MAX];
 static pont_ordre_cb_t s_ordre;
 static int64_t s_ordres_des_us;  // avant : valeurs posees par la pile au demarrage, pas des ordres
 static volatile bool s_ble_annonce;
@@ -206,11 +206,11 @@ esp_err_t pont_demarrer(const amaran_config_t *cfg, pont_ordre_cb_t ordre) {
   // Une lampe pontee par emplacement, toujours les deux : les numeros d'endpoint
   // (2 et 3) suivent l'ordre de creation et ne changent jamais (spec 6.1).
   for (int i = 0; i < PONT_EMPLACEMENTS; i++) {
-    const amaran_lampe_t *l = &cfg->lampes[i];
+    const liste_lampe_t *l = i < cfg->liste.n ? &cfg->liste.lampes[i] : NULL;
     endpoint::bridged_node::config_t cfg_pontee;
     char *uid = cfg_pontee.bridged_device_basic_information.unique_id;
     const size_t tuid = sizeof(cfg_pontee.bridged_device_basic_information.unique_id);
-    if (l->adresse) {
+    if (l) {
       snprintf(uid, tuid, "%02X%02X%02X%02X%02X%02X", l->mac[0], l->mac[1], l->mac[2], l->mac[3], l->mac[4],
                l->mac[5]);
     } else {
@@ -225,7 +225,7 @@ esp_err_t pont_demarrer(const amaran_config_t *cfg, pont_ordre_cb_t ordre) {
     cfg_lampe.level_control_lighting.start_up_current_level = nullptr;
     if (endpoint::dimmable_light::add(ep, &cfg_lampe) != ESP_OK) return ESP_FAIL;
     if (endpoint::set_parent_endpoint(ep, agregateur) != ESP_OK) return ESP_FAIL;
-    snprintf(s_nom_lampe[i], sizeof(s_nom_lampe[i]), "%s", l->adresse ? l->nom : "lampe absente");
+    snprintf(s_nom_lampe[i], sizeof(s_nom_lampe[i]), "%s", l ? l->nom : "lampe absente");
     cluster_t *pontee = cluster::get(ep, BridgedDeviceBasicInformation::Id);
     if (pontee) {
       // Sans NONVOLATILE (create_node_label le mettrait en NVS, et ce premier nom
@@ -268,7 +268,7 @@ esp_err_t pont_demarrer(const amaran_config_t *cfg, pont_ordre_cb_t ordre) {
   // Un emplacement sans lampe n'est jamais joignable. Les autres partent
   // joignables (spec 6.5) et se calent au premier etat lu.
   for (int i = 0; i < PONT_EMPLACEMENTS; i++) {
-    if (!cfg->lampes[i].adresse) pont_publier(i, NULL, false);
+    if (i >= cfg->liste.n) pont_publier(i, NULL, false);
   }
   return ESP_OK;
 }

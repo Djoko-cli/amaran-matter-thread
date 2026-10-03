@@ -14,6 +14,7 @@
 #include "freertos/task.h"
 #include "linenoise/linenoise.h"
 
+#include "catalogue.h"
 #include "telink.h"
 #include "texte.h"
 
@@ -62,9 +63,8 @@ static void afficher_etat(void) {
          " (plancher NVS 0x%06" PRIx32 ")\n",
          s_cfg->adresse, mesh_iv_courant(), s_cfg->iv, mesh_sequence(),
          mesh_pret() ? mesh_plancher() : s_cfg->plancher_seq);
-  for (int i = 0; i < AMARAN_LAMPES_MAX; i++) {
-    const amaran_lampe_t *l = &s_cfg->lampes[i];
-    if (!l->adresse) continue;
+  for (int i = 0; i < s_cfg->liste.n; i++) {
+    const liste_lampe_t *l = &s_cfg->liste.lampes[i];
     if (st.derniere_reponse_us[i]) {
       printf("lampe %d : 0x%04x %s, derniere reponse il y a %lld s\n", i + 1, l->adresse, l->nom,
              age_s(st.derniere_reponse_us[i]));
@@ -116,31 +116,96 @@ static int mesh_cles(int argc, char **argv) {
   return 0;
 }
 
+// Chargement d'une liste (spec N lampes 10) : `mesh lampes <N>` ouvre une liste de N
+// lampes, et chaque `mesh lampe <n> ...` en donne une. Elle n'est validee et sauvee
+// qu'une fois les N donnees : tout ou rien. Effet au redemarrage.
+static liste_t s_brouillon;
+static uint8_t s_attendues;  // N de la liste en cours ; 0 : aucune
+static uint32_t s_donnees;   // bit n-1 : lampe n donnee
+
+static int mesh_lampes(int argc, char **argv) {
+  uint32_t n = 0;
+  if (argc != 3 || !texte_lire_nombre(argv[2], &n) || n > LISTE_CAPACITE) {
+    printf("erreur : mesh lampes <0-%d>\n", LISTE_CAPACITE);
+    return 1;
+  }
+  s_attendues = 0;
+  memset(&s_brouillon, 0, sizeof(s_brouillon));
+  if (n == 0) {
+    if (config_sauver_liste(&s_brouillon) != ESP_OK) {
+      printf("erreur : ecriture NVS\n");
+      return 1;
+    }
+    printf("ok liste vide enregistree (redemarrer pour l'appliquer)\n");
+    return 0;
+  }
+  s_brouillon.n = (uint8_t)n;
+  s_attendues = (uint8_t)n;
+  s_donnees = 0;
+  printf("ok liste de %" PRIu32 " lampe(s) : envoyer mesh lampe 1 a %" PRIu32 "\n", n, n);
+  return 0;
+}
+
+// mesh lampe <n> <adresse> <mac> <code> <nom...> : le code avant le nom, qu'un nombre
+// peut terminer (« Lampe 2 »).
 static int mesh_lampe(int argc, char **argv) {
-  uint32_t n = 0, adresse = 0;
-  amaran_lampe_t l;
+  if (!s_attendues) {
+    printf("erreur : mesh lampes <N> d'abord\n");
+    return 1;
+  }
+  uint32_t n = 0, adresse = 0, code = 0;
+  liste_lampe_t l;
   memset(&l, 0, sizeof(l));
-  if (argc < 6 || !texte_lire_nombre(argv[2], &n) || n < 1 || n > AMARAN_LAMPES_MAX ||
-      !texte_lire_nombre(argv[3], &adresse) || adresse == 0 || adresse > 0x7FFF || !texte_lire_mac(argv[4], l.mac)) {
-    printf("erreur : mesh lampe <1-%d> <adresse> <mac> <nom>\n", AMARAN_LAMPES_MAX);
+  if (argc < 7 || !texte_lire_nombre(argv[2], &n) || n < 1 || n > s_attendues ||
+      !texte_lire_nombre(argv[3], &adresse) || adresse > 0xFFFF || !texte_lire_mac(argv[4], l.mac) ||
+      !texte_lire_nombre(argv[5], &code)) {
+    printf("erreur : mesh lampe <1-%u> <adresse> <mac> <code> <nom>\n", (unsigned)s_attendues);
     return 1;
   }
   l.adresse = (uint16_t)adresse;
+  l.code = code;
   size_t pos = 0;
-  for (int i = 5; i < argc; i++) {
+  for (int i = 6; i < argc; i++) {
     const size_t m = strlen(argv[i]);
-    const size_t espace = i > 5 ? 1 : 0;
-    if (pos + espace + m >= AMARAN_NOM_MAX) break;
+    const size_t espace = i > 6 ? 1 : 0;
+    if (pos + espace + m >= LISTE_NOM_MAX) break;
     if (espace) l.nom[pos++] = ' ';
     memcpy(l.nom + pos, argv[i], m);
     pos += m;
   }
   l.nom[pos] = '\0';
-  if (config_sauver_lampe((uint8_t)(n - 1), &l) != ESP_OK) {
-    printf("erreur : ecriture NVS\n");
+  // Cette lampe seule d'abord (adresse, MAC, nom) : l'erreur vise la bonne ligne.
+  liste_t une = {.n = 1};
+  une.lampes[0] = l;
+  int fautive = -1;
+  const liste_erreur_t e = liste_valider(&une, &fautive);
+  if (e != LISTE_OK) {
+    printf("erreur : lampe %" PRIu32 " : %s\n", n, liste_erreur_texte(e));
     return 1;
   }
-  printf("ok lampe %" PRIu32 " 0x%04x %s (redemarrer pour l'appliquer)\n", n, l.adresse, l.nom);
+  s_brouillon.lampes[n - 1] = l;
+  s_donnees |= 1u << (n - 1);
+  // Une seule ligne par commande : `ok ...` ou `erreur ...` (outils/cles_amaran.py en
+  // attend une). La derniere lampe donnee : la liste entiere (doublons), puis la NVS.
+  const uint8_t total = s_attendues;
+  const bool complete = s_donnees == (1u << total) - 1u;
+  if (complete) {
+    s_attendues = 0;
+    const liste_erreur_t eliste = liste_valider(&s_brouillon, &fautive);
+    if (eliste != LISTE_OK) {
+      printf("erreur : liste refusee (lampe %d : %s)\n", fautive + 1, liste_erreur_texte(eliste));
+      return 1;
+    }
+    if (config_sauver_liste(&s_brouillon) != ESP_OK) {
+      printf("erreur : ecriture NVS\n");
+      return 1;
+    }
+  }
+  const catalogue_modele_t *m = catalogue_trouver(code);
+  printf("ok lampe %" PRIu32 " 0x%04x modele %" PRIu32 " %s [%s] : %s", n, l.adresse, code,
+         catalogue_connu(code) ? m->nom : "non catalogue", catalogue_capacites_texte(m->capacites), l.nom);
+  if (complete) printf(" ; liste de %u lampe(s) enregistree (redemarrer pour l'appliquer)", (unsigned)total);
+  printf("\n");
   return 0;
 }
 
@@ -241,6 +306,7 @@ int mesh_console_commande(int argc, char **argv) {
   }
   const char *s = argv[1];
   if (!strcmp(s, "cles")) return mesh_cles(argc, argv);
+  if (!strcmp(s, "lampes")) return mesh_lampes(argc, argv);
   if (!strcmp(s, "lampe")) return mesh_lampe(argc, argv);
   if (!strcmp(s, "iv")) return mesh_iv(argc, argv);
   if (!strcmp(s, "adresse")) return mesh_adresse(argc, argv);
@@ -250,7 +316,7 @@ int mesh_console_commande(int argc, char **argv) {
       printf("erreur : ecriture NVS\n");
       return 1;
     }
-    printf("ok cles et lampes oubliees\n");
+    printf("ok cles oubliees (la liste des lampes reste ; mesh lampes 0 pour la vider)\n");
     mesh_console_redemarrer();
     return 0;
   }

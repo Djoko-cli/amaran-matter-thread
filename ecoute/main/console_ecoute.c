@@ -32,9 +32,8 @@ static int envoyer(uint16_t dst, const uint8_t t[TELINK_TAILLE], uint8_t repetit
 
 static int cmd_lampe(int argc, char **argv) {
   uint32_t n = 0;
-  if (argc < 3 || !texte_lire_nombre(argv[1], &n) || n < 1 || n > AMARAN_LAMPES_MAX ||
-      !s_cfg->lampes[n - 1].adresse) {
-    printf("erreur : lampe <1-%d> releve|on|off|niveau <0-1000> (lampe declaree ?)\n", AMARAN_LAMPES_MAX);
+  if (argc < 3 || !texte_lire_nombre(argv[1], &n) || n < 1 || n > s_cfg->liste.n) {
+    printf("erreur : lampe <1-%u> releve|on|off|niveau <0-1000> (lampe declaree ?)\n", (unsigned)s_cfg->liste.n);
     return 1;
   }
   uint8_t t[TELINK_TAILLE];
@@ -58,7 +57,7 @@ static int cmd_lampe(int argc, char **argv) {
     printf("erreur : lampe <n> releve|on|off|niveau <0-1000>\n");
     return 1;
   }
-  return envoyer(s_cfg->lampes[n - 1].adresse, t, repetitions);
+  return envoyer(s_cfg->liste.lampes[n - 1].adresse, t, repetitions);
 }
 
 static int cmd_groupe(int argc, char **argv) {
@@ -104,9 +103,9 @@ void console_demarrer(amaran_config_t *cfg) {
   ESP_ERROR_CHECK(esp_console_new_repl_usb_serial_jtag(&usb, &conf, &repl));
   const esp_console_cmd_t cmds[] = {
       {.command = "mesh",
-       .help = "etat ; mesh cles|lampe|iv|adresse|oublie|ecoute|balayage|autotest ...",
+       .help = "etat ; mesh cles|lampes|lampe|iv|adresse|oublie|ecoute|balayage|autotest ...",
        .func = mesh_console_commande},
-      {.command = "lampe", .help = "lampe <1-2> releve|on|off|niveau <0-1000>", .func = cmd_lampe},
+      {.command = "lampe", .help = "lampe <n> releve|on|off|niveau <0-1000>", .func = cmd_lampe},
       {.command = "groupe", .help = "groupe releve : demande d'etat au groupe All (0xC000)", .func = cmd_groupe},
       {.command = "redemarre", .help = "redemarre la carte", .func = cmd_redemarre},
       {.command = "taches", .help = "marges de pile des taches et du tas (octets)", .func = mesh_console_taches},

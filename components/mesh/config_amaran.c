@@ -4,16 +4,38 @@
 
 #include <string.h>
 
+#include "esp_log.h"
 #include "esp_random.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "mbedtls/sha256.h"
 #include "nvs.h"
 
 #include "texte.h"
 
 #define ESPACE "amaran"
+#define CLE_LISTE "lampes"
 
-_Static_assert(AMARAN_LAMPES_MAX == 2, "NOMS_LAMPES a completer");
-static const char *const NOMS_LAMPES[AMARAN_LAMPES_MAX] = {"lampe0", "lampe1"};
+static const char *TAG = "config";
+
+// Ancien format (plan 2) : deux emplacements de 40 octets.
+_Static_assert(sizeof(liste_v1_t) == 40, "format du plan 2 : adresse, MAC, nom de 32 octets");
+static const char *const NOMS_V1[2] = {"lampe0", "lampe1"};
+
+// La liste se lit et s'ecrit en entier : la console (chargement, masquer, afficher),
+// la tache lampes (premiere reponse) et le demarrage (numeros d'endpoint) la mettent
+// a jour chacun son tour, sous ce verrou. Tampons statiques : les piles sont serrees.
+static SemaphoreHandle_t s_verrou;
+static StaticSemaphore_t s_verrou_memoire;
+static liste_t s_actuelle, s_nouvelle;
+static uint8_t s_tampon[sizeof(liste_entete_t) + LISTE_CAPACITE * sizeof(liste_lampe_t)];
+
+static void verrouiller(void) {
+  if (!s_verrou) s_verrou = xSemaphoreCreateMutexStatic(&s_verrou_memoire);  // config_charger, au demarrage
+  xSemaphoreTake(s_verrou, portMAX_DELAY);
+}
+
+static void deverrouiller(void) { xSemaphoreGive(s_verrou); }
 
 static bool lire_blob(nvs_handle_t h, const char *cle, void *dst, size_t taille) {
   size_t n = taille;
@@ -31,6 +53,43 @@ static esp_err_t fermer(nvs_handle_t h, esp_err_t err) {
 static esp_err_t effacer(nvs_handle_t h, const char *cle) {
   const esp_err_t e = nvs_erase_key(h, cle);
   return e == ESP_ERR_NVS_NOT_FOUND ? ESP_OK : e;
+}
+
+// Liste en NVS (sous le verrou). ESP_ERR_NVS_NOT_FOUND : jamais ecrite. Une liste
+// illisible ou invalide donne une liste vide, et le dit au journal.
+static esp_err_t lire_liste(nvs_handle_t h, liste_t *l) {
+  memset(l, 0, sizeof(*l));
+  size_t n = sizeof(s_tampon);
+  const esp_err_t err = nvs_get_blob(h, CLE_LISTE, s_tampon, &n);
+  if (err != ESP_OK) return err;
+  int fautive = -1;
+  if (!liste_depuis_nvs(l, s_tampon, (uint32_t)n)) {
+    ESP_LOGE(TAG, "liste des lampes illisible (format) : liste vide");
+  } else if (liste_valider(l, &fautive) != LISTE_OK) {
+    ESP_LOGE(TAG, "liste des lampes invalide (lampe %d) : liste vide", fautive + 1);
+    memset(l, 0, sizeof(*l));
+  }
+  return ESP_OK;
+}
+
+static esp_err_t ecrire_liste(nvs_handle_t h, const liste_t *l) {
+  liste_vers_nvs(l, s_tampon);
+  return nvs_set_blob(h, CLE_LISTE, s_tampon, liste_taille_nvs(l));
+}
+
+// Ancien format, converti une fois : l'emplacement i gardait l'endpoint 2 + i.
+// L'ancien n'est efface qu'une fois le nouveau ecrit (coupure : on recommence).
+static esp_err_t migrer_v1(nvs_handle_t h, liste_t *l) {
+  liste_v1_t v1[2];
+  bool lu[2];
+  for (int i = 0; i < 2; i++) lu[i] = lire_blob(h, NOMS_V1[i], &v1[i], sizeof(v1[i]));
+  liste_migrer_v1(l, v1, lu);
+  if (!lu[0] && !lu[1]) return ESP_OK;
+  esp_err_t err = ecrire_liste(h, l);
+  if (err == ESP_OK) err = nvs_commit(h);
+  for (int i = 0; i < 2 && err == ESP_OK; i++) err = effacer(h, NOMS_V1[i]);
+  if (err == ESP_OK) ESP_LOGI(TAG, "liste des lampes convertie : %u lampe(s), EP2 et EP3 gardes", l->n);
+  return err;
 }
 
 esp_err_t config_charger(amaran_config_t *c) {
@@ -58,13 +117,15 @@ esp_err_t config_charger(amaran_config_t *c) {
   }
   if (nvs_get_u32(h, "plancher", &c->plancher_seq) != ESP_OK) c->plancher_seq = 0;
   if (nvs_get_u32(h, "releve", &c->releve_ms) != ESP_OK) c->releve_ms = 0;
-  for (uint8_t i = 0; i < AMARAN_LAMPES_MAX; i++) {
-    if (!lire_blob(h, NOMS_LAMPES[i], &c->lampes[i], sizeof(amaran_lampe_t))) {
-      memset(&c->lampes[i], 0, sizeof(amaran_lampe_t));
-    }
-    c->lampes[i].nom[AMARAN_NOM_MAX - 1] = '\0';
-    if (c->lampes[i].adresse != 0) c->nb_lampes++;
+  verrouiller();
+  const esp_err_t lu = lire_liste(h, &c->liste);
+  if (lu == ESP_ERR_NVS_NOT_FOUND) {
+    const esp_err_t m = migrer_v1(h, &c->liste);
+    if (m != ESP_OK) ESP_LOGE(TAG, "conversion de la liste des lampes : %s", esp_err_to_name(m));
+  } else if (lu != ESP_OK) {
+    ESP_LOGE(TAG, "liste des lampes illisible (%s) : liste vide", esp_err_to_name(lu));
   }
+  deverrouiller();
   return fermer(h, err);
 }
 
@@ -77,13 +138,49 @@ esp_err_t config_sauver_cles(const uint8_t netkey[16], const uint8_t appkey[16])
   return fermer(h, err);
 }
 
-esp_err_t config_sauver_lampe(uint8_t index, const amaran_lampe_t *lampe) {
-  if (index >= AMARAN_LAMPES_MAX) return ESP_ERR_INVALID_ARG;
+esp_err_t config_sauver_liste(const liste_t *nouvelle) {
+  int fautive = -1;
+  if (liste_valider(nouvelle, &fautive) != LISTE_OK) return ESP_ERR_INVALID_ARG;
   nvs_handle_t h;
   esp_err_t err = ouvrir(&h);
   if (err != ESP_OK) return err;
-  return fermer(h, nvs_set_blob(h, NOMS_LAMPES[index], lampe, sizeof(*lampe)));
+  verrouiller();
+  const esp_err_t lu = lire_liste(h, &s_actuelle);
+  if (lu == ESP_OK || lu == ESP_ERR_NVS_NOT_FOUND) {
+    s_nouvelle = *nouvelle;
+    liste_fusionner(&s_nouvelle, &s_actuelle);
+    err = ecrire_liste(h, &s_nouvelle);
+  } else {
+    err = lu;
+  }
+  deverrouiller();
+  return fermer(h, err);
 }
+
+// Lit la liste, change une lampe retrouvee par sa MAC, ecrit la liste.
+static esp_err_t maj_lampe(const uint8_t mac[6], bool endpoint, uint16_t valeur) {
+  nvs_handle_t h;
+  esp_err_t err = ouvrir(&h);
+  if (err != ESP_OK) return err;
+  verrouiller();
+  err = lire_liste(h, &s_actuelle);
+  const int i = err == ESP_OK ? liste_chercher_mac(&s_actuelle, mac) : -1;
+  if (err == ESP_OK && i < 0) err = ESP_ERR_NOT_FOUND;
+  if (err == ESP_OK) {
+    if (endpoint) {
+      s_actuelle.lampes[i].endpoint = valeur;
+    } else {
+      s_actuelle.lampes[i].drapeaux = (uint8_t)valeur;
+    }
+    err = ecrire_liste(h, &s_actuelle);
+  }
+  deverrouiller();
+  return fermer(h, err);
+}
+
+esp_err_t config_maj_endpoint(const uint8_t mac[6], uint16_t endpoint) { return maj_lampe(mac, true, endpoint); }
+
+esp_err_t config_maj_drapeaux(const uint8_t mac[6], uint8_t drapeaux) { return maj_lampe(mac, false, drapeaux); }
 
 esp_err_t config_sauver_iv(uint32_t iv) {
   nvs_handle_t h;
@@ -125,7 +222,6 @@ esp_err_t config_oublier_cles(void) {
   if (err != ESP_OK) return err;
   err = effacer(h, "netkey");
   if (err == ESP_OK) err = effacer(h, "appkey");
-  for (uint8_t i = 0; i < AMARAN_LAMPES_MAX && err == ESP_OK; i++) err = effacer(h, NOMS_LAMPES[i]);
   return fermer(h, err);
 }
 

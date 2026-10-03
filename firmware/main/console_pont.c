@@ -32,7 +32,7 @@ static int cmd_lampes(int argc, char **argv) {
   const uint32_t t = (uint32_t)(esp_timer_get_time() / 1000);
   for (int i = 0; i < l.n; i++) {
     const lampe_t *p = &l.lampes[i];
-    printf("lampe %d : 0x%04x %s, %s\n", i + 1, p->adresse, s_cfg->lampes[i].adresse ? s_cfg->lampes[i].nom : "(absente)",
+    printf("lampe %d : 0x%04x %s, %s\n", i + 1, p->adresse, s_cfg->liste.lampes[i].nom,
            p->joignable ? "joignable" : "PAS DE REPONSE");
     printf("  lue       : ");
     if (p->connu) {
@@ -64,8 +64,8 @@ static int cmd_lampes(int argc, char **argv) {
 
 static int cmd_lampe(int argc, char **argv) {
   uint32_t n = 0;
-  if (argc < 3 || !texte_lire_nombre(argv[1], &n) || n < 1 || n > PONT_EMPLACEMENTS || !s_cfg->lampes[n - 1].adresse) {
-    printf("erreur : lampe <1-%d> on|off|niveau <0-1000>|releve (lampe declaree ?)\n", PONT_EMPLACEMENTS);
+  if (argc < 3 || !texte_lire_nombre(argv[1], &n) || n < 1 || n > s_cfg->liste.n) {
+    printf("erreur : lampe <1-%u> on|off|niveau <0-1000>|releve (lampe declaree ?)\n", (unsigned)s_cfg->liste.n);
     return 1;
   }
   const int i = (int)n - 1;
@@ -73,7 +73,7 @@ static int cmd_lampe(int argc, char **argv) {
   if (!strcmp(action, "releve") && argc == 3) {
     uint8_t t[TELINK_TAILLE];
     telink_demande_etat(t);
-    const esp_err_t err = mesh_envoyer(s_cfg->lampes[i].adresse, t, MESH_REPETITIONS_ETAT);
+    const esp_err_t err = mesh_envoyer(s_cfg->liste.lampes[i].adresse, t, MESH_REPETITIONS_ETAT);
     printf(err == ESP_OK ? "ok demande d'etat a la lampe %d\n" : "erreur : envoi impossible (lampe %d)\n", i + 1);
     return err == ESP_OK ? 0 : 1;
   }
@@ -161,9 +161,9 @@ void console_pont_demarrer(amaran_config_t *cfg) {
   ESP_ERROR_CHECK(esp_console_new_repl_usb_serial_jtag(&usb, &conf, &repl));
   const esp_console_cmd_t cmds[] = {
       {.command = "lampes", .help = "etat des lampes : lu, consigne, joignabilite, releves, ordres", .func = cmd_lampes},
-      {.command = "lampe", .help = "lampe <1-2> on|off|niveau <0-1000>|releve", .func = cmd_lampe},
+      {.command = "lampe", .help = "lampe <n> on|off|niveau <0-1000>|releve", .func = cmd_lampe},
       {.command = "mesh",
-       .help = "etat ; mesh cles|lampe|iv|adresse|oublie|ecoute|balayage|autotest|releve ...",
+       .help = "etat ; mesh cles|lampes|lampe|iv|adresse|oublie|ecoute|balayage|autotest|releve ...",
        .func = cmd_mesh},
       {.command = "matter", .help = "mise en service, Thread, abonnements, codes, identite", .func = cmd_matter},
       {.command = "decommission", .help = "retire toutes les fabriques Matter (cles gardees)", .func = cmd_decommission},

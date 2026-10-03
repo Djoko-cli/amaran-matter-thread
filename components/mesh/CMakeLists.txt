@@ -8,7 +8,7 @@ idf_component_register(
         "${IDF_PATH}/components/bt/esp_ble_mesh/core/include"
         "${IDF_PATH}/components/bt/esp_ble_mesh/core"
         "${IDF_PATH}/components/bt/esp_ble_mesh/common/include"
-    REQUIRES telink
+    REQUIRES telink liste
     PRIV_REQUIRES nvs_flash mbedtls bt esp_timer console)
 
 # Crochet de reception (spec 5.5) : la pile appelle nos enveloppes a la place
