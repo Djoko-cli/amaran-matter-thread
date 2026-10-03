@@ -1,8 +1,9 @@
 # amaran COB 60d -> Matter
 
-Piloter deux lampes **amaran COB 60d** (Aputure, 1re génération) depuis Apple
-Maison, Siri et les automatisations, par **Matter sur Thread**, avec un
-ESP32-C6, tout en gardant l'app **amaran Desktop** utilisable.
+Piloter des lampes **amaran** (Aputure), aujourd'hui deux **COB 60d** (1re
+génération), depuis Apple Maison, Siri et les automatisations, par **Matter sur
+Thread**, avec un ESP32-C6, tout en gardant l'app **amaran Desktop** utilisable.
+Jusqu'à 16 lampes par pont.
 
 Projets frères :
 - [benq-screenbar-halo-matter](https://github.com/Djoko-cli/benq-screenbar-halo-matter) :
@@ -64,9 +65,9 @@ Il faut ESP-IDF v5.5.4 et esp-matter (commit `c5b9ea8`) dans `~/esp`, une ESP32-
 
 3. Appairer. `python3 outils/console.py --port /dev/cu.usbmodemXXXX matter` imprime le code manuel. Dans Maison : « + », « Ajouter un accessoire », « Plus d'options… », puis ce code. Le pont utilise les codes de test du SDK Matter : Maison prévient qu'il n'est pas certifié, « Ajouter quand même ».
 
-Une fois appairé, le pont entre dans le réseau des lampes, et elles apparaissent sous leurs noms d'amaran Desktop.
+Une fois appairé, le pont entre dans le réseau des lampes. Chaque lampe apparaît dans Maison, sous son nom d'amaran Desktop, à sa première réponse : une lampe déclarée dans amaran Desktop mais absente d'ici n'y apparaît pas.
 
-Carte déjà servie : `erase-flash` fait tirer au pont une nouvelle adresse Mesh au hasard (`0x7F00` à `0x7F7F`). Dans environ 1 cas sur 128 par adresse déjà employée, elle retombe sur une adresse que les lampes connaissent, et elles ignorent alors le pont, sans message d'erreur. Si les deux lampes restent muettes (`lampes` : « lue : jamais ») sans autre alerte de la console, taper `mesh adresse suivante` : le pont prend l'adresse voisine, repart de zéro et redémarre.
+Carte déjà servie : `erase-flash` fait tirer au pont une nouvelle adresse Mesh au hasard (`0x7F00` à `0x7F7F`). Dans environ 1 cas sur 128 par adresse déjà employée, elle retombe sur une adresse que les lampes connaissent, et elles ignorent alors le pont, sans message d'erreur. Si toutes les lampes restent muettes (`lampes` : « lue jamais ») sans autre alerte de la console, taper `mesh adresse suivante` : le pont prend l'adresse voisine, repart de zéro et redémarre.
 
 ## Voyant et bouton
 
@@ -87,9 +88,12 @@ Bouton BOOT : appui court, redémarrage ; de 2 à 8 s, rien ; 8 s ou plus, désa
 ## Console
 
 Sur l'USB, en français (`python3 outils/console.py --port <port> "<commande>"`, ou tout terminal série) :
-- `lampes` : état lu, consigne, joignabilité, relectures et ordres de chaque lampe ;
+- `lampes` : une ligne par lampe (sa place dans Maison : `EP<n>`, « jamais vue » ou « masquee » ; état lu, joignabilité, relectures répondues), puis les ordres ;
+- `lampe <n>` : le détail d'une lampe (adresse, MAC, modèle et capacités, consigne, relectures sur 10 min) ;
 - `lampe <n> on|off|niveau <0-1000>|releve` : le niveau est arrondi au pour cent (la lampe ne garde pas mieux) ;
+- `mesh lampe <n> masquer|afficher` : retirer la lampe de Maison, ou l'y remettre, avec le même numéro ;
 - `mesh` : réseau, empreintes des clés, compteurs ; `mesh releve <s>`, `mesh balayage`, `mesh ecoute on|off`, `mesh autotest`, etc. ;
+- `mesh lampes <N>`, puis `mesh lampe <n> <adresse> <mac> <code> <nom>` : la liste des lampes, tout ou rien (c'est ce qu'envoie `outils/cles_amaran.py`) ;
 - `matter` : mise en service, Thread, abonnements, codes, identité ;
 - `led [test|stop]`, `cause`, `taches`, `decommission`, `redemarre`.
 
@@ -101,6 +105,11 @@ Sur l'USB, en français (`python3 outils/console.py --port <port> "<commande>"`,
 - amaran Desktop, lui, ne suit pas les ordres venus de Maison.
 - Maison ne montre une lampe « Pas de réponse », puis son retour, qu'après avoir touché sa tuile. Le pont publie pourtant chaque changement.
 - Pour la luminosité, taper sur la jauge de Maison est plus fluide que la faire glisser : un glissé envoie une valeur toutes les 150 à 300 ms.
+- Une lampe n'entre dans Maison qu'à sa première réponse, puis y reste : absente, elle y est « Pas de réponse », et garde sa tuile, sa pièce et ses scènes. Pour la retirer de Maison : `mesh lampe <n> masquer` (`afficher` la remet, avec le même numéro).
+- Retirer une lampe dans amaran Desktop, puis recharger les clés, lui fait perdre son numéro : remise plus tard, elle revient comme une lampe nouvelle.
+- `mesh oublie` efface les clés, mais garde la liste des lampes : leurs tuiles restent, en « Pas de réponse », jusqu'au rechargement des clés.
+- Un modèle que le pont ne connaît pas encore est piloté en marche et intensité seulement. `outils/cles_amaran.py` signale une lampe qui déclare la température de couleur ou la couleur : modèle à cataloguer.
+- Si une lampe manque plus de 5 % de ses relectures sur 10 minutes, la console le dit (`!! lampe <n> : relectures manquees`) : allonger la période (`mesh releve`).
 - Bouton BOOT : juste après un appui annulé (tenu de 2 à 8 s, donc sans effet), relâcher net ; un effleurement redémarre le pont, sans conséquence (les clés et l'appairage restent).
 
 ## Clés du réseau

@@ -398,10 +398,10 @@ Autres règles :
 | 2 | lampe 1 | Bridged Node + Dimmable Light : grappes créées par esp-matter pour ce type (Identify, Groups, OnOff, LevelControl…) ; Bridged Device Basic Information : NodeLabel = nom de la base, Reachable, UniqueID = MAC |
 | 3 | lampe 2 | idem |
 
-- Les numéros d'endpoint sont fixes : les deux emplacements sont toujours
-  créés, dans le même ordre (EP2, EP3), sans rien garder en NVS. Recharger les
-  clés ne crée donc pas de nouvelles tuiles. Un emplacement sans lampe est
-  « Pas de réponse ».
+- Depuis le plan 3a (spec `2026-10-03-pont-amaran-n-lampes-design.md`, 5 et
+  7) : un endpoint par lampe exposée, jusqu'à 16, avec un numéro stable par
+  MAC. Les deux lampes du plan 2 gardent EP2 et EP3. Une lampe jamais vue n'est
+  pas exposée ; son retrait de Maison est un geste explicite.
 - Maison reprend les noms (T1). Il affiche « Pas de réponse » pour une lampe
   non joignable, mais seulement après qu'on a touché sa tuile (T5, T9), bien
   que le pont publie l'attribut Reachable et l'événement ReachableChanged. Ce
@@ -555,8 +555,10 @@ Priorités et intensités comme sur le Halo ; `led test` joue chaque motif.
   (6.2).
 - `mesh` : adresse, IV Index, compteur de séquence, empreintes des clés,
   compteurs du crochet et de l'émission, part d'écoute du Mesh.
-- Réglages : `mesh cles <netkey> <appkey>`, `mesh lampe <n> <adresse> <mac>
-  <nom>`, `mesh iv <n> | cherche`, `mesh adresse <a> | suivante`,
+- Réglages : `mesh cles <netkey> <appkey>`, `mesh lampes <N>` puis
+  `mesh lampe <n> <adresse> <mac> <code> <nom>` (plan 3a, spec N lampes 10),
+  `mesh lampe <n> masquer | afficher`, `mesh iv <n> | cherche`,
+  `mesh adresse <a> | suivante`,
   `mesh releve <s>`, `mesh balayage [<fenêtre> <intervalle>]` (part d'écoute
   du Mesh, en ms : 5.8), `mesh ecoute on | off` (écoute détaillée : messages
   d'accès, balises et états des lampes), `mesh oublie`.
@@ -581,7 +583,8 @@ broche de démarrage :
   main peut les lire : acceptable à la maison.
 - Jamais affichées (empreinte seulement), jamais dans un journal ni dans le
   dépôt.
-- `decommission` les garde ; `mesh oublie` les efface.
+- `decommission` les garde ; `mesh oublie` les efface, et garde la liste des
+  lampes (plan 3a).
 
 ## 8. Phases et bancs
 
