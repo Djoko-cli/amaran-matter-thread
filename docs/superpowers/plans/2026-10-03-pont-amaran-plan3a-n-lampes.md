@@ -4769,8 +4769,8 @@ bool liste_a_cacher(const liste_lampe_t *l, uint32_t silence_ms);
 ````c
 void liste_afficher(liste_lampe_t *l) { l->drapeaux = (uint8_t)((l->drapeaux | LISTE_VUE) & ~LISTE_MASQUEE); }
 
-uint32_t liste_taille_nvs(const liste_t *l) {
-  return (uint32_t)(sizeof(liste_entete_t) + (size_t)l->n * sizeof(liste_lampe_t));
+// n borne a la capacite : meme une liste non validee ne deborde jamais.
+static uint8_t n_borne(const liste_t *l) { return l->n > LISTE_CAPACITE ? LISTE_CAPACITE : l->n; }
 ````
 
 par :
@@ -4782,11 +4782,11 @@ bool liste_a_cacher(const liste_lampe_t *l, uint32_t silence_ms) {
   return (l->drapeaux & LISTE_AUTO) && liste_exposee(l) && silence_ms >= LISTE_AUTO_SILENCE_MS;
 }
 
-uint32_t liste_taille_nvs(const liste_t *l) {
-  return (uint32_t)(sizeof(liste_entete_t) + (size_t)l->n * sizeof(liste_lampe_t));
+// n borne a la capacite : meme une liste non validee ne deborde jamais.
+static uint8_t n_borne(const liste_t *l) { return l->n > LISTE_CAPACITE ? LISTE_CAPACITE : l->n; }
 ````
 
-- [ ] **Step 4 : le test passe.** Run: `sh tests/hote/lancer.sh` : `liste : 55 verifications, 0 echecs`.
+- [ ] **Step 4 : le test passe.** Run: `sh tests/hote/lancer.sh` : `liste : 66 verifications, 0 echecs` (61 apres le tour de correction de la Task 1, plus 5).
 
 - [ ] **Step 5 : la tâche des lampes et la console.**
 
