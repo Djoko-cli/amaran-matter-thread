@@ -3,7 +3,8 @@
 
 Lit la base locale d'amaran Desktop, puis envoie par la console du pont :
     mesh cles <reseau> <application>
-    mesh lampe <n> <adresse> <mac> <nom>
+    mesh lampes <N>
+    mesh lampe <n> <adresse> <mac> <code> <nom>     (une ligne par lampe)
     redemarre
 
 Les cles ne sont jamais affichees : seulement leurs empreintes (8 premiers
@@ -15,10 +16,18 @@ perdre en route :
       (sinon ce port n'est pas le pont, et rien n'est envoye) ;
     - apres `mesh cles`, les empreintes rendues par le pont doivent etre les
       notres (sinon erreur, et pas de redemarrage) ;
+    - la derniere lampe envoyee, le pont doit dire la liste enregistree (sinon
+      erreur, et pas de redemarrage) ;
     - apres `redemarre`, le pont doit ecrire `redemarrage` (sinon avertissement).
+
+Le pont annonce le modele et les capacites de chaque lampe d'apres son
+catalogue. Une lampe qui declare la temperature de couleur (Light CTL) ou la
+couleur (Light HSL) dans sa composition, sans que le pont lui connaisse ces
+capacites, est signalee : modele a cataloguer (marche et intensite seulement).
 
     python outils/cles_amaran.py                    # montre ce qui serait envoye
     python outils/cles_amaran.py --port /dev/cu.usbmodem1101
+    python outils/cles_amaran.py --port ... --fictives 3   # banc : 3 lampes fictives en plus
 """
 import argparse
 import glob
@@ -35,10 +44,17 @@ MOTIFS_BASE = (
     "~/Library/Containers/com.sidus.amaran-desktop/Data/Library/Application Support/amaran Desktop/*/amaran.db",
     "~/Library/Application Support/amaran Desktop/*/amaran.db",
 )
-LAMPES_MAX = 2
+CAPACITE = 16  # LISTE_CAPACITE du pont : il refuse lui-meme une liste plus longue
 INVITE = "amaran>"
 # Reponse du pont a `mesh cles` : ok cles <EMPREINTE RESEAU> <EMPREINTE APPLICATION> (...)
 REPONSE_CLES = re.compile(r"ok cles ([0-9A-Fa-f]{8}) ([0-9A-Fa-f]{8})(?:\s|$)")
+# Reponse a `mesh lampe` : ok lampe <n> 0x<adresse> modele <code> <nom du modele> [<capacites>] : <nom>,
+# et, pour la derniere, " ; liste de <N> lampe(s) enregistree (...)".
+REPONSE_LAMPE = re.compile(r"ok lampe (\d+) 0x[0-9A-Fa-f]{4} modele (\d+) (.+?) \[([a-z+]*)\] : (.*?)"
+                           r"(?: ; liste de (\d+) lampe\(s\) enregistree.*)?$")
+# Modeles SIG serveurs qui disent une capacite dans la composition d'une lampe.
+MODELE_CTL = 0x1303  # Light CTL Server : temperature de couleur
+MODELE_HSL = 0x1307  # Light HSL Server : couleur
 
 
 class ErreurCles(Exception):
@@ -53,6 +69,42 @@ def trouver_base(motifs=MOTIFS_BASE):
     return max(trouvees, key=os.path.getmtime)
 
 
+def modeles_sig(composition):
+    """Modeles SIG declares par une lampe (composition_data, page 0, en hexa) ; vide si illisible.
+
+    Page 0 : numero de page, CID, PID, VID, CRPL, fonctions (2 octets chacun),
+    puis chaque element : emplacement (2), nombre de modeles SIG (1) et vendeur
+    (1), les modeles SIG (2 octets) et vendeur (4 octets).
+    """
+    try:
+        d = bytes.fromhex(composition or "")
+    except ValueError:
+        return set()
+    modeles = set()
+    i = 11  # page, puis 5 champs de 2 octets
+    while i + 4 <= len(d):
+        nb_sig, nb_vendeur = d[i + 2], d[i + 3]
+        i += 4
+        if i + 2 * nb_sig + 4 * nb_vendeur > len(d):
+            return set()
+        for k in range(nb_sig):
+            modeles.add(d[i + 2 * k] | (d[i + 2 * k + 1] << 8))
+        i += 2 * nb_sig + 4 * nb_vendeur
+    return modeles
+
+
+def capacites_declarees(composition):
+    """Capacites au-dela de l'intensite que la lampe declare : {"cct", "couleur"}."""
+    m = modeles_sig(composition)
+    return ({"cct"} if MODELE_CTL in m else set()) | ({"couleur"} if MODELE_HSL in m else set())
+
+
+def lire_code(code):
+    """Code produit Sidus (colonne `code`, texte) ; 0 s'il manque ou n'est pas un nombre."""
+    texte = str(code).strip() if code is not None else ""
+    return int(texte) if texte.isdigit() and int(texte) < 2 ** 32 else 0
+
+
 def lire_reseau(chemin):
     """Cles et lampes de la base, ouverte en lecture seule."""
     import re as _re
@@ -61,9 +113,12 @@ def lire_reseau(chemin):
         try:
             reseaux = con.execute(
                 "select net_key, app_key from mesh where net_key is not null and app_key is not null").fetchall()
+            # `code` et `composition_data` : absentes d'une base plus ancienne, sans gravite.
+            colonnes = {c[1] for c in con.execute("pragma table_info(fixtures)")}
+            extra = ", ".join(c if c in colonnes else "null" for c in ("code", "composition_data"))
             lignes = con.execute(
-                "select node_address, mac_address, name from fixtures "
-                "where node_address is not null order by node_address").fetchall()
+                "select node_address, mac_address, name, %s from fixtures "
+                "where node_address is not null order by node_address" % extra).fetchall()
         finally:
             con.close()
     except sqlite3.Error as e:
@@ -78,10 +133,10 @@ def lire_reseau(chemin):
         raise ErreurCles("cle de longueur inattendue")
     if not lignes:
         raise ErreurCles("aucune lampe dans la base")
-    if len(lignes) > LAMPES_MAX:
-        raise ErreurCles("%d lampes, le pont en gere %d" % (len(lignes), LAMPES_MAX))
+    if len(lignes) > CAPACITE:
+        raise ErreurCles("%d lampes, le pont en gere %d" % (len(lignes), CAPACITE))
     lampes = []
-    for adresse, mac, nom in lignes:
+    for adresse, mac, nom, code, composition in lignes:
         try:
             # Valider l'adresse : int, 1..0x7FFF
             if not isinstance(adresse, int) or adresse < 1 or adresse > 0x7FFF:
@@ -96,7 +151,8 @@ def lire_reseau(chemin):
             raise
         except (AttributeError, TypeError):
             raise ErreurCles("lampe illisible dans la base (adresse %r)" % (adresse,))
-        lampes.append({"adresse": adresse, "mac": mac.upper(), "nom": nom})
+        lampes.append({"adresse": adresse, "mac": mac.upper(), "nom": nom, "code": lire_code(code),
+                       "declare": capacites_declarees(composition)})
     return {"reseau": reseau, "application": application, "lampes": lampes}
 
 
@@ -108,15 +164,57 @@ def empreinte(cle):
 def resume(r):
     lignes = ["cles : reseau %s, application %s" % (empreinte(r["reseau"]), empreinte(r["application"]))]
     for i, l in enumerate(r["lampes"], 1):
-        lignes.append("lampe %d : 0x%04X %s (%s)" % (i, l["adresse"], l["nom"], l["mac"]))
+        lignes.append("lampe %d : 0x%04X %s (%s), modele %s" % (i, l["adresse"], l["nom"], l["mac"],
+                                                             l["code"] or "inconnu"))
     return lignes
 
 
 def commandes(r):
-    lignes = ["mesh cles %s %s" % (r["reseau"].hex().upper(), r["application"].hex().upper())]
+    """`mesh cles`, `mesh lampes <N>`, puis une ligne par lampe : le code avant le nom."""
+    lignes = ["mesh cles %s %s" % (r["reseau"].hex().upper(), r["application"].hex().upper()),
+              "mesh lampes %d" % len(r["lampes"])]
     for i, l in enumerate(r["lampes"], 1):
-        lignes.append("mesh lampe %d 0x%04X %s %s" % (i, l["adresse"], l["mac"], l["nom"]))
+        lignes.append("mesh lampe %d 0x%04X %s %d %s" % (i, l["adresse"], l["mac"], l["code"], l["nom"]))
     return lignes
+
+
+def ajouter_fictives(r, n):
+    """Banc de capacite (plan 3a) : n lampes fictives apres les vraies, qui ne repondront jamais.
+
+    Adresses a partir de 0x0100 (sautant celles des vraies lampes), MAC
+    administrees localement (02:00:00:00:00:kk), code 0 (modele non catalogue).
+    """
+    if n < 0 or len(r["lampes"]) + n > CAPACITE:
+        raise ErreurCles("%d lampes et %d fictives : le pont en gere %d" % (len(r["lampes"]), n, CAPACITE))
+    prises = {l["adresse"] for l in r["lampes"]}
+    adresse = 0x0100
+    for k in range(1, n + 1):
+        while adresse in prises:
+            adresse += 1
+        r["lampes"].append({"adresse": adresse, "mac": "02:00:00:00:00:%02X" % k, "nom": "Fictive %d" % k,
+                            "code": 0, "declare": set()})
+        prises.add(adresse)
+    return r
+
+
+def verifier_lampes(reponses, r, sortie=print):
+    """Lit les reponses aux lignes `mesh lampe` : modeles a cataloguer, et liste enregistree.
+
+    Les reponses sont celles des lampes, dans l'ordre. Leve ErreurCles si la
+    derniere ne dit pas la liste enregistree.
+    """
+    for i, (reponse, l) in enumerate(zip(reponses, r["lampes"]), 1):
+        m = REPONSE_LAMPE.match(reponse)
+        if not m or int(m.group(1)) != i:
+            raise ErreurCles("reponse inattendue du pont a mesh lampe %d : %s" % (i, reponse))
+        connues = set(m.group(4).split("+"))
+        for capacite, modele in (("cct", "temperature de couleur (Light CTL)"), ("couleur", "couleur (Light HSL)")):
+            if capacite in l["declare"] and capacite not in connues:
+                sortie("modele a cataloguer : lampe %d (%s, code %s) declare la %s, que le pont ne lui connait "
+                       "pas : marche et intensite seulement" % (i, l["nom"], l["code"] or "inconnu", modele))
+    dernier = REPONSE_LAMPE.match(reponses[-1]) if reponses else None
+    if not dernier or dernier.group(6) is None or int(dernier.group(6)) != len(r["lampes"]):
+        raise ErreurCles("le pont n'a pas enregistre la liste des lampes : ne pas le redemarrer, relancer l'outil")
 
 
 def texte_de_ligne(brute):
@@ -194,10 +292,11 @@ def attendre_redemarrage(port, attente=3.0):
 def charger(port, r, attente=3.0, sortie=print):
     """Charge les cles et les lampes de r dans le pont, puis le redemarre."""
     verifier_pont(port, attente)
-    cles, *lampes = commandes(r)  # `mesh cles` d'abord, puis une ligne par lampe
+    cles, liste, *lampes = commandes(r)  # `mesh cles`, `mesh lampes <N>`, puis une ligne par lampe
     verifier_empreintes(envoyer(port, [cles], attente=attente, sortie=sortie)[0], r)
     sortie("empreintes du pont identiques aux notres")
-    envoyer(port, lampes, attente=attente, sortie=sortie)
+    envoyer(port, [liste], attente=attente, sortie=sortie)
+    verifier_lampes(envoyer(port, lampes, attente=attente, sortie=sortie), r, sortie=sortie)
     port.write(b"redemarre\r\n")
     if attendre_redemarrage(port, attente):
         sortie("pont redemarre avec les nouvelles cles")
@@ -210,9 +309,11 @@ def main(argv=None, sortie=print):
     ap = argparse.ArgumentParser(description="Charge les cles d'amaran Desktop dans le pont.")
     ap.add_argument("--db", help="base d'amaran Desktop (sinon : la plus recente)")
     ap.add_argument("--port", help="port serie du pont ; sans lui, rien n'est envoye")
+    ap.add_argument("--fictives", type=int, default=0,
+                    help="banc de capacite : N lampes fictives en plus, qui ne repondront jamais")
     args = ap.parse_args(argv)
     try:
-        r = lire_reseau(args.db or trouver_base())
+        r = ajouter_fictives(lire_reseau(args.db or trouver_base()), args.fictives)
         for ligne in resume(r):
             sortie(ligne)
         lignes = commandes(r)
