@@ -303,21 +303,25 @@ TDD, comme aux plans 1 et 2, dans `tests/hote/` :
    identiques dans Maison ; EP2 et EP3 inchangés (`matter`) ; un T1 rapide
    (allumer, régler, éteindre chaque lampe).
 2. **Retrait et retour : ce que Maison garde.** Masquer la lampe 2, puis
-   l'afficher ; ensuite, charger une liste sans elle, puis la remettre.
-   Attendu : sa tuile disparaît, puis revient avec **EP3** ; la lampe 1 n'a pas
-   bougé. **On relève ce que Maison a gardé au retour** : la pièce, le groupe
-   d'accessoires, une scène et une automatisation de test qui la contiennent.
+   l'afficher. Attendu : sa tuile disparaît, puis revient avec **EP3** ; la
+   lampe 1 n'a pas bougé. **On relève ce que Maison a gardé au retour** : la
+   pièce, le groupe d'accessoires, une scène et une automatisation de test qui
+   la contiennent. (Retirer une lampe de la liste, elle, lui fait perdre son
+   numéro, 5 : remise plus tard, elle revient comme une lampe nouvelle. Le
+   banc 4 exerce ce retrait avec ses lampes fictives.)
    - Si Maison garde tout : on ajoute l'option par lampe « masquer quand
      absente depuis 5 min » (décision 6), avec son propre test.
    - Sinon : on en reste au geste explicite, et le constat va dans BANC.md.
-3. **Lampe jamais vue.** Déclarer une lampe fictive (adresse qui ne répond
-   jamais) : aucune tuile n'apparaît, et `lampes` la dit « jamais vue ».
+3. **Lampe jamais vue.** Déclarer une lampe fictive (`outils/cles_amaran.py
+   --fictives 1`) : aucune tuile n'apparaît, et `lampes` la dit « jamais vue ».
 4. **Capacité, avec l'accord de Djoko le moment venu.** Ajouter des lampes
-   fictives (adresses qui ne répondent jamais, MAC inventées) jusqu'à 16, et
-   les exposer avec `afficher`.
+   fictives jusqu'à 16 (`outils/cles_amaran.py --fictives 14` : adresses qui ne
+   répondent jamais, MAC administrées localement), et les exposer avec
+   `afficher`.
    Mesurer : tas libre et piles, temps jusqu'à `mesh pret`, tenue de Maison
-   (16 tuiles, abonnements), ordres sur les deux vraies lampes. Puis masquer
-   et retirer les fictives : leurs tuiles disparaissent. Ce banc est intrusif
+   (16 tuiles, abonnements), ordres sur les deux vraies lampes. Puis recharger
+   la liste sans les fictives (`outils/cles_amaran.py`) : leurs tuiles
+   disparaissent au redémarrage. Ce banc est intrusif
    (tuiles « Pas de réponse » le temps de la mesure). La charge radio réelle à N lampes
    ne se mesurera qu'avec de vraies lampes en plus.
 
