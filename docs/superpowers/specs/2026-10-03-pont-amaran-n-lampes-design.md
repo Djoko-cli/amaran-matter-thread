@@ -36,8 +36,8 @@ Hors périmètre :
 - changer la liste à chaud : charger une nouvelle liste demande un
   redémarrage, comme aujourd'hui (l'exposition d'une lampe de la liste, elle,
   se fait à chaud : 7) ;
-- le masquage automatique d'une lampe absente : seulement en option, et
-  seulement si le banc 2 montre que Maison garde tout au retour (12) ;
+- le masquage automatique d'une lampe absente : écarté, le banc 2 du
+  05/10/2026 ayant montré que Maison oublie la lampe au retour (12) ;
 - les groupes Mesh configurés dans les lampes (piste notée en 9).
 
 ## 2. Décisions de Djoko (03/10/2026)
@@ -60,7 +60,10 @@ Hors périmètre :
    très probablement perdre à Maison sa pièce, ses groupes, ses scènes et ses
    automatisations, à chaque extinction au bouton d'alimentation : ce masquage
    ne viendra qu'en option par lampe, si le banc 2 montre que Maison garde
-   tout au retour.
+   tout au retour. **Banc 2 (05/10/2026) : Maison ne garde rien.** Une lampe
+   masquée puis remise revient comme un nouvel accessoire : nom donné dans
+   Maison, groupe, scènes et automatisations perdus ; la pièce suit celle du
+   pont. L'option est donc écartée, et `masquer` reste un geste explicite.
 
 ## 3. Faits établis (03/10/2026)
 
@@ -317,6 +320,8 @@ TDD, comme aux plans 1 et 2, dans `tests/hote/` :
    - Si Maison garde tout : on ajoute l'option par lampe « masquer quand
      absente depuis 5 min » (décision 6), avec son propre test.
    - Sinon : on en reste au geste explicite, et le constat va dans BANC.md.
+   - **Résultat (05/10/2026) :** Maison reprend la lampe comme un nouvel
+     accessoire. On en reste au geste explicite (BANC.md, plan 3a).
 3. **Lampe jamais vue.** Déclarer une lampe fictive (`outils/cles_amaran.py
    --fictives 1`) : aucune tuile n'apparaît, et `lampes` la dit « jamais vue ».
 4. **Capacité, avec l'accord de Djoko le moment venu.** Ajouter des lampes
@@ -337,7 +342,7 @@ TDD, comme aux plans 1 et 2, dans `tests/hote/` :
 | fonction d'esp-matter pour imposer le numéro d'endpoint absente ou différente | repli décrit en 5 | plan (lecture d'esp-matter) |
 | mémoire insuffisante pour 16 endpoints | capacité abaissée à ce que mesure le banc | banc 4 |
 | création ou retrait d'endpoint à chaud mal suivi par Maison | retour au comportement « au démarrage seulement » (exposition au redémarrage suivant) | bancs 2 et 3 |
-| Maison oublie pièce, groupes et scènes d'une lampe retirée puis revenue | retrait seulement par geste explicite ; pas de masquage automatique | banc 2 |
+| Maison oublie pièce, groupes et scènes d'une lampe retirée puis revenue | retrait seulement par geste explicite ; pas de masquage automatique | banc 2 : constaté le 05/10/2026 |
 | Maison réordonne ou recrée les tuiles à la migration | numéros et UniqueID inchangés ; sinon, retour au firmware précédent (flash) | banc 1 |
 | réponses télescopées au-delà de quelques lampes | alerte sous 95 %, période allongée à la main | banc réel, plus tard |
 | autres modèles : trames `0x8C`/`0x8F` différentes | repli en intensité seule à vérifier avec la vraie lampe ; entrée de catalogue | à l'arrivée d'un nouveau modèle |
