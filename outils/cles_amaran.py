@@ -78,7 +78,7 @@ def modeles_sig(composition):
     """
     try:
         d = bytes.fromhex(composition or "")
-    except ValueError:
+    except (ValueError, TypeError):  # TypeError : valeur non texte dans la base
         return set()
     modeles = set()
     i = 11  # page, puis 5 champs de 2 octets

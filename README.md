@@ -58,6 +58,8 @@ Il faut ESP-IDF v5.5.4 et esp-matter (commit `c5b9ea8`) dans `~/esp`, une ESP32-
    cd firmware && idf.py build && idf.py -p /dev/cu.usbmodemXXXX erase-flash flash
    ```
 
+   Pour mettre à jour un pont déjà appairé : `flash` sans `erase-flash` (sinon Maison perd tout), et supprimer d'abord `firmware/sdkconfig` pour que les réglages de `sdkconfig.defaults` s'appliquent. La première mise à jour vers les N lampes convertit la liste des lampes et efface l'ancien format : sauvegarder avant la flash entière (`esptool.py read_flash 0 0x400000 <fichier>`, gardé hors du dépôt : il contient les clés).
+
 2. Charger les clés du réseau des lampes, lues dans la base d'amaran Desktop :
 
    ```bash
@@ -110,7 +112,7 @@ Sur l'USB, en français (`python3 outils/console.py --port <port> "<commande>"`,
 - Retirer une lampe dans amaran Desktop, puis recharger la liste (`outils/cles_amaran.py`), lui fait perdre son numéro : remise plus tard, elle revient comme une lampe nouvelle.
 - `mesh oublie` efface les clés, mais garde la liste des lampes : leurs tuiles restent, en « Pas de réponse », jusqu'au rechargement des clés. `mesh lampes 0` vide la liste.
 - Un modèle que le pont ne connaît pas encore est piloté en marche et intensité seulement. `outils/cles_amaran.py` signale une lampe qui déclare la température de couleur ou la couleur : modèle à cataloguer.
-- Si une lampe joignable manque plus de 5 % de ses relectures sur 10 minutes, la console le dit (`!! lampe <n> : relectures manquees, <p> % repondues sur 10 min`) : allonger la période (`mesh releve`). Le premier verdict vient au plus tôt 10 minutes après le démarrage, ou 5 minutes après une coupure du Mesh ou le retour d'une lampe.
+- Si une lampe joignable manque plus de 5 % de ses relectures sur 10 minutes, la console le dit (`!! lampe <n> : relectures manquees, <p> % repondues sur 10 min`) : allonger la période (`mesh releve`). Le premier verdict vient au plus tôt 10 minutes après le démarrage ; après un démarrage tardif du Mesh, ou une lampe absente depuis 10 minutes ou plus, il attend 5 minutes de relectures.
 - Bouton BOOT : juste après un appui annulé (tenu de 2 à 8 s, donc sans effet), relâcher net ; un effleurement redémarre le pont, sans conséquence (les clés et l'appairage restent).
 
 ## Clés du réseau

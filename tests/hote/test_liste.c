@@ -34,6 +34,18 @@ static void test_valider(void) {
   l.n = LISTE_CAPACITE + 1;
   VERIFIE(liste_valider(&l, &fautive) == LISTE_TROP_LONGUE && fautive == -1, "au-dela de la capacite");
 
+  // La capacite pile : 16 lampes valides, et relues telles quelles depuis le format NVS.
+  liste_t pleine;
+  memset(&pleine, 0, sizeof(pleine));
+  pleine.n = LISTE_CAPACITE;
+  for (int k = 0; k < LISTE_CAPACITE; k++) pleine.lampes[k] = lampe((uint16_t)(2 + 2 * k), (uint8_t)(k + 1), "Lampe");
+  VERIFIE(liste_valider(&pleine, &fautive) == LISTE_OK, "%d lampes : la capacite pile", LISTE_CAPACITE);
+  uint8_t tampon[sizeof(liste_entete_t) + LISTE_CAPACITE * sizeof(liste_lampe_t)];
+  liste_vers_nvs(&pleine, tampon);
+  liste_t relue;
+  VERIFIE(liste_depuis_nvs(&relue, tampon, liste_taille_nvs(&pleine)) && relue.n == LISTE_CAPACITE,
+          "%d lampes relues depuis le format NVS", LISTE_CAPACITE);
+
   const uint16_t mauvaises[] = {0x0000, 0x8000, 0xC000, LISTE_RESERVEE_MIN, LISTE_RESERVEE_MAX};
   for (unsigned k = 0; k < sizeof(mauvaises) / sizeof(mauvaises[0]); k++) {
     l = deux_lampes();
@@ -104,6 +116,8 @@ static void test_fusionner(void) {
   nouvelle.lampes[0] = lampe(0x0008, 0x02, "Lampe B renommee");  // B : autre adresse, et place 2 -> 1
   nouvelle.lampes[0].endpoint = 77;  // ce que dit le chargement ne compte pas
   nouvelle.lampes[1] = lampe(0x0006, 0x03, "Lampe C");  // nouvelle
+  nouvelle.lampes[1].endpoint = 99;                       // le chargement ne lui donne rien
+  nouvelle.lampes[1].drapeaux = LISTE_VUE | LISTE_MASQUEE;
   liste_fusionner(&nouvelle, &actuelle);
 
   VERIFIE(nouvelle.lampes[0].endpoint == 3 && nouvelle.lampes[0].drapeaux == (LISTE_VUE | LISTE_MASQUEE),

@@ -14,6 +14,10 @@
 
 static const char *TAG = "pont";
 
+// pont_demarrer expose les lampes sur la pile de main (sdkconfig.defaults) : un
+// sdkconfig ancien, garde par erreur, l'aurait laissee a 4 Ko.
+static_assert(CONFIG_ESP_MAIN_TASK_STACK_SIZE >= 6144, "supprimer firmware/sdkconfig : pile de main de 6 Ko");
+
 static void ordre_matter(int lampe, const bool *marche, const uint16_t *intensite) {
   tache_lampes_ordre(lampe, marche, intensite, true);
 }

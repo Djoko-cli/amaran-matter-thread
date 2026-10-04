@@ -180,7 +180,7 @@ class TestComposition(unittest.TestCase):
         self.assertEqual(ca.capacites_declarees(hsl), {"couleur"})
 
     def test_composition_illisible(self):
-        for compo in (None, "", "zz", "0011", COMPO_60D[:-10]):
+        for compo in (None, "", "zz", "0011", COMPO_60D[:-10], b"\x00\x11", 3.5):
             self.assertEqual(ca.modeles_sig(compo), set(), compo)
 
 

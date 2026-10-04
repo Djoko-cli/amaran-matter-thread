@@ -30,7 +30,9 @@ typedef struct {
 } amaran_config_t;
 
 // Lit la NVS. Tire et sauve l'adresse et la cle d'appareil si elles manquent. La
-// liste de l'ancien format (deux emplacements, plan 2) est convertie une fois.
+// liste de l'ancien format (deux emplacements, plan 2) est convertie une fois ; une
+// ancienne liste invalide ne l'est pas (liste vide). A appeler au demarrage, avant
+// toute autre fonction de ce fichier et avant les taches : elle cree le verrou.
 esp_err_t config_charger(amaran_config_t *c);
 esp_err_t config_sauver_cles(const uint8_t netkey[16], const uint8_t appkey[16]);
 // Nouvelle liste (chargement) : fusionnee avec celle en NVS (une MAC connue garde son

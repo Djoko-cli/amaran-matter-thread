@@ -96,7 +96,7 @@ Du banc :
 |---|---|
 | MAC | identité stable (UniqueID dans Matter) |
 | adresse Mesh | unicast, `0x0001` à `0x7FFF`, hors `0x7F00`–`0x7F7F` (nos adresses) |
-| nom | NodeLabel dans Matter, 32 caractères au plus |
+| nom | NodeLabel dans Matter, 31 octets au plus (32 avec la fin de chaîne) |
 | code de modèle | code produit Sidus (`40065` pour la 60d) |
 | endpoint | numéro d'endpoint Matter, attribué une fois (5) |
 | vue | la lampe a répondu au moins une fois (7) |
@@ -197,15 +197,19 @@ vérifier au banc avec la vraie lampe.
 - **Une lampe déjà vue reste exposée**, en « Pas de réponse » quand elle est
   absente (règle 7.2 de la spec du pont). Elle garde sa tuile, sa pièce, ses
   groupes, ses scènes et ses automatisations.
-- **Retrait explicite.** `mesh lampe <n> masquer` retire l'endpoint à chaud et
-  marque la lampe masquée ; `mesh lampe <n> afficher` la ré-expose avec le même
+- **Retrait explicite.** `mesh lampe <n> masquer` désactive l'endpoint à chaud
+  (`endpoint::disable`, sans le détruire : il reste en mémoire jusqu'au
+  redémarrage) et marque la lampe masquée. Maison oublie alors la lampe :
+  remise, elle revient comme un nouvel accessoire (banc 2 du 05/10/2026) ; `mesh lampe <n> afficher` la ré-expose avec le même
   numéro, même si elle n'a jamais été vue (c'est ce qui sert au banc de
   capacité). Un masquage survit aux redémarrages et aux rechargements de la
   liste. L'app compagnon (3b) offrira le même geste.
-- La création et le retrait à chaud suivent les exemples de pont d'esp-matter
-  (création, puis activation de l'endpoint ; retrait qui met à jour la liste
-  des parties de l'agrégateur). Le détail des appels est à vérifier dans le
-  commit installé lors du plan.
+- La création suit les exemples de pont d'esp-matter (création, puis
+  activation de l'endpoint). Le retrait désactive l'endpoint au lieu de le
+  détruire : esp-matter garde quelques secondes des pointeurs vers ses
+  attributs (écriture différée en flash), et sa place dans la liste des
+  endpoints range l'état des grappes des autres lampes. `afficher` réactive
+  l'endpoint s'il existe encore.
 - Seul le type Dimmable Light est réalisé. Tout le reste du comportement
   d'une lampe est celui de la spec du pont (6.2 à 6.5) : conversion linéaire,
   lampe noire, pas d'écho, démarrage sans ordre rejoué.
@@ -254,8 +258,8 @@ vérifier au banc avec la vraie lampe.
 ## 10. Console et outils
 
 - `lampes` : une ligne par lampe (numéro, nom, sa place dans Maison : `EP<n>`,
-  « jamais vue » ou « masquée », état lu, joignable, relectures répondues sur
-  relectures), puis les compteurs d'ordres.
+  `jamais vue`, `masquee` ou `hors de Maison`, état lu, joignable, relectures
+  répondues sur relectures), puis les compteurs d'ordres.
 - `mesh lampe <n> masquer | afficher` : retire la lampe de Maison, ou l'y
   remet (7). Effet immédiat, sans redémarrage.
 - `lampe <n> on | off | niveau <0-1000> | releve` : pour `n` de 1 à N. Avec
@@ -343,7 +347,7 @@ TDD, comme aux plans 1 et 2, dans `tests/hote/` :
 | mémoire insuffisante pour 16 endpoints | capacité abaissée à ce que mesure le banc | banc 4 |
 | création ou retrait d'endpoint à chaud mal suivi par Maison | retour au comportement « au démarrage seulement » (exposition au redémarrage suivant) | bancs 2 et 3 |
 | Maison oublie pièce, groupes et scènes d'une lampe retirée puis revenue | retrait seulement par geste explicite ; pas de masquage automatique | banc 2 : constaté le 05/10/2026 |
-| Maison réordonne ou recrée les tuiles à la migration | numéros et UniqueID inchangés ; sinon, retour au firmware précédent (flash) | banc 1 |
+| Maison réordonne ou recrée les tuiles à la migration | numéros et UniqueID inchangés ; sinon, retour par la sauvegarde complète de la flash, faite avant (la conversion efface l'ancien format) | banc 1 |
 | réponses télescopées au-delà de quelques lampes | alerte sous 95 %, période allongée à la main | banc réel, plus tard |
 | autres modèles : trames `0x8C`/`0x8F` différentes | repli en intensité seule à vérifier avec la vraie lampe ; entrée de catalogue | à l'arrivée d'un nouveau modèle |
 
