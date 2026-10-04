@@ -20,6 +20,7 @@ Projets frères :
 | P0 | Reconnaissance. Un firmware d'écoute rejoint le réseau des lampes et vérifie : IV Index, réponses captées, ordres, molette, groupe, cohabitation avec amaran Desktop | faite (30/09/2026) : 62 ordres sur 62 confirmés par relecture, toutes les demandes d'état ont reçu leur réponse ; aucun état spontané (ni molette, ni bouton, ni coupure) |
 | P1 | Matter sur la même carte, et banc de la radio partagée entre Thread et Bluetooth : une ou deux C6 | faite (30/09/2026) : une seule C6 suffit, avec l'écoute du Mesh à 50 %, l'arrondi au pour cent et la demande d'état doublée ; 96,9 % et 98,3 % des relectures répondues, 47 salves d'ordres de Maison sans échec |
 | P2 | Produit : voyant, bouton, console, fiche produit ; bancs, puis endurance 24 h | faite (02/10/2026) : T1 à T10 (T5 partiel, T7 non fait) ; 24 h sans redémarrage, 97,9 % et 98,3 % des relectures répondues, 41 salves d'ordres sans échec ; lampe noire (molette à 0 %) corrigée et vérifiée |
+| P3a | N lampes : liste, catalogue de modèles, numéros d'endpoint stables, exposition à la première réponse | faite (05/10/2026) : bancs 1 à 4 ; migration sans perte dans Maison ; 16 lampes tenues (tas au plus bas 103 Ko) ; une lampe masquée puis remise est oubliée par Maison, donc pas de masquage automatique |
 
 Résultats des bancs : [docs/BANC.md](docs/BANC.md). Protocole relevé : [docs/PROTOCOLE.md](docs/PROTOCOLE.md).
 
@@ -91,7 +92,7 @@ Sur l'USB, en français (`python3 outils/console.py --port <port> "<commande>"`,
 - `lampes` : une ligne par lampe (sa place dans Maison : `EP<n>`, « jamais vue », « masquee » ou « hors de Maison » ; état lu, joignabilité, relectures répondues), puis les ordres ;
 - `lampe <n>` : le détail d'une lampe (adresse, MAC, modèle et capacités, consigne, relectures sur 10 min) ;
 - `lampe <n> on|off|niveau <0-1000>|releve` : le niveau est arrondi au pour cent (la lampe ne garde pas mieux) ;
-- `mesh lampe <n> masquer|afficher` : retirer la lampe de Maison, ou l'y remettre, avec le même numéro (`afficher` y fait aussi entrer une lampe jamais vue) ;
+- `mesh lampe <n> masquer|afficher` : retirer la lampe de Maison, qui l'oublie alors (voir « À savoir »), ou l'y remettre, avec le même numéro (`afficher` y fait aussi entrer une lampe jamais vue) ;
 - `mesh` : réseau, empreintes des clés, compteurs ; `mesh releve <s>`, `mesh balayage`, `mesh ecoute on|off`, `mesh autotest`, etc. ;
 - `mesh lampes <N>`, puis `mesh lampe <n> <adresse> <mac> <code> <nom>` : la liste des lampes, tout ou rien (c'est ce qu'envoie `outils/cles_amaran.py`) ;
 - `matter` : mise en service, Thread, abonnements, codes, identité ;
@@ -105,7 +106,7 @@ Sur l'USB, en français (`python3 outils/console.py --port <port> "<commande>"`,
 - amaran Desktop, lui, ne suit pas les ordres venus de Maison.
 - Maison ne montre une lampe « Pas de réponse », puis son retour, qu'après avoir touché sa tuile. Le pont publie pourtant chaque changement.
 - Pour la luminosité, taper sur la jauge de Maison est plus fluide que la faire glisser : un glissé envoie une valeur toutes les 150 à 300 ms.
-- Une lampe n'entre dans Maison qu'à sa première réponse, puis y reste : absente, elle y est « Pas de réponse », et garde sa tuile, sa pièce et ses scènes. Pour la retirer de Maison : `mesh lampe <n> masquer` (`afficher` la remet, avec le même numéro).
+- Une lampe n'entre dans Maison qu'à sa première réponse, puis y reste : absente, elle y est « Pas de réponse », et garde sa tuile, sa pièce et ses scènes. Pour la retirer de Maison : `mesh lampe <n> masquer`. Maison oublie alors la lampe : remise (`afficher`, avec le même numéro), elle revient comme un nouvel accessoire, sous son nom d'amaran Desktop, sans le nom donné dans Maison, ni groupe, ni scènes, ni automatisations (banc du 05/10/2026).
 - Retirer une lampe dans amaran Desktop, puis recharger la liste (`outils/cles_amaran.py`), lui fait perdre son numéro : remise plus tard, elle revient comme une lampe nouvelle.
 - `mesh oublie` efface les clés, mais garde la liste des lampes : leurs tuiles restent, en « Pas de réponse », jusqu'au rechargement des clés. `mesh lampes 0` vide la liste.
 - Un modèle que le pont ne connaît pas encore est piloté en marche et intensité seulement. `outils/cles_amaran.py` signale une lampe qui déclare la température de couleur ou la couleur : modèle à cataloguer.

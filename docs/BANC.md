@@ -219,3 +219,42 @@ Du 02/10/2026 13:03 au 03/10/2026 13:26 (24 h 20), firmware `7ab7339`, relecture
 
 Aucun redémarrage ; Thread attaché, 1 abonnement actif ; pile la plus basse 1 828 o (`lampes`). La séquence Mesh avance d'environ 87 000 numéros par jour. Verdict : 2 s devient la période par défaut (`LAMPES_RELEVE_DEFAUT_MS`). La confirmation à 1,6 s n'a pas été capturée : T2 en avait eu une semblable à 5 s, pendant un glissé du curseur.
 
+
+## Plan 3a : N lampes
+
+05/10/2026, de 00:20 à 00:58. Firmware `adaa5fc` (code du commit `386f1b4`), flashé sans effacer sur la C6 du pont, après une sauvegarde complète de sa flash (4 Mo, gardée hors du dépôt : elle contient les clés). Djoko présent.
+
+### Banc 1 : la migration
+
+- **Conversion.** Capturée au premier démarrage : `liste des lampes convertie : 2 lampe(s), EP2 et EP3 gardes`, puis `lampe 1 dans Maison : EP2, amaran COB 60d` et `lampe 2 dans Maison : EP3, amaran COB 60d`.
+- **État.** `matter` : 2 fabriques, Thread `child`, 1 abonnement, EP2 et EP3 aux noms des lampes. `lampes` : `[EP2]` et `[EP3]`, joignables, 21 et 22 relectures répondues sur 22.
+- **Mémoire.** Pile de main : 3 504 o libres au plus bas (6 Ko ; au moins 1 Ko attendu). Pile de `lampes` : 3 760 o ; la plus basse, `amaran_tx` : 2 032 o. Tas : 170 Ko libres (164 Ko au plus bas).
+- **Maison.** Tuiles, pièce, groupe d'accessoires et automatisations identiques. T1 : les deux lampes obéissent ; 27 ordres, 0 abandon, confirmation en 472 ms en moyenne, 618 ms au plus.
+- **Redémarrages.** Trois, sans perte : EP2 et EP3 à chaque fois, et Maison n'a rien perdu.
+
+### Banc 2 : retrait et retour
+
+- `mesh lampe 2 masquer` : `ok` ; `lampes` la dit `[masquee]` ; `matter` ne montre plus qu'EP2 ; la tuile disparaît de Maison.
+- Une minute plus tard, `mesh lampe 2 afficher` : l'endpoint EP3 est réactivé (`lampe 2 de nouveau dans Maison : EP3`), et un contrôleur s'y réabonne aussitôt.
+- **Maison reprend la lampe comme un nouvel accessoire.** La tuile revient sous le nom que publie le pont (celui d'amaran Desktop), pas sous celui que Djoko lui avait donné dans Maison. Perdus : ce nom, le groupe d'accessoires, la scène de test et l'automatisation de test. La pièce ne revient que parce qu'un nouvel accessoire prend celle du pont. Le numéro d'endpoint et l'UniqueID (la MAC) étaient pourtant les mêmes.
+- **Conséquence.** Le masquage automatique d'une lampe absente (Task 8 du plan) est écarté : il ferait tout perdre à Maison à chaque absence. `masquer` reste un geste explicite, et le README prévient qu'il fait oublier la lampe à Maison.
+- **Masquer et afficher à la suite.** Lampe 2 éteinte, son niveau retenu passé de 6 à 12 %, puis, 1 s plus tard : masquer, afficher, masquer, afficher. Quatre `ok`. L'écriture différée du niveau (CurrentLevel), encore en attente au premier `masquer`, part une seconde plus tard, sur l'endpoint resté valide. Aucun redémarrage (`cause`). C'est le cas d'utilisation après libération relevé par la relecture de la Task 4 : il est corrigé, l'endpoint étant désactivé au lieu d'être détruit. La lampe 2 obéit ensuite depuis Maison.
+- **Lampe 1 masquée** (demandé par la relecture de la Task 4, car elle n'est pas le dernier endpoint) : sauté, au choix de Djoko, puisque Maison aurait oublié la lampe 1. La relecture a vérifié dans esp-matter qu'un endpoint désactivé garde sa place dans la liste.
+
+### Banc 3 : une lampe jamais vue
+
+- `outils/cles_amaran.py --fictives 1` : `ok lampe 3 0x0100 modele 0 non catalogue [intensite] : Fictive 1 ; liste de 3 lampe(s) enregistree (...)`, puis le pont redémarre.
+- `lampes` : `lampe 3 : Fictive 1 [jamais vue] lue jamais, PAS DE REPONSE`. `matter` : EP2 et EP3 seuls ; les lampes 1 et 2 gardent leurs numéros (fusion par MAC). Maison : aucune tuile nouvelle.
+
+### Banc 4 : la capacité
+
+- `--fictives 14` : liste de 16 lampes enregistrée. `mesh lampe 3` à `16 afficher` : 14 `ok`, avec des numéros neufs, EP4 à EP17.
+- `matter` : 16 endpoints de lampe, 1 abonnement. `taches` : toutes les piles au-dessus de 2 Ko (`amaran_tx` 2 024 o, `console_repl` 3 244 o, `lampes` 3 780 o). Tas : 110 Ko libres, 105 Ko au plus bas, contre 164 Ko à 2 lampes : environ 4 Ko par lampe exposée.
+- **Redémarrage avec les 16 lampes exposées.** Thread attaché à 1,5 s, les 16 endpoints créés entre 1,98 et 2,14 s, Bluetooth Mesh prêt à 5,2 s. Pile de main : 3 504 o libres, car le pic vient d'une seule exposition à la fois. Tas au plus bas : 103 Ko.
+- Maison : 16 tuiles, dont 14 « Pas de réponse ». T1 sur les deux vraies lampes, fait avec les 16 endpoints exposés : conforme.
+- **Retrait des fictives** (l'outil relancé sans `--fictives`) : `matter` ne montre plus qu'EP2 et EP3, et les 14 tuiles disparaissent de Maison. Les deux lampes restent intactes.
+- La capacité de 16 lampes tient, loin du seuil de 30 Ko de tas.
+
+Remarques :
+- **Numéros consommés.** Les fictives ont pris EP4 à EP17, et le compteur d'esp-matter ne redescend jamais : la prochaine lampe nouvelle aura EP18. Sans conséquence, les numéros allant jusqu'à 65 534.
+- **Erreurs `chip[DIS]` au démarrage.** Ce sont des annonces DNS-SD tentées avant que Thread soit attaché. Elles figuraient déjà dans les journaux du plan 2.
