@@ -131,7 +131,7 @@ Le pont date le dernier octet reçu et la fin de la dernière commande ; le bail
 
 ### 3.6 Écho et invite
 
-En mode texte, la console est celle d'ESP-IDF (linenoise) : écho, invite `amaran> `, historique. En mode machine, la tâche de la console lit elle-même l'USB, sans écho ni invite : linenoise ne sait pas couper son écho. L'app affiche elle-même la commande envoyée dans sa console.
+En mode texte, la console est celle d'ESP-IDF (linenoise, toujours en mode simple : sans édition aux flèches) : écho, invite `amaran> `, historique. En mode machine, la tâche de la console lit elle-même l'USB, sans écho ni invite : linenoise ne sait pas couper son écho. L'app affiche elle-même la commande envoyée dans sa console.
 
 ## 4. Enveloppe et conventions
 
@@ -242,7 +242,7 @@ Le préfixe est retiré avant l'aiguillage. Sans `id`, rien ne change : texte se
 | Commande | Déroulement |
 |---|---|
 | famille `json` | `reponse` `fin` aussitôt ; après la dernière ligne pour `json 1`, `json etat`, `json hello` |
-| `lampe <n> on\|off\|niveau <0-1000>` | **asynchrone** : `reponse` `fin`, code `accepte`, `suite` `ordre`, en quelques millisecondes ; puis l'événement `ordre` qui porte l'`id` (7.1) ; si la file des lampes est pleine : `erreur`, « file des lampes pleine », sans `suite` |
+| `lampe <n> on\|off\|niveau <0-1000>` | **asynchrone** : `reponse` `fin`, code `accepte`, `suite` `ordre`, en quelques millisecondes ; puis l'événement `ordre` qui porte l'`id` (7.1), toujours après la réponse `accepte` ; si la file des lampes est pleine : `erreur`, « file des lampes pleine », sans `suite` |
 | toute autre commande | `reponse` `debut`, le texte de la commande, puis `reponse` `fin` : `ok` si elle a réussi, `erreur` sinon (le texte dit pourquoi), `inconnue` pour une commande inconnue |
 
 La tâche `json` émet pendant qu'une commande tourne. Le bloc `sante` et le battement `hb` portent l'`id` de la commande en cours (`commande`) : il y entre avec la `reponse` `debut` et en sort avec la `fin`. Un bloc `sante` ou un `hb` sans cet `id`, reçu après le `debut`, dit que la `fin` s'est perdue.

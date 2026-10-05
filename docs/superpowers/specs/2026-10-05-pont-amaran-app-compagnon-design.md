@@ -116,8 +116,10 @@ Le 05/10/2026, au brainstorming du plan 3b :
   trousseau, mode démo) ;
 - `apps/macos/AmaranProtocoleTests/` et `apps/macos/AmaranCompagnonTests/` ;
 - Swift 6 strict, avertissements en erreurs, macOS 15 ou plus, sandbox
-  (`device.serial`, `network.client`, fichiers choisis par l'utilisateur) et
-  runtime durci.
+  (`device.serial`, fichiers choisis par l'utilisateur et leur signet ;
+  `network.client` viendra avec Thread, au plan 3b-2), et runtime durci quand
+  l'app est signée avec une équipe (`Local.xcconfig`) : signée ad hoc, elle ne
+  chargerait pas son framework.
 
 **Firmware :**
 - `components/protocole` (3b-1) : écriture compacte et ordonnée, file des
@@ -166,7 +168,8 @@ Le firmware `ecoute` n'est pas touché.
   par PBKDF2-HMAC-SHA256 (600 000 tours, sel aléatoire de 16 octets) ; un
   en-tête versionné ;
 - la phrase de passe : 12 caractères au moins, tapée deux fois, jamais gardée
-  ni journalisée ;
+  ni journalisée, normalisée (NFC) avant PBKDF2 : un « é » composé ou
+  décomposé ouvre la même sauvegarde ;
 - « Importer une sauvegarde » : choisir le fichier, taper la phrase, vérifier
   l'intégrité, montrer les empreintes, puis proposer de remplacer la copie du
   trousseau.
@@ -211,7 +214,10 @@ tel quel :
   texte, puis `reponse fin` : `ok` si elle a réussi, `erreur` sinon ;
 - la console texte du pont n'est plus la REPL d'ESP-IDF : linenoise fait
   toujours l'écho de ce qu'il lit. Le pont a sa propre tâche de console :
-  linenoise en mode texte, une lecture sans écho ni invite en mode machine. Un
+  linenoise en mode texte, toujours en mode simple (sans édition aux flèches,
+  même sous `idf.py monitor` : en mode évolué, il lirait la ligne de l'app
+  comme la réponse du curseur), une lecture sans écho ni invite en mode
+  machine. Un
   firmware d'avant le plan 3b répond `Unrecognized command` à `id=1 json 1` ;
 - la tâche `json` émet pendant qu'une commande tourne. Le bloc `etat` `sante`
   et le battement `hb` portent l'`id` de la commande en cours (`commande`) :
@@ -237,7 +243,7 @@ tel quel :
     lampe part quand elle change, et toutes les 10 s ;
 - `compteurs` (Mesh : annonces, NID reconnus, NetMIC faux, accès déchiffrés,
   émis, refus, file d'émission) et `reseau` (Thread, abonnements Matter) ;
-- des événements : `ordre` (issue confirmé ou abandonné, délai), `alerte`
+- des événements : `ordre` (issue confirmé, abandonné ou tenu, délai), `alerte`
   (relectures manquées, Mesh inopérant), `lampe` (entendue, entrée dans Maison,
   masquée, remise), `log` (annonces de la console, sur demande), `led`, `fin`.
 
@@ -400,7 +406,7 @@ données n'utilisent que des MAC inventées.
 
 | risque | parade | levé par |
 |---|---|---|
-| linenoise ne coupe ni l'écho ni l'invite | lecture de ligne propre au mode machine | levé en préparant le plan 3b-1 : linenoise fait toujours l'écho ; le pont a sa propre tâche de console ; à confirmer au banc A |
+| linenoise ne coupe ni l'écho ni l'invite | lecture de ligne propre au mode machine | levé en préparant le plan 3b-1 : linenoise fait toujours l'écho ; le pont a sa propre tâche de console ; confirmé au banc A (05/10/2026) |
 | l'USB ne sait pas écrire une ligne entière sans bloquer | tampon et écriture tout ou rien, ligne perdue et comptée | levé en préparant le plan 3b-1 : `usb_serial_jtag_write_bytes` sans attente écrit tout ou rien (tampon porté à 4 Ko) ; à confirmer au banc A |
 | le signet ne donne pas accès au conteneur d'amaran Desktop | copie de la base choisie par Djoko, ou app sans sandbox (à décider avec lui) | banc B du plan 3b-1, en premier : l'essai demande l'app signée et un choix de Djoko ; macOS lui demande alors d'autoriser l'accès aux données d'une autre app |
 | une socket UDP sur OpenThread gêne CHIP | essai d'abord ; Halo l'a déjà fait | tâche 1 du plan 3b-2 |

@@ -53,7 +53,7 @@ et refaire `xcodegen generate`. Seule l'icône nommée entre dans l'app.
 - `open "<DerivedData>/Build/Products/Debug/Amaran Compagnon.app" --args -demo` : démarre en mode démo (pont simulé à trois lampes) ;
 - `--args -ecran commandes` : ouvre l'écran des commandes.
 
-L'app ne s'ouvre jamais seule sur un port : choisir le pont (VID 303A) dans le menu de la barre latérale, la connexion part aussitôt. Ensuite, « Connecter » vise ce même pont, reconnu à son numéro de série USB, jamais un autre port Espressif. Ouvrir le port ne redémarre pas le pont : DTR et RTS passent à 0 en un seul appel. « Libérer le port » rend la console texte au pont (`json 0`) et ferme le port, pour flasher.
+L'app ne s'ouvre jamais seule sur un port : choisir le pont (VID 303A) dans le menu de la barre latérale, la connexion part aussitôt. Ensuite, « Connecter » vise ce même pont, reconnu à son numéro de série USB, jamais un autre port Espressif ; tant qu'aucun pont n'a été choisi au menu, il reste grisé. Ouvrir le port ne redémarre pas le pont : DTR et RTS passent à 0 en un seul appel. « Libérer le port » rend la console texte au pont (`json 0`) et ferme le port, pour flasher.
 
 ## Structure
 

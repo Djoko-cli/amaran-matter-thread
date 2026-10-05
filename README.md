@@ -81,7 +81,7 @@ Amaran Compagnon (`apps/macos`) supervise et pilote le pont par l'USB : une cart
 - elle charge le pont par l'USB, vérifie ses empreintes et sa liste, puis le redémarre ;
 - elle compare les empreintes de la base, de la copie et du pont, sans jamais montrer une clé.
 
-Le mode démo (menu Source, ou ⇧⌘D) simule un pont à trois lampes, sans matériel. Compiler : voir [apps/macos/README.md](apps/macos/README.md).
+Le mode démo (menu de la barre latérale, ou Fichier › Mode démo, ⇧⌘D) simule un pont à trois lampes, sans matériel. Compiler : voir [apps/macos/README.md](apps/macos/README.md).
 
 ## Voyant et bouton
 
