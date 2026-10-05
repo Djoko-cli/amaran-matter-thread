@@ -4656,6 +4656,9 @@ static bool commande_cle(int o, uint32_t id, const char *vue, int argc, char **a
   esp_err_t err = ESP_OK;
   if (o != USB) {
     erreur = "USB seulement";
+  } else if (nouvelle && id && !s_puits[USB].machine) {
+    // json cle nouvelle avec id : en mode machine seulement. Rien ne change.
+    erreur = "json cle nouvelle avec id : en mode machine seulement (json 1)";
   } else if (nouvelle && hexa(argv[3], alea, sizeof(alea))) {
     err = net_udp_cle_nouvelle(alea, cle, emp);
     memset(alea, 0, sizeof(alea));
@@ -5977,14 +5980,16 @@ Expected : `ok cle UDP <8 hexa>, port 5480 ouvert` ; le bloc `ip` suivant porte 
 /usr/bin/grep -oE "[0-9A-Fa-f]{64}" logs/<journal> | sort -u | wc -l
 ```
 
-(1 attendu : l'aléa.)
+(1 attendu : l'aléa. Relevé au banc A : 0, l'écho de la console masque aussi l'aléa ; une suite trouvée est à examiner.)
+
+Puis, en mode texte, `id=9 json cle nouvelle <64 hexa>` : refusée (`usage`, « en mode machine seulement ») avant toute création, la commande citée masquée : sans le mode machine, la réponse s'écrirait en texte, clé comprise (correction faite à la relecture de la Task 3, `c5128fa`).
 
 - [ ] **Step 5 : les trames (Djoko présent, lampe 1).**
 
 Run: `python3 outils/console.py --port <port> "id=1 json 1" "@3" "id=2 json trames 1" "@1" "id=3 lampe 1 on" "@4" "id=4 lampe 1 off" "@4" "id=5 json trames 0" "@1" "id=6 json 0"`
-Expected : après `id=3`, `trame` `tx` `ordre` (`lampe` 1, `marche` true, `essai` 1), `tx` `demande` (`lampe` 1), puis `rx` `etat` (`lampe` 1, `marche` true, son intensité) et l'`ordre` `confirme` `ids` [3] ; de même pour `id=4` ; entre les ordres, les relectures : `tx` `demande` au groupe (`lampe` null) et un `rx` `etat` par lampe. Après `id=5`, plus aucune `trame`. Djoko voit la lampe s'allumer puis s'éteindre, et Maison suivre.
+Expected : après `id=3`, `trame` `tx` `ordre` (`lampe` 1, `marche` true, `essai` 1), `tx` `demande` (`lampe` 1), puis `rx` `etat` (`lampe` 1, `marche` true, son intensité) et l'`ordre` `confirme` `ids` [3] ; de même pour `id=4` ; entre les ordres, les relectures : `tx` `demande` au groupe (`lampe` null) et un `rx` `etat` par lampe. Après `id=5`, plus aucune `trame`. Djoko voit la lampe s'allumer puis s'éteindre, et Maison suivre. Si la lampe est déjà allumée, `on` est « tenu » (`ids` [3], rien n'est émis) : seul `off` montre les trames de l'ordre (vu au banc A).
 
-- [ ] **Step 6 : le secteur.** Djoko branche le pont sur un chargeur USB (pas sur le Mac). Expected : au bout d'une minute au plus, le voyant est éteint avec une brève lueur blanche toutes les 10 s, et une lampe répond à Maison. Puis, de retour sur le Mac : `"cause" "matter"` : `mise sous tension`, mise en service faite.
+- [ ] **Step 6 : le secteur.** Djoko branche le pont sur un chargeur USB (pas sur le Mac). Expected : au bout d'une minute au plus, le voyant est éteint avec une brève lueur blanche toutes les 10 s, et une lampe répond à Maison. Puis, de retour sur le Mac : `"cause" "matter"` : mise en service faite ; la cause est « réinitialisation par l'USB » quand l'ouverture du port par `outils/console.py` redémarre la carte (vu au banc A), sinon `mise sous tension`.
 
 - [ ] **Step 7 : les marges.** En texte, `taches`. Expected : au moins 1 Ko de pile libre pour `udp`, `distant`, `json` et `console` ; tas au plus bas proche du plan 3b-1.
 
