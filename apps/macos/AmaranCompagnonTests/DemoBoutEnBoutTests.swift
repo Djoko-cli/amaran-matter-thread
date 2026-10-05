@@ -170,3 +170,29 @@ struct SandboxTests {
         #expect(chemin.hasSuffix("/Library/Containers/com.sidus.amaran-desktop/Data/Library/Application Support/amaran Desktop"))
     }
 }
+
+@Suite("Port du pont")
+@MainActor
+struct PortDuPontTests {
+    @Test func seulLePontEspressifEstRetenu() {
+        func port(_ chemin: String, vid: Int, serie: String?) -> PortUSB {
+            PortUSB(chemin: chemin, vid: vid, pid: 0x1001, serie: serie, produit: nil)
+        }
+        let pont = "02:00:00:00:00:AA"
+        // Meme numero de serie sous un autre nom : ce port.
+        let ailleurs = [port("/dev/cu.usbmodem1101", vid: 0x303A, serie: "02:00:00:00:00:BB"),
+                        port("/dev/cu.usbmodem2201", vid: 0x303A, serie: pont)]
+        #expect(Pont.portDuPont(ailleurs, chemin: "/dev/cu.usbmodem1101", serie: pont)?.chemin == "/dev/cu.usbmodem2201")
+        // Numero connu mais absent : jamais un autre port Espressif de meme nom.
+        let autre = [port("/dev/cu.usbmodem1101", vid: 0x303A, serie: "02:00:00:00:00:BB")]
+        #expect(Pont.portDuPont(autre, chemin: "/dev/cu.usbmodem1101", serie: pont) == nil)
+        // Sans numero connu, un port qui n'est pas Espressif n'est jamais retenu.
+        let ecran = [port("/dev/cu.usbmodem1101", vid: 0x043E, serie: nil)]
+        #expect(Pont.portDuPont(ecran, chemin: "/dev/cu.usbmodem1101", serie: nil) == nil)
+        // Sans numero connu : le port Espressif de meme chemin.
+        let memeChemin = ecran + [port("/dev/cu.usbmodem1101", vid: 0x303A, serie: nil),
+                                  port("/dev/cu.usbmodem3301", vid: 0x303A, serie: nil)]
+        #expect(Pont.portDuPont(memeChemin, chemin: "/dev/cu.usbmodem1101", serie: nil)?.vid == 0x303A)
+        #expect(Pont.portDuPont(memeChemin, chemin: "/dev/cu.usbmodem1101", serie: nil)?.chemin == "/dev/cu.usbmodem1101")
+    }
+}

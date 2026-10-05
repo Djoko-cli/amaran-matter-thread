@@ -272,9 +272,13 @@ final class Pont {
             if demo == nil { demo = TransportDemo(vitesse: vitesseDemo) }
             t = demo!
         case .serie(let chemin, let serie):
-            // Le meme pont (meme numero de serie USB) peut revenir sous un autre nom.
-            let port = ports.first { serie != nil && $0.serie == serie } ?? ports.first { $0.chemin == chemin }
-            t = TransportSerie(chemin: port?.chemin ?? chemin)
+            // Le meme pont (meme numero de serie USB) peut revenir sous un autre nom ;
+            // jamais un autre appareil, meme sous le nom d'avant.
+            guard let port = Self.portDuPont(ports, chemin: chemin, serie: serie) else {
+                echecOuverture(ErreurTransport("Pont absent : aucune carte Espressif reconnue"))
+                return
+            }
+            t = TransportSerie(chemin: port.chemin)
         }
         transport = t
         genreTransport = t.genre
@@ -371,6 +375,15 @@ final class Pont {
         }
     }
 
+    /// Le port du pont parmi `ports` : Espressif seulement. Avec un numero de serie USB
+    /// connu, c'est lui qui decide (le pont peut changer de nom, jamais de numero) ;
+    /// sans numero, le port de meme chemin.
+    static func portDuPont(_ ports: [PortUSB], chemin: String, serie: String?) -> PortUSB? {
+        let cartes = ports.filter(\.estEspressif)
+        if let serie { return cartes.first { $0.serie == serie } }
+        return cartes.first { $0.chemin == chemin }
+    }
+
     /// Ports du menu Source : les cartes Espressif seulement (USB Serial/JTAG du C6,
     /// VID 303A) ; ni Bluetooth, ni console de debogage, ni ecrans.
     static func portsVisibles(_ tous: [PortUSB]) -> [PortUSB] { tous.filter(\.estEspressif) }
@@ -384,8 +397,7 @@ final class Pont {
         case .attente, .erreur: break
         default: return
         }
-        let revenu = nouveaux.contains { ($0.serie != nil && $0.serie == serie) || $0.chemin == chemin }
-        if revenu {
+        if Self.portDuPont(nouveaux, chemin: chemin, serie: serie) != nil {
             essaisReconnexion = 0
             planifierReconnexion("port revenu")
         }

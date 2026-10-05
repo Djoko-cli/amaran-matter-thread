@@ -111,15 +111,16 @@ final class TransportSerie: Transport {
     }
 
     func fermer() {
-        file.async { [weak self] in self?.terminer("port fermé par l'app") }
+        // self fort : bloc court ; faible, le transport libere avant lui laisserait le fd ouvert.
+        file.async { self.terminer("port fermé par l'app") }
     }
 
     /// Le descripteur est `O_NONBLOCK` : a la fermeture, le tty jette ce qui
     /// n'est pas encore parti (`ttylclose`). Attendre donc que la file de
     /// sortie se vide (`TIOCOUTQ`, 300 ms au plus) avant de fermer.
     func fermerApresVidage(synchrone: Bool) {
-        let travail: @Sendable () -> Void = { [weak self] in
-            guard let self else { return }
+        // self fort : blocs courts ; faible, le transport libere avant eux laisserait le fd ouvert.
+        let travail: @Sendable () -> Void = {
             self.vider(delaiMax: .milliseconds(300))
             self.terminer("port fermé par l'app")
         }

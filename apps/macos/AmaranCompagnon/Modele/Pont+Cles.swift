@@ -218,7 +218,7 @@ extension Pont {
             return
         }
         let commande = c.restantes.removeFirst()
-        let secret = c.etape == 0
+        let secret = PolitiqueCommandes.masquerCle(commande) != commande
         c.commandeSuivie = secret ? PolitiqueCommandes.masquerCle(commande) : commande
         c.suivi = envoyer(commande, secret: secret)
         c.etape += 1
