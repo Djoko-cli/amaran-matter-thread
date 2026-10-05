@@ -12653,6 +12653,8 @@ final class TransportDemo: Transport {
 Run: `cd apps/macos && xcodegen generate && xcodebuild -project AmaranCompagnon.xcodeproj -scheme AmaranCompagnon -destination 'platform=macOS' -derivedDataPath build/dd test 2>&1 | /usr/bin/grep -E '(swift:[0-9]+:[0-9]+: (error|warning)|Test run with|[*][*] TEST)' ; cd ../..`
 Expected : `Test run with 85 tests in 13 suites passed` et `Test run with 9 tests in 3 suites passed`, puis `** TEST SUCCEEDED **`, sans avertissement. Le test du vrai trousseau est sauté.
 
+> **Amendement (exécution, 05/10)** : la relecture (Opus) a montré deux défauts, corrigés en un commit à part. (1) Une réouverture par le seul nom du port pouvait ouvrir un autre appareil (la C6 du maillage BenQ, un écran LG) : le pont n'est plus reconnu qu'à son numéro de série USB (`Pont.portDuPont`, cartes Espressif seulement), avec un test (`PortDuPontTests`). (2) Les blocs de fermeture de `TransportSerie` capturaient `self` faiblement : le descripteur exclusif pouvait rester ouvert. Le drapeau « secret » du chargement vient aussi du masquage de la commande. `AmaranCompagnonTests` compte désormais 10 tests (la Task 9 aussi).
+
 - [ ] **Step 8 : commit.**
 
 ```bash
