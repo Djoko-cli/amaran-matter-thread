@@ -45,13 +45,13 @@ Règles :
 1. Elle commence par l'octet **RS** (`0x1E`), suivi de `{"v":`. RS n'apparaît dans aucune autre sortie du pont ni d'ESP-IDF.
 2. Un seul objet JSON, **compact** (aucun espace hors des chaînes), sur une ligne, terminé par **LF** seul.
 3. **UTF-8, sans octet de contrôle.** Dans les chaînes, `"` et `\` sont échappés ; un octet de contrôle est remplacé par `?`, de même qu'une séquence UTF-8 invalide ; aucune séquence `\uXXXX`. Les noms des lampes viennent d'amaran Desktop et peuvent porter des accents : ils passent tels quels.
-4. **1 024 octets au plus**, RS et LF compris. Le pire cas de chaque message, avec 16 lampes et des noms de 31 octets, tient en **896 octets** (vérifié par `tests/hote/test_json.cpp`) : il reste 128 octets aux ajouts. Un message qui approcherait le budget gagne un bloc, jamais de longueur.
+4. **1 024 octets au plus**, RS et LF compris. Le pire cas de chaque message à contenu variable, avec 16 lampes et des noms de 31 octets, tient en **896 octets** (vérifié par `tests/hote/test_json.cpp`) : il reste 128 octets aux ajouts. Un message qui approcherait le budget gagne un bloc, jamais de longueur.
 5. Les premiers champs sont toujours `v`, `t`, `n`, `ms`, dans cet ordre, puis `bloc` pour les messages en blocs (`hello`, `config`, `etat`, `compteurs`, `reseau`).
 
 ### 2.3 Émission côté pont
 
 - Une ligne est formée dans un tampon de 1 024 octets, puis confiée **d'un seul appel** au pilote de l'USB (`usb_serial_jtag_write_bytes`, sans attente) : elle entre entière dans son tampon d'émission de 4 096 octets, ou pas du tout. Faute de place, elle est perdue et comptée (`json_perdus`) ; le pont réessaie une fois une milliseconde plus tard, pour le cas où une autre tâche tenait le pilote.
-- Les lignes périodiques et les instantanés passent par une file (48 places) : la tâche `json` en émet une toutes les 10 ms. Une ligne en retard de plus de 500 ms est perdue et comptée ; une `reponse` ne l'est jamais.
+- Les lignes périodiques et les instantanés passent par une file (48 places) : la tâche `json` en émet une toutes les 10 ms. Une ligne périodique en retard de plus de 500 ms est perdue et comptée ; une `reponse` n'est jamais abandonnée pour retard : si la file est pleine, elle est perdue et comptée dans `json_perdus`.
 - Les événements partent dès que la tâche `json` les reçoit.
 - `n` augmente à chaque ligne produite, écrite ou perdue : un trou dans `n` signale une perte.
 

@@ -172,7 +172,7 @@ class RateCap {
   uint32_t winAt_ = 0, skipped_ = 0;
 };
 
-// Au plus kLines lignes acceptees par kWindowMs glissantes (section 6.5).
+// Au plus kLines lignes acceptees par kWindowMs glissantes (section 6.3).
 class Cadence {
  public:
   static constexpr uint8_t kLines = 20;
@@ -229,7 +229,7 @@ class Queue {
 };
 
 // ---------------------------------------------------------------------------
-//  Bail (section 3.5)
+//  Bail (section 3.4)
 // ---------------------------------------------------------------------------
 
 // Le bail court depuis le plus recent : dernier octet recu, ou fin de la

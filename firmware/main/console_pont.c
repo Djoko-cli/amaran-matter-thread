@@ -265,7 +265,7 @@ static void tache_console(void *arg) {
     }
     char *ligne = linenoise(INVITE);
     if (!ligne) continue;  // ligne vide
-    linenoiseHistoryAdd(ligne);
+    // Pas d'historique : le mode simple n'a pas de navigation, et `mesh cles <k1> <k2>` n'a pas a rester en memoire.
     json_pont_executer(ligne, strlen(ligne) > JSON_PONT_CMD_MAX);
     linenoiseFree(ligne);
   }
@@ -288,7 +288,6 @@ void console_pont_demarrer(amaran_config_t *cfg) {
   ESP_ERROR_CHECK(esp_console_init(&conf));
   usb_serial_jtag_vfs_use_driver();
   linenoiseSetMultiLine(1);
-  linenoiseHistorySetMaxLen(20);
   linenoiseSetMaxLineLen(LIGNE_MAX);
   linenoiseAllowEmpty(false);
   // Toujours en mode simple : l'app partage cette console, et en mode evolue chaque linenoise()

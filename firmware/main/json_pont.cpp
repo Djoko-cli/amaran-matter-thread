@@ -732,12 +732,23 @@ void json_pont_executer(char *ligne, bool trop_long) {
   const bool a_id = parseIdPrefix(ligne, &id, &cmd);
   // Ligne vide (l'effacement 0x15 + LF que l'app envoie a l'ouverture) : rien a faire.
   if (!a_id && !trop_long && strspn(cmd, " ") == strlen(cmd)) return;
-  // La commande telle que la reponse la cite : masquee (mesh cles), puis tronquee.
+  // Les mots de la commande (esp_console_run decoupe une copie de son cote). Decoupes avant
+  // la reponse : les guillemets sont retires ici comme par la console, et la commande citee
+  // se juge sur ses mots, pas sur la ligne brute.
+  static char copie[kCmdMax + 1];
+  static char *argv[8];
+  snprintf(copie, sizeof(copie), "%s", cmd);
+  const int argc = (int)esp_console_split_argv(copie, argv, sizeof(argv) / sizeof(argv[0]));
+  // La commande telle que la reponse la cite : masquee (mesh cles, avec ou sans guillemets :
+  // jamais une cle dans cmd), puis tronquee.
   char vue[kCmdTextMax + 1];
   {
     char masquee[kCmdMax + 1];
     snprintf(masquee, sizeof(masquee), "%s", cmd);
     maskCmd(masquee);
+    if (argc >= 1 && (!strncmp(argv[0], "mesh cles", 9) || (!strcmp(argv[0], "mesh") && argc >= 2 && !strncmp(argv[1], "cles", 4)))) {
+      snprintf(masquee, sizeof(masquee), "mesh cles");
+    }
     copyCmd(vue, masquee);
   }
   xSemaphoreTake(s_verrou, portMAX_DELAY);
@@ -757,11 +768,6 @@ void json_pont_executer(char *ligne, bool trop_long) {
     if (!a_id) printf("erreur : %s\n", refus);
     return;
   }
-  // Les mots de la commande (esp_console_run decoupe une copie de son cote).
-  static char copie[kCmdMax + 1];
-  static char *argv[8];
-  snprintf(copie, sizeof(copie), "%s", cmd);
-  const int argc = (int)esp_console_split_argv(copie, argv, sizeof(argv) / sizeof(argv[0]));
   if (argc >= 1 && !strcmp(argv[0], "json")) {
     commande_json(a_id ? id : 0, vue, argc, argv, debut);
     s_derniere_cmd = maintenant_ms();
