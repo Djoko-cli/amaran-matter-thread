@@ -258,3 +258,17 @@ Aucun redémarrage ; Thread attaché, 1 abonnement actif ; pile la plus basse 1 
 Remarques :
 - **Numéros consommés.** Les fictives ont pris EP4 à EP17, et le compteur d'esp-matter ne redescend jamais : la prochaine lampe nouvelle aura EP18. Sans conséquence, les numéros allant jusqu'à 65 534.
 - **Erreurs `chip[DIS]` au démarrage.** Ce sont des annonces DNS-SD tentées avant que Thread soit attaché. Elles figuraient déjà dans les journaux du plan 2.
+
+## Plan 3b-1 : banc A, le mode JSON du pont (05/10/2026)
+
+Firmware `437441f` flashé sans effacer sur la C6 du pont (Maison garde tout), deux lampes, Djoko présent. Journaux dans `logs/2026-10-05-banc-a-etape*.log` (hors du dépôt).
+
+- **Console texte** : inchangée pour un humain. `help` liste `json` ; `mesh pret : oui` ; les deux lampes, joignables ; `taches` cite `json` et `console`. `bonjour` répond `Commande inconnue : "bonjour" (help)`.
+- **Mode machine** (`id=1 json 1`) : l'instantané complet (`hello` base et identité, `config` catalogue, mesh et une ligne par lampe, `etat` pont, lampes et santé, `compteurs`, `reseau` Matter et Thread), puis `reponse` `ok` avec `bail_s` 30. Sur 52 lignes : aucun trou de `n`, aucune ligne abîmée, toutes sous 896 octets. `id=2 lampe 1` : `reponse debut`, le texte du détail sans écho, `reponse fin` `ok`. `json ping` : `ok` avec `bail_s`. `json 0` : `ok`, `fin` (cause `commande`), le texte et l'invite ; `mesh` répond ensuite en texte, avec écho. La ligne `id=1 json 1` elle-même a son écho : elle est lue en mode texte.
+- **Ordres de l'app**, lampe 1 : chacun reçoit `accepte` (suite `ordre`), puis son événement `ordre` avec son `id` : allumage confirmé en 361 ms, 30 % en 355 ms, 30 % de nouveau `tenu` (délai et essai à 0, rien d'émis), 60 % en 475 ms, extinction en 360 ms ; un événement `led` `livree` à chaque confirmation. La lampe obéit et Maison suit (Djoko).
+- **Ordres de Maison** pendant une session de 25 s : allumage et extinction de la lampe 2, puis deux ordres sur la lampe 1, chacun confirmé (530 à 592 ms) avec `"ids":[]`, et les lignes `etat` `lampe` qui suivent la consigne.
+- **Bail** : sans rien recevoir, la session se coupe à 30 s : `fin` (cause `bail`), `json : mode machine coupe (hote muet depuis 30 s)`, l'invite.
+- **Refus** : `mesh cles 00 11` (clés invalides, rien d'enregistré) : la réponse ne cite que `mesh cles`, `erreur`, et le texte d'usage ; une ligne de 139 octets : `trop_long`, rien n'est exécuté ; `lampe 9 on` : `usage` (`lampe <1-2> ...`) ; `json periode 5` : `usage` (`json periode <0|200-60000 ms>`).
+- **Marges** (blocs `sante` et `taches`) : pile libre au plus bas `json` 2 096 o, `console` 3 756 o, `socle` 2 540 o, `amaran_tx` 2 028 o, `ot_task` 2 212 o, les autres au-dessus ; tas au plus bas 145 Ko (deux lampes) ; `json_perdus` 0, aucun rejet.
+
+Non vu à ce banc : un bloc `sante` émis pendant une commande (`commande` non nul) : les commandes essayées ont toutes duré moins d'une période. Le test natif de `components/protocole` et la corrélation de l'app (Task 6) le couvrent.
