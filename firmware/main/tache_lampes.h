@@ -10,6 +10,7 @@
 #include "esp_err.h"
 
 #include "config_amaran.h"
+#include "diagnostic.h"
 #include "lampes.h"
 #include "liste.h"
 
@@ -21,6 +22,8 @@ esp_err_t tache_lampes_demarrer(const amaran_config_t *cfg);
 // Ordre pour une lampe, sans bloquer, depuis n'importe quelle tache (la tache
 // CHIP comprise). marche/intensite : NULL = inchange.
 void tache_lampes_ordre(int lampe, const bool *marche, const uint16_t *intensite, bool depuis_matter);
+// Ordre de l'app (mode JSON) : son id reviendra dans l'evenement ordre qui le finira.
+void tache_lampes_ordre_id(int lampe, const bool *marche, const uint16_t *intensite, uint32_t id);
 // Nouvelle periode de relecture (ms).
 void tache_lampes_regler_releve(uint32_t releve_ms);
 // Copie coherente de l'etat, pour la console.
@@ -35,6 +38,8 @@ void tache_lampes_ecoute(bool oui);
 // Ordres confirmes et abandonnes depuis le demarrage (ne font que croitre).
 uint32_t tache_lampes_confirmes(void);
 uint32_t tache_lampes_abandons(void);
+// Etat du diagnostic du Bluetooth Mesh (spec 7.3).
+diagnostic_t tache_lampes_diagnostic(void);
 
 #ifdef __cplusplus
 }

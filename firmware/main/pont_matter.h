@@ -19,6 +19,18 @@ extern "C" {
 
 #define PONT_PLAFOND_ABONNEMENT_S 20  // lecon du Halo : Apple se reabonne quand l'intervalle expire
 #define PONT_NIVEAU_PLANCHER 4        // lecon du Halo : sous 4, Maison montre une lampe allumee a fond
+#define PONT_NOM "Pont amaran"        // NodeLabel
+
+// Releve du cote Matter pour le protocole JSON : rien n'y prend un verrou.
+typedef struct {
+  bool demarre;
+  uint8_t fabriques;
+  bool ble_annonce, identifie, thread_attache;
+  const char *role;  // role Thread du dernier evenement : disabled, detached, child, router, leader
+  uint32_t abo_demandes, abo_plafonnes, abo_etablis, abo_termines;
+  // Lus une fois, juste apres le demarrage de Matter ; NULL avant, ou en cas d'echec.
+  const char *code_manuel, *qr, *fabricant, *produit, *serie;
+} pont_infos_t;
 
 // Ordre d'un controleur pour une lampe (appele dans la tache CHIP, sans bloquer) :
 // marche et/ou intensite 0..1000 (NULL : inchange).
@@ -52,6 +64,8 @@ bool pont_ble_annonce(void);
 bool pont_thread_attache(void);
 // La commande `matter` : mise en service, fabriques, Thread, abonnements, codes.
 void pont_afficher(void);
+// Releve pour le protocole JSON, depuis n'importe quelle tache, sans verrou.
+void pont_lire(pont_infos_t *infos);
 // Retire toutes les fabriques Matter, puis la pile redemarre la carte. Les
 // reglages "amaran" (cles, lampes) restent (spec 7.7).
 void pont_desappairer(void);

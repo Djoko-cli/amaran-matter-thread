@@ -11,6 +11,7 @@
 #include "freertos/task.h"
 
 #include "diagnostic.h"
+#include "json_pont.h"
 #include "mesh_amaran.h"
 #include "mesh_console.h"
 #include "pont_matter.h"
@@ -27,6 +28,7 @@ typedef struct {
   bool a_marche, marche, a_intensite, depuis_matter;
   uint16_t intensite;
   uint32_t releve_ms;
+  uint32_t id;  // ordre de l'app (mode JSON) ; 0 : aucun
 } message_t;
 
 static QueueHandle_t s_file;
@@ -37,6 +39,12 @@ static volatile bool s_ecoute;
 static volatile uint32_t s_confirmes, s_abandons;
 static bool s_cles;                  // cles du reseau presentes au demarrage
 static diagnostic_suivi_t s_diag;    // Bluetooth Mesh inoperant (spec 7.3)
+static volatile diagnostic_t s_diag_etat;
+// Id des ordres de l'app en cours, par lampe : le prochain signal de la lampe les
+// porte (un ordre arrive pendant un autre se fond dans le sien). Tache lampes.
+static uint32_t s_ids[LAMPES_CAPACITE][JSON_PONT_IDS_MAX];
+static uint8_t s_nb_ids[LAMPES_CAPACITE];
+static uint32_t s_ids_perdus[LAMPES_CAPACITE];
 
 static uint32_t maintenant_ms(void) { return (uint32_t)(esp_timer_get_time() / 1000); }
 
@@ -50,26 +58,34 @@ static void sortie_publier(void *ctx, int lampe, const lampe_etat_t *etat, bool 
   pont_publier(lampe, etat, joignable);
 }
 
+// Le voyant suit confirmes et abandons ; l'app recoit chaque fin d'ordre, avec les
+// id de ses ordres que le signal couvre (sous s_verrou, dans la tache lampes).
 static void sortie_signaler(void *ctx, int lampe, lampes_signal_t signal) {
   (void)ctx;
-  (void)lampe;
   if (signal == LAMPES_SIGNAL_CONFIRME) {
     s_confirmes++;
   } else if (signal == LAMPES_SIGNAL_ABANDON) {
     s_abandons++;
   }
+  const lampe_t *p = &s_lampes.lampes[lampe];
+  json_pont_ordre(lampe, signal, p->dernier_delai_ms, signal == LAMPES_SIGNAL_TENU ? 0 : p->essai, s_ids[lampe],
+                  s_nb_ids[lampe], s_ids_perdus[lampe]);
+  s_nb_ids[lampe] = 0;
+  s_ids_perdus[lampe] = 0;
 }
 
 // Relectures manquees (spec N lampes 8) : une ligne a l'entree, une a la sortie.
 static void sortie_alerter(void *ctx, int lampe, bool manque, uint8_t pour_cent) {
   (void)ctx;
   if (manque) {
-    printf("!! lampe %d : relectures manquees, %u %% repondues sur 10 min : allonger la periode (mesh releve)\n",
-           lampe + 1, (unsigned)pour_cent);
+    json_pont_annoncer("lampes", true,
+                       "!! lampe %d : relectures manquees, %u %% repondues sur 10 min : allonger la periode (mesh releve)",
+                       lampe + 1, (unsigned)pour_cent);
   } else {
-    printf("[lampes] lampe %d : relectures de nouveau repondues a %u %% sur 10 min\n", lampe + 1,
-           (unsigned)pour_cent);
+    json_pont_annoncer("lampes", false, "[lampes] lampe %d : relectures de nouveau repondues a %u %% sur 10 min",
+                       lampe + 1, (unsigned)pour_cent);
   }
+  json_pont_alerte_releves(lampe, manque, pour_cent);
 }
 
 // Lampes dont l'endpoint existe, vues au dernier tic (publier_les_apparues).
@@ -105,11 +121,16 @@ static void exposer_les_nouvelles(void) {
     liste_lampe_t *a = &s_liste.lampes[i];
     if (!s_lampes.lampes[i].entendue || !liste_a_exposer_a_l_ecoute(a)) continue;
     liste_marquer_vue(a);
-    if (config_maj_drapeaux(a->mac, a->drapeaux) != ESP_OK) printf("!! lampe %d : vue, mais NVS non mise a jour\n", i + 1);
+    if (config_maj_drapeaux(a->mac, a->drapeaux) != ESP_OK) {
+      json_pont_annoncer("lampes", true, "!! lampe %d : vue, mais NVS non mise a jour", i + 1);
+    }
     if (exposer(i) == ESP_OK) {
-      printf("[lampes] lampe %d entendue : dans Maison (EP%u)\n", i + 1, (unsigned)pont_endpoint(i));
+      json_pont_annoncer("lampes", false, "[lampes] lampe %d entendue : dans Maison (EP%u)", i + 1,
+                         (unsigned)pont_endpoint(i));
+      json_pont_lampe(i, JSON_LAMPE_ENTREE, pont_endpoint(i));
     } else {
-      printf("!! lampe %d entendue, mais pas dans Maison (endpoint Matter)\n", i + 1);
+      json_pont_annoncer("lampes", true, "!! lampe %d entendue, mais pas dans Maison (endpoint Matter)", i + 1);
+      json_pont_lampe(i, JSON_LAMPE_ECHEC, 0);
     }
   }
 }
@@ -118,6 +139,16 @@ static void traiter(const message_t *m) {
   if (m->type == MSG_RELEVE) {
     lampes_regler_releve(&s_lampes, m->releve_ms);
     return;
+  }
+  // L'id d'abord : un ordre deja tenu, ou un Mesh pas pret, signale aussitot.
+  if (m->id && m->lampe >= 0 && m->lampe < s_lampes.n) {
+    const int i = m->lampe;
+    if (s_nb_ids[i] == JSON_PONT_IDS_MAX) {  // le plus ancien sort
+      memmove(s_ids[i], s_ids[i] + 1, (JSON_PONT_IDS_MAX - 1) * sizeof(s_ids[i][0]));
+      s_nb_ids[i]--;
+      s_ids_perdus[i]++;
+    }
+    s_ids[i][s_nb_ids[i]++] = m->id;
   }
   lampes_ordre(&s_lampes, m->lampe, m->a_marche ? &m->marche : NULL, m->a_intensite ? &m->intensite : NULL,
                m->depuis_matter, maintenant_ms());
@@ -129,11 +160,13 @@ static void diagnostiquer(uint32_t t) {
   mesh_lire_stats(&st);
   const diagnostic_ecarts_t compteurs = {st.annonces, st.nid_reconnu, st.netmic_faux, st.acces_dechiffres};
   if (!diagnostic_suivre(&s_diag, s_cles, mesh_pret(), &compteurs, t)) return;
+  s_diag_etat = s_diag.etat;
   if (s_diag.etat == DIAG_OK) {
-    printf("[mesh] de nouveau operationnel\n");
+    json_pont_annoncer("mesh", false, "[mesh] de nouveau operationnel");
   } else {
-    printf("!! Bluetooth Mesh inoperant : %s\n", diagnostic_texte(s_diag.etat));
+    json_pont_annoncer("mesh", true, "!! Bluetooth Mesh inoperant : %s", diagnostic_texte(s_diag.etat));
   }
+  json_pont_alerte_mesh(s_diag.etat);
   socle_panne_mesh(s_diag.etat != DIAG_OK);
 }
 
@@ -189,9 +222,9 @@ esp_err_t tache_lampes_demarrer(const amaran_config_t *cfg) {
   return xTaskCreate(tache, "lampes", 6144, NULL, 4, NULL) == pdPASS ? ESP_OK : ESP_ERR_NO_MEM;
 }
 
-void tache_lampes_ordre(int lampe, const bool *marche, const uint16_t *intensite, bool depuis_matter) {
+static void envoyer_ordre(int lampe, const bool *marche, const uint16_t *intensite, bool depuis_matter, uint32_t id) {
   if (!s_file || lampe < 0 || lampe >= LAMPES_CAPACITE) return;
-  message_t m = {.type = MSG_ORDRE, .lampe = (int8_t)lampe, .depuis_matter = depuis_matter};
+  message_t m = {.type = MSG_ORDRE, .lampe = (int8_t)lampe, .depuis_matter = depuis_matter, .id = id};
   if (marche) {
     m.a_marche = true;
     m.marche = *marche;
@@ -205,6 +238,14 @@ void tache_lampes_ordre(int lampe, const bool *marche, const uint16_t *intensite
   // en pratique jamais : la tache CHIP produit elle-meme les ecritures, et la tache lampes
   // vide la file en continu.
   xQueueSend(s_file, &m, 0);
+}
+
+void tache_lampes_ordre(int lampe, const bool *marche, const uint16_t *intensite, bool depuis_matter) {
+  envoyer_ordre(lampe, marche, intensite, depuis_matter, 0);
+}
+
+void tache_lampes_ordre_id(int lampe, const bool *marche, const uint16_t *intensite, uint32_t id) {
+  envoyer_ordre(lampe, marche, intensite, false, id);
 }
 
 void tache_lampes_regler_releve(uint32_t releve_ms) {
@@ -248,6 +289,8 @@ esp_err_t tache_lampes_exposition(int lampe, bool afficher) {
   if (err == ESP_OK) {
     s_liste.lampes[lampe] = copie;
     err = afficher ? exposer(lampe) : pont_masquer(lampe);
+    json_pont_lampe(lampe, err != ESP_OK ? JSON_LAMPE_ECHEC : afficher ? JSON_LAMPE_REMISE : JSON_LAMPE_MASQUEE,
+                    pont_endpoint(lampe));
   }
   xSemaphoreGive(s_verrou);
   return err;
@@ -258,3 +301,5 @@ void tache_lampes_ecoute(bool oui) { s_ecoute = oui; }
 uint32_t tache_lampes_confirmes(void) { return s_confirmes; }
 
 uint32_t tache_lampes_abandons(void) { return s_abandons; }
+
+diagnostic_t tache_lampes_diagnostic(void) { return s_diag_etat; }

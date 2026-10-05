@@ -72,6 +72,10 @@ static volatile uint32_t s_abo_demandes, s_abo_plafonnes, s_abo_etablis, s_abo_t
 static_assert(EMPLACEMENTS <= 32, "s_identifie : un bit par emplacement");
 static volatile uint32_t s_identifie;
 static volatile uint32_t s_effet_fin[EMPLACEMENTS];
+// Codes d'appairage et identite, lus une fois sous le verrou de la pile juste apres
+// esp_matter::start : le protocole JSON les rend ensuite sans verrou.
+static char s_qr[128], s_manuel[32], s_fabricant[33], s_produit[33], s_serie[33];
+static volatile bool s_infos_lues;
 
 // --- Abonnements : intervalle maximal plafonne (lecon du Halo : apres un
 // redemarrage du noeud, Apple ne se reabonne que quand cet intervalle expire).
@@ -363,7 +367,7 @@ esp_err_t pont_demarrer(const amaran_config_t *cfg, pont_ordre_cb_t ordre) {
 
   node::config_t cfg_noeud;
   snprintf(cfg_noeud.root_node.basic_information.node_label,
-           sizeof(cfg_noeud.root_node.basic_information.node_label), "%s", "Pont amaran");
+           sizeof(cfg_noeud.root_node.basic_information.node_label), "%s", PONT_NOM);
   // Identify reste sans effet sur la lampe (Maison ne le propose pas, spec 6.1).
   s_noeud = node::create(&cfg_noeud, rappel_attribut, rappel_identification);
   if (!s_noeud) return ESP_FAIL;
@@ -396,6 +400,16 @@ esp_err_t pont_demarrer(const amaran_config_t *cfg, pont_ordre_cb_t ordre) {
     lock::ScopedChipStackLock verrou(portMAX_DELAY);
     chip::app::InteractionModelEngine::GetInstance()->RegisterReadHandlerAppCallback(&s_plafond);
     s_fabriques = chip::Server::GetInstance().GetFabricTable().FabricCount();
+    // Codes d'appairage (ils ne changent pas) et identite, pour le protocole JSON.
+    chip::MutableCharSpan qr_span(s_qr), manuel_span(s_manuel);
+    const chip::RendezvousInformationFlags ble(chip::RendezvousInformationFlag::kBLE);
+    if (GetQRCode(qr_span, ble) != CHIP_NO_ERROR) s_qr[0] = 0;
+    if (GetManualPairingCode(manuel_span, ble) != CHIP_NO_ERROR) s_manuel[0] = 0;
+    chip::DeviceLayer::DeviceInstanceInfoProvider *infos = chip::DeviceLayer::GetDeviceInstanceInfoProvider();
+    if (!infos || infos->GetVendorName(s_fabricant, sizeof(s_fabricant)) != CHIP_NO_ERROR) s_fabricant[0] = 0;
+    if (!infos || infos->GetProductName(s_produit, sizeof(s_produit)) != CHIP_NO_ERROR) s_produit[0] = 0;
+    if (!infos || infos->GetSerialNumber(s_serie, sizeof(s_serie)) != CHIP_NO_ERROR) s_serie[0] = 0;
+    s_infos_lues = true;
   }
   // Les lampes exposees, juste apres start (le compteur d'esp-matter vient d'etre
   // relu) : dans l'ordre croissant de leur numero, pour qu'apres un desappairage
@@ -455,6 +469,27 @@ void pont_desappairer(void) {
     return;
   }
   esp_matter::factory_reset();
+}
+
+void pont_lire(pont_infos_t *infos) {
+  memset(infos, 0, sizeof(*infos));
+  infos->demarre = esp_matter::is_started();
+  infos->fabriques = s_fabriques;
+  infos->ble_annonce = s_ble_annonce;
+  infos->identifie = pont_identifie();
+  infos->thread_attache = pont_thread_attache();
+  infos->role = otThreadDeviceRoleToString(static_cast<otDeviceRole>(s_role));
+  infos->abo_demandes = s_abo_demandes;
+  infos->abo_plafonnes = s_abo_plafonnes;
+  infos->abo_etablis = s_abo_etablis;
+  infos->abo_termines = s_abo_termines;
+  if (s_infos_lues) {
+    infos->code_manuel = s_manuel[0] ? s_manuel : NULL;
+    infos->qr = s_qr[0] ? s_qr : NULL;
+    infos->fabricant = s_fabricant[0] ? s_fabricant : NULL;
+    infos->produit = s_produit[0] ? s_produit : NULL;
+    infos->serie = s_serie[0] ? s_serie : NULL;
+  }
 }
 
 bool pont_identifie(void) {

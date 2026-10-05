@@ -16,6 +16,7 @@
 #include "freertos/task.h"
 
 #include "boot_button.h"
+#include "json_pont.h"
 #include "pont_matter.h"
 #include "status_led.h"
 #include "tache_lampes.h"
@@ -44,6 +45,7 @@ static uint32_t s_desappairage_ms;
 static volatile bool s_demande_test, s_demande_arret, s_en_test;
 static volatile statusled::Pattern s_motif;
 static volatile uint32_t s_couleur;
+static volatile uint32_t s_phase_ms;  // depart de la phase du motif affiche (protocole JSON)
 
 static uint32_t maintenant_ms(void) { return (uint32_t)(esp_timer_get_time() / 1000); }
 
@@ -86,7 +88,8 @@ static void attendre_bouton_haut(void) {
       haute_depuis = t;
       if (!dit) {
         dit = true;
-        printf("[bouton] tenu pendant un redemarrage : reset au relachement (IO9, broche de strapping)\n");
+        json_pont_annoncer("bouton", false,
+                           "[bouton] tenu pendant un redemarrage : reset au relachement (IO9, broche de strapping)");
       }
     } else if (t - haute_depuis >= (int64_t)kArretHautMs * 1000) {
       return;
@@ -103,7 +106,8 @@ static void bouton_relever(uint32_t t) {
     // La tache CHIP efface puis redemarre : bouton inerte. Filet si rien ne
     // redemarre : esp_matter::factory_reset() ne dit pas son echec.
     if (s_redemarrage || t - s_desappairage_ms < kDesappairageMs) return;
-    printf("[bouton] toujours en marche %" PRIu32 " s apres le desappairage : redemarrage\n", kDesappairageMs / 1000);
+    json_pont_annoncer("bouton", true, "[bouton] toujours en marche %" PRIu32 " s apres le desappairage : redemarrage",
+                       kDesappairageMs / 1000);
     if (broche_stable()) esp_restart();
     s_desappairage_ms = maintenant_ms();
     return;
@@ -114,28 +118,32 @@ static void bouton_relever(uint32_t t) {
     case Event::None:
       return;
     case Event::Armed:
-      printf("[bouton] tenu 8 s : relacher pour desappairer (retrait de Matter)\n");
+      json_pont_annoncer("bouton", false, "[bouton] tenu 8 s : relacher pour desappairer (retrait de Matter)");
       return;
     case Event::Cancelled:
-      printf("[bouton] appui de %" PRIu32 " ms (2 a 8 s) : annule, rien fait\n", tenu);
+      json_pont_annoncer("bouton", false, "[bouton] appui de %" PRIu32 " ms (2 a 8 s) : annule, rien fait", tenu);
       return;
     case Event::Unsure:
-      printf("[bouton] appui de %" PRIu32 " ms ignore : releves interrompus %" PRIu32 " ms, duree incertaine\n", tenu,
-             s_bouton.lastGapMs());
+      json_pont_annoncer("bouton", false,
+                         "[bouton] appui de %" PRIu32 " ms ignore : releves interrompus %" PRIu32
+                         " ms, duree incertaine",
+                         tenu, s_bouton.lastGapMs());
       return;
     case Event::Dropped:
-      printf("[bouton] nouvel appui : action en attente abandonnee\n");
+      json_pont_annoncer("bouton", false, "[bouton] nouvel appui : action en attente abandonnee");
       return;
     case Event::BootReleased:
-      printf("[bouton] relache : il etait tenu au demarrage, ignore\n");
+      json_pont_annoncer("bouton", false, "[bouton] relache : il etait tenu au demarrage, ignore");
       return;
     case Event::Reboot:
-      printf("[bouton] appui court (%" PRIu32 " ms) : redemarrage\n", tenu);
+      json_pont_annoncer("bouton", false, "[bouton] appui court (%" PRIu32 " ms) : redemarrage", tenu);
       if (!broche_stable()) break;
       esp_restart();
       return;
     case Event::Unpair:
-      printf("[bouton] appui long (%" PRIu32 " ms) : retrait de toutes les fabriques Matter, puis redemarrage\n", tenu);
+      json_pont_annoncer("bouton", false,
+                         "[bouton] appui long (%" PRIu32 " ms) : retrait de toutes les fabriques Matter, puis redemarrage",
+                         tenu);
       if (!broche_stable()) break;
       s_desappairage = true;
       s_desappairage_ms = maintenant_ms();
@@ -143,7 +151,7 @@ static void bouton_relever(uint32_t t) {
       return;
   }
   // Rappuye pendant la derniere garde : pas de reset broche basse.
-  printf("[bouton] rappuye juste avant le reset : action annulee\n");
+  json_pont_annoncer("bouton", false, "[bouton] rappuye juste avant le reset : action annulee");
   s_bouton.begin(bouton_bas(), maintenant_ms());
 }
 
@@ -186,9 +194,15 @@ static void voyant_relever(uint32_t t) {
     abandons = a;
     s_led.unreachable(t);
   }
-  premier = false;
   const statusled::Frame f = s_led.frame(t);
+  // Changement de motif, ou du test : evenement led du protocole JSON (7.4).
+  if (premier || f.p != s_motif || s_led.testing() != s_en_test) {
+    json_pont_led(statusled::patternCode(f.p), statusled::patternCode(premier ? f.p : (statusled::Pattern)s_motif),
+                  s_led.testing(), f.t);
+  }
+  premier = false;
   s_motif = f.p;
+  s_phase_ms = t - f.t;
   s_couleur = (uint32_t)f.c.r << 16 | (uint32_t)f.c.g << 8 | f.c.b;
   s_en_test = s_led.testing();
   if (!affiche_ok || f.c != affiche) {  // n'ecrire que les changements
@@ -235,6 +249,12 @@ esp_err_t socle_demarrer(void) {
 }
 
 void socle_panne_mesh(bool oui) { s_panne_mesh = oui; }
+
+void socle_voyant(socle_voyant_t *v) {
+  v->motif = statusled::patternCode(s_motif);
+  v->test = s_en_test;
+  v->depuis_ms = maintenant_ms() - s_phase_ms;
+}
 
 int socle_commande_led(int argc, char **argv) {
   if (argc == 2 && !strcmp(argv[1], "test")) {

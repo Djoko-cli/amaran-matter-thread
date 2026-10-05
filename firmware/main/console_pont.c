@@ -1,16 +1,28 @@
 // Console du pont (spec 7.5 ; spec N lampes 10) : lampes, lampe, mesh (et mesh
 // releve, mesh lampe <n> masquer|afficher), matter, decommission, redemarre,
-// taches. Les cles ne s'affichent jamais (7.7).
+// taches, json. Les cles ne s'affichent jamais (7.7).
+//
+// La tache de la console est la notre, et non la REPL d'ESP-IDF : linenoise fait
+// toujours l'echo de ce qu'il lit, et le mode machine du protocole JSON
+// (json_pont.h) lit l'USB sans echo ni invite. En mode texte, linenoise lit la
+// ligne ; dans les deux modes, json_pont_executer l'execute.
 #include "console_pont.h"
 
+#include <fcntl.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
 
+#include "driver/usb_serial_jtag.h"
+#include "driver/usb_serial_jtag_vfs.h"
 #include "esp_console.h"
 #include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "linenoise/linenoise.h"
 
 #include "catalogue.h"
+#include "json_pont.h"
 #include "lampes.h"
 #include "liste.h"
 #include "mesh_amaran.h"
@@ -21,8 +33,11 @@
 #include "telink.h"
 #include "texte.h"
 
+#define INVITE "amaran> "
+#define LIGNE_MAX 256  // linenoise : au-dela, la ligne est coupee ; 128 a 255 sont refusees (JSON_PONT_CMD_MAX)
+
 static amaran_config_t *s_cfg;
-// Copies : trop grosses pour la pile de la console. Une commande a la fois (REPL).
+// Copies : trop grosses pour la pile de la console. Une commande a la fois.
 static lampes_t s_l;
 static liste_t s_liste;
 
@@ -236,18 +251,47 @@ static int cmd_redemarre(int argc, char **argv) {
   return 0;
 }
 
-static const char *const TACHES[] = {"lampes", "socle", "amaran_tx", "nimble_host", "mesh_adv_task", "CHIP",
-                                     "ot_task", "console_repl"};
+const char *const CONSOLE_PONT_TACHES[CONSOLE_PONT_NB_TACHES] = {
+    "lampes", "socle", "json", "console", "amaran_tx", "nimble_host", "mesh_adv_task", "CHIP", "ot_task"};
+
+static void tache_console(void *arg) {
+  (void)arg;
+  setvbuf(stdin, NULL, _IONBF, 0);  // rien ne reste dans un tampon de stdin au passage en mode machine
+  printf("\nConsole du pont amaran : 'help' pour les commandes.\n");
+  for (;;) {
+    if (json_pont_machine()) {
+      json_pont_lire();
+      continue;
+    }
+    char *ligne = linenoise(INVITE);
+    if (!ligne) continue;  // ligne vide
+    linenoiseHistoryAdd(ligne);
+    json_pont_executer(ligne, strlen(ligne) > JSON_PONT_CMD_MAX);
+    linenoiseFree(ligne);
+  }
+}
 
 void console_pont_demarrer(amaran_config_t *cfg) {
   s_cfg = cfg;
-  mesh_console_init(cfg, TACHES, sizeof(TACHES) / sizeof(TACHES[0]));
-  esp_console_repl_t *repl = NULL;
-  esp_console_repl_config_t conf = ESP_CONSOLE_REPL_CONFIG_DEFAULT();
-  conf.prompt = "amaran>";
-  conf.task_stack_size = 6144;  // `matter` et `mesh autotest` y tournent
-  esp_console_dev_usb_serial_jtag_config_t usb = ESP_CONSOLE_DEV_USB_SERIAL_JTAG_CONFIG_DEFAULT();
-  ESP_ERROR_CHECK(esp_console_new_repl_usb_serial_jtag(&usb, &conf, &repl));
+  mesh_console_init(cfg, CONSOLE_PONT_TACHES, CONSOLE_PONT_NB_TACHES);
+  // Comme esp_console_new_repl_usb_serial_jtag (ESP-IDF 5.5.4), avec un tampon
+  // d'emission de 4 Ko : une ligne machine fait jusqu'a 1 Ko (docs/PROTOCOLE-JSON.md 2.3).
+  usb_serial_jtag_vfs_set_rx_line_endings(ESP_LINE_ENDINGS_CR);
+  usb_serial_jtag_vfs_set_tx_line_endings(ESP_LINE_ENDINGS_CRLF);
+  fcntl(fileno(stdout), F_SETFL, 0);
+  fcntl(fileno(stdin), F_SETFL, 0);
+  usb_serial_jtag_driver_config_t usb = USB_SERIAL_JTAG_DRIVER_CONFIG_DEFAULT();
+  usb.tx_buffer_size = 4096;
+  ESP_ERROR_CHECK(usb_serial_jtag_driver_install(&usb));
+  esp_console_config_t conf = ESP_CONSOLE_CONFIG_DEFAULT();
+  conf.max_cmdline_length = LIGNE_MAX;
+  ESP_ERROR_CHECK(esp_console_init(&conf));
+  usb_serial_jtag_vfs_use_driver();
+  linenoiseSetMultiLine(1);
+  linenoiseHistorySetMaxLen(20);
+  linenoiseSetMaxLineLen(LIGNE_MAX);
+  linenoiseAllowEmpty(false);
+  if (linenoiseProbe() != 0) linenoiseSetDumbMode(1);  // terminal sans sequences d'echappement (l'app)
   const esp_console_cmd_t cmds[] = {
       {.command = "lampes", .help = "une ligne par lampe : Maison, etat lu, joignabilite, relectures ; ordres",
        .func = cmd_lampes},
@@ -262,8 +306,13 @@ void console_pont_demarrer(amaran_config_t *cfg) {
       {.command = "led", .help = "led [test|stop] : motif du voyant ; test = chaque motif a tour de role", .func = socle_commande_led},
       {.command = "cause", .help = "pourquoi la carte a redemarre la derniere fois", .func = socle_commande_cause},
       {.command = "taches", .help = "marges de pile des taches et du tas (octets)", .func = mesh_console_taches},
+      {.command = "json",
+       .help = "mode machine de l'app (docs/PROTOCOLE-JSON.md) : json [1 [bail <s>]|0|etat|hello|ping|"
+               "periode|lampes|compteurs|reseau <ms>|log 0|1]",
+       .func = json_pont_commande},
   };
   for (size_t i = 0; i < sizeof(cmds) / sizeof(cmds[0]); i++) ESP_ERROR_CHECK(esp_console_cmd_register(&cmds[i]));
   ESP_ERROR_CHECK(esp_console_register_help_command());
-  ESP_ERROR_CHECK(esp_console_start_repl(repl));
+  // 6 Ko : `matter` et `mesh autotest` y tournent.
+  if (xTaskCreate(tache_console, "console", 6144, NULL, 2, NULL) != pdPASS) printf("!! console non demarree\n");
 }

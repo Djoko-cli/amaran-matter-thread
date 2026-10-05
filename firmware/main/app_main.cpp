@@ -7,6 +7,7 @@
 
 #include "config_amaran.h"
 #include "console_pont.h"
+#include "json_pont.h"
 #include "mesh_amaran.h"
 #include "pont_matter.h"
 #include "socle.h"
@@ -43,7 +44,10 @@ extern "C" void app_main(void) {
     ESP_LOGE(TAG, "reglages illisibles (%s) : sans Bluetooth Mesh", esp_err_to_name(err));
     cfg.cles_presentes = false;
   }
-  // Le socle d'abord : la garde du bouton BOOT passe ainsi en dernier avant tout
+  // Le mode JSON d'abord : le socle, la console et la tache des lampes lui
+  // envoient leurs evenements, et le numero de demarrage se tire avant toute radio.
+  if (json_pont_demarrer(&cfg) != ESP_OK) ESP_LOGE(TAG, "mode JSON non demarre");
+  // Puis le socle : la garde du bouton BOOT passe ainsi en dernier avant tout
   // reset, et le voyant montre l'etat des le demarrage.
   if (socle_demarrer() != ESP_OK) ESP_LOGE(TAG, "socle (voyant, bouton) non demarre");
   console_pont_demarrer(&cfg);
