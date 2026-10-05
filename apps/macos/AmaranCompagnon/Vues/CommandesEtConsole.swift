@@ -69,7 +69,13 @@ private struct PanneauCommandes: View {
                         Text(verbatim: "Toutes les \(releve) s")
                     }
                     Button("Appliquer") { pont.reglerReleve(secondes: releve) }
-                        .disabled(pont.etat.mesh?.valeur.releveMs == releve * 1000)
+                        .disabled(pont.etat.mesh?.valeur.releveMs == releve * 1000 || !pont.peutEnvoyer("mesh releve \(releve)"))
+                    if pont.aDistance {
+                        Text("Par le réseau, le pont refuse ce réglage (liste blanche) : le faire par l'USB.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 Carte(titre: "Commandes récentes", icone: "list.bullet.rectangle") {
                     let recents = pont.suivis.filter { $0.origine != .session }.suffix(12).reversed()
@@ -232,6 +238,9 @@ private struct ConsoleBrute: View {
             HStack {
                 if let erreur {
                     Text(verbatim: erreur).foregroundStyle(.red)
+                } else if pont.aDistance {
+                    Text("Par le réseau, le pont n'accepte qu'une liste de commandes (les autres ne partent pas) ; le texte d'une commande revient rattaché à son id.")
+                        .foregroundStyle(.secondary)
                 } else if !pont.consoleAvecId, pont.phase != .ferme {
                     Text(verbatim: "Console seule (\(pont.phase.libelle)) : lignes envoyées sans id, sans corrélation.")
                         .foregroundStyle(.orange)

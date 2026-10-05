@@ -1,13 +1,26 @@
-// Fenetre Reglages (spec 3b, section 8) : l'onglet General (l'onglet « Acces reseau
-// Thread » viendra au plan 3b-2, comme celui de Halo Compagnon).
+// Fenetre Reglages (spec 3b, section 8) : General, et « Acces reseau Thread » (comme
+// Halo Compagnon, commit e114cd5).
 import AmaranProtocole
 import SwiftUI
 
+/// Onglets de la fenetre Reglages ; le choix est garde, et la carte « Thread et Matter »
+/// du tableau de bord ouvre directement « Acces reseau Thread ».
+enum OngletReglages: String {
+    case general, accesReseau
+    static let cle = "reglages.onglet"
+}
+
 struct FenetreReglages: View {
+    @AppStorage(OngletReglages.cle) private var onglet: OngletReglages = .general
+
     var body: some View {
-        TabView {
-            Tab("Général", systemImage: "gearshape") {
+        TabView(selection: $onglet) {
+            Tab("Général", systemImage: "gearshape", value: OngletReglages.general) {
                 ReglagesGeneral()
+            }
+            Tab("Accès réseau Thread", systemImage: "point.3.connected.trianglepath.dotted",
+                value: OngletReglages.accesReseau) {
+                ReglagesAccesReseau()
             }
         }
     }

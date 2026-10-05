@@ -16,7 +16,9 @@ struct TableauDeBord: View {
                     ContentUnavailableView {
                         Label("Aucun état reçu", systemImage: "antenna.radiowaves.left.and.right.slash")
                     } description: {
-                        Text("Choisir le port du pont (VID 303A) ou le mode démo dans la barre latérale.")
+                        Text(verbatim: pont.source == nil
+                             ? "Choisir le pont dans le menu de la barre latérale : un port USB (VID 303A), un pont « Réseau » joint par Thread, ou le mode démo."
+                             : "Rien n'est encore arrivé de cette source : son état est sous le menu de la barre latérale, où se choisit aussi une autre source (port USB, pont « Réseau », démo).")
                     } actions: {
                         Button("Lancer la démo") { pont.connecter(.demo) }
                     }
@@ -86,14 +88,16 @@ private struct CarteMesh: View {
     var body: some View {
         let p = pont.etat.pont?.valeur
         let m = pont.etat.mesh?.valeur
-        let c = pont.etat.compteurs?.valeur
+        // A distance, seulement les compteurs du releve en cours : jamais des valeurs
+        // figees (bloc d'une session precedente) montrees comme actuelles.
+        let c = pont.compteursMeshActuels
         let pret = p?.mesh?.pret == true
         Carte(titre: "Bluetooth Mesh", icone: "point.3.filled.connected.trianglepath.dotted",
               accent: p?.mesh?.diag.map { $0 != .ok } == true ? .red : .secondary) {
             LigneInfo("Réseau des lampes", pret ? "prêt" : "pas prêt", couleur: pret ? .green : .orange)
             if let d = p?.mesh?.diag, d != .ok { LigneInfo("Diagnostic", Interpretation.diag(d), couleur: .red) }
             LigneInfo("Adresse du pont", m?.adresse.map { "0x\($0)" }, mono: true)
-            LigneInfo("IV Index", c?.iv.map(String.init))
+            LigneInfo("IV Index", pont.ivIndexMesh?.texte)
             LigneInfo("Relecture", m?.releveMs.map { "toutes les \($0 / 1000) s" })
             LigneInfo("Ordres", p?.ordres.map { o in
                 "\(o.total ?? 0) : \(o.confirmes ?? 0) confirmé(s), \(o.abandons ?? 0) abandonné(s), \(o.tenus ?? 0) déjà tenu(s)"
@@ -102,6 +106,33 @@ private struct CarteMesh: View {
             LigneInfo("Annonces", c.map { "\($0.annonces ?? 0) (\($0.nidReconnu ?? 0) de notre réseau)" })
             LigneInfo("NetMIC faux", c?.netmicFaux.map(String.init), couleur: (c?.netmicFaux ?? 0) > 0 ? .orange : nil)
             LigneInfo("Émis, refus", c.map { "\($0.emis ?? 0), \($0.echecsEmission ?? 0)" })
+            noteCompteurs
+        }
+    }
+
+    /// Source reseau : sans compteurs du releve en cours, les lignes « – » ci-dessus
+    /// s'expliquent (la meme phrase que l'ecran Graphiques).
+    @ViewBuilder private var noteCompteurs: some View {
+        switch pont.etatCompteursMesh {
+        case .normal:
+            EmptyView()
+        case .nonReleves:
+            HStack(alignment: .firstTextBaseline) {
+                Text(verbatim: pont.texteCompteursMesh ?? "")
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 12)
+                Button("Activer") { pont.activerCompteursMesh() }
+                    .buttonStyle(.link)
+                    .disabled(!pont.peutCommander)
+                    .help("json compteurs \(CompteursMesh.periodeProposeeMs) : un bloc toutes les 5 s par le réseau")
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        case .demandes:
+            Text(verbatim: pont.texteCompteursMesh ?? "")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
@@ -120,7 +151,78 @@ private struct CarteMatter: View {
             LigneInfo("Abonnements actifs", m?.abonnements?.actifs.map(String.init))
             LigneInfo("Annonce BLE", Format.oui(m?.ble))
             LigneInfo("Identification", Format.oui(m?.identifie))
+            if let ip = pont.etat.ip?.valeur {
+                Divider()
+                BlocIp(ip: ip)
+            }
+            Divider()
+            ResumeAccesReseau()
         }
+    }
+}
+
+/// Bloc `ip` du pont (5.5) : ce que l'app vise par le reseau Thread, et l'etat du canal
+/// UDP (10.2). La cle n'y est jamais : son empreinte seulement.
+private struct BlocIp: View {
+    let ip: ReseauIp
+
+    var body: some View {
+        LigneInfo("Nom réseau", ip.hote, mono: true)
+        ForEach(Array((ip.adresses ?? []).enumerated()), id: \.offset) { _, a in
+            LigneInfo(a.type.libelle, a.adresse, mono: true)
+        }
+        if let u = ip.udp {
+            LigneInfo("Canal UDP", u.ouvert == true ? "port \(u.port ?? 0) ouvert" : "fermé",
+                      couleur: u.ouvert == true ? nil : .secondary)
+            LigneInfo("Clé du pont", u.cle == true ? "empreinte \(u.empreinte ?? "?")" : "aucune",
+                      couleur: u.cle == true ? nil : .secondary, mono: u.cle == true)
+            LigneInfo("Sessions réseau", u.sessions.map(String.init))
+            LigneInfo("Reçus · émis", "\(u.recus ?? 0) · \(u.emis ?? 0)")
+            LigneInfo("Rejets · perdus", "\(u.rejets ?? 0) · \(u.perdus ?? 0)",
+                      couleur: (u.rejets ?? 0) + (u.perdus ?? 0) > 0 ? .orange : nil)
+        }
+    }
+}
+
+private extension Optional where Wrapped == TypeAdresse {
+    /// Libelle de la ligne d'une adresse du pont.
+    var libelle: String {
+        switch self {
+        case .omr: "Adresse OMR (réseau local)"
+        case .mlEid: "Adresse ML-EID (Thread)"
+        case .autre: "Autre adresse"
+        case .inconnu, nil: "Adresse"
+        }
+    }
+}
+
+/// Etat de la cle du transport reseau, en lecture seule : la gestion (creer, renouveler,
+/// oublier) est dans Reglages › Acces reseau Thread, que ce bouton ouvre.
+private struct ResumeAccesReseau: View {
+    @Environment(Pont.self) private var pont
+    @Environment(\.openSettings) private var ouvrirReglages
+    @AppStorage(OngletReglages.cle) private var onglet: OngletReglages = .general
+
+    var body: some View {
+        HStack {
+            switch pont.accesReseau {
+            case .sansCle:
+                Text("Accès réseau : aucune clé").foregroundStyle(.secondary)
+            case .cleConnue(_, let e):
+                Text(verbatim: "Clé \(e) connue de ce Mac").foregroundStyle(.secondary)
+            case .cleInconnue(_, let e):
+                Text(verbatim: "Clé \(e) inconnue de ce Mac").foregroundStyle(.orange)
+            case .inconnu:
+                Text("Ponts connus et clés de ce Mac").foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button("Gérer…") {
+                onglet = .accesReseau
+                ouvrirReglages()
+            }
+        }
+        .font(.callout)
+        .controlSize(.small)
     }
 }
 
@@ -196,7 +298,11 @@ private struct CarteAppairage: View {
                 }
                 .font(.callout)
             } else {
-                Text("Le pont n'est pas encore mis en service ; ses codes d'appairage arrivent avec le bloc réseau.")
+                // A distance, le pont ne donne jamais ses codes d'appairage (`code_manuel` et
+                // `qr` a null, 5.5) : rien de secret ne passe par Thread.
+                Text(verbatim: pont.aDistance
+                     ? "Le pont n'est pas encore mis en service. Ses codes d'appairage passent par l'USB seulement : le brancher et le connecter (menu Source) pour les afficher."
+                     : "Le pont n'est pas encore mis en service ; ses codes d'appairage arrivent avec le bloc réseau.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .font(.callout)

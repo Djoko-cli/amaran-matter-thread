@@ -1,16 +1,18 @@
 // Repris de Halo Compagnon (commit e114cd5) : fenetre, bandeaux, panneau de connexion.
-// Deux ecrans en 3b-1 (les graphiques et les trames viendront au plan 3b-2).
+// Quatre ecrans : tableau de bord, graphiques, trames, commandes et console.
 import AmaranProtocole
 import SwiftUI
 
 enum Ecran: String, CaseIterable, Identifiable {
-    case tableau, commandes
+    case tableau, graphiques, trames, commandes
 
     var id: String { rawValue }
 
     var titre: String {
         switch self {
         case .tableau: "Tableau de bord"
+        case .graphiques: "Graphiques"
+        case .trames: "Trames"
         case .commandes: "Commandes et console"
         }
     }
@@ -18,6 +20,8 @@ enum Ecran: String, CaseIterable, Identifiable {
     var icone: String {
         switch self {
         case .tableau: "gauge.with.dots.needle.33percent"
+        case .graphiques: "chart.xyaxis.line"
+        case .trames: "dot.radiowaves.left.and.right"
         case .commandes: "slider.horizontal.3"
         }
     }
@@ -50,7 +54,9 @@ struct ContenuPrincipal: View {
             }
         } detail: {
             VStack(spacing: 0) {
-                if let alerte = pont.alerte {
+                if let a = pont.alerteReseau {
+                    Bandeau(texte: a.texte, couleur: .red, icone: "network.slash")
+                } else if let alerte = pont.alerte {
                     Bandeau(texte: alerte.texte, couleur: .red, icone: "exclamationmark.octagon.fill")
                 }
                 if pont.estDemo {
@@ -69,6 +75,8 @@ struct ContenuPrincipal: View {
                 Group {
                     switch ecran {
                     case .tableau: TableauDeBord()
+                    case .graphiques: Graphiques()
+                    case .trames: Trames()
                     case .commandes: CommandesEtConsole()
                     }
                 }
@@ -89,7 +97,11 @@ struct ContenuPrincipal: View {
         .confirmationDialog("Libérer le port ?", isPresented: $confirmerLiberation) {
             Button("Libérer le port") { pont.libererPort() }
         } message: {
-            Text("L'app envoie json 0 et ferme le port (DTR et RTS restent à 0) : idf.py flash pourra flasher. Rien ne se rouvre avant « Reconnecter ».")
+            if pont.source?.estReseau == true {
+                Text("L'app envoie json 0 et ferme la session réseau. Rien ne se rouvre avant « Reconnecter ».")
+            } else {
+                Text("L'app envoie json 0 et ferme le port (DTR et RTS restent à 0) : idf.py flash pourra flasher. Rien ne se rouvre avant « Reconnecter ».")
+            }
         }
     }
 
@@ -116,7 +128,9 @@ struct ContenuPrincipal: View {
             } label: {
                 Label("Libérer le port", systemImage: "eject")
             }
-            .help("json 0 puis fermeture du port, pour flasher")
+            .help(pont.source?.estReseau == true
+                  ? "json 0 puis fermeture de la session réseau"
+                  : "json 0 puis fermeture du port, pour flasher")
             .disabled(pont.phase == .ferme || pont.estDemo)
         }
     }
@@ -142,8 +156,8 @@ struct Bandeau: View {
     }
 }
 
-/// Choix de la source (port USB ou demo) et etat du transport. Aucun port ne
-/// s'ouvre sans un clic.
+/// Choix de la source (port USB, pont par le reseau ou demo) et etat du transport.
+/// Aucun port ni session reseau ne s'ouvre sans un clic.
 struct PanneauConnexion: View {
     @Environment(Pont.self) private var pont
 
@@ -158,9 +172,26 @@ struct PanneauConnexion: View {
                         } label: {
                             Label {
                                 Text(verbatim: pont.titre(port: p))
-                                Text(verbatim: p.chemin.replacingOccurrences(of: "/dev/cu.", with: ""))
+                                Text(verbatim: p.chemin)
                             } icon: {
                                 Image(systemName: "cpu")
+                            }
+                        }
+                    }
+                }
+                Section("Réseau") {
+                    if pont.pontsConnus.isEmpty {
+                        Text("Aucun pont : Réglages › Accès réseau Thread, pont branché en USB")
+                    }
+                    ForEach(pont.pontsConnus) { p in
+                        Button {
+                            pont.connecter(.reseau(nom: p.nom))
+                        } label: {
+                            Label {
+                                Text(verbatim: pont.titre(pont: p))
+                                Text(verbatim: "\(p.hote) · clé \(p.empreinte)")
+                            } icon: {
+                                Image(systemName: "point.3.connected.trianglepath.dotted")
                             }
                         }
                     }
@@ -173,7 +204,7 @@ struct PanneauConnexion: View {
                     }
                 }
             } label: {
-                Label(libelleSource, systemImage: pont.estDemo ? "play.rectangle" : "cable.connector")
+                Label(libelleSource, systemImage: iconeSource)
                     .lineLimit(1)
             }
             .menuStyle(.borderlessButton)
@@ -182,6 +213,9 @@ struct PanneauConnexion: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(3)
+                // Trois lignes au plus : le texte entier (sans route IPv6, l'assistant
+                // halo-routes) reste lisible au survol.
+                .help(Text(verbatim: libelleTransport))
 
             HStack {
                 switch pont.etatTransport {
@@ -207,6 +241,10 @@ struct PanneauConnexion: View {
         }
     }
 
+    private var iconeSource: String {
+        if pont.estDemo { "play.rectangle" } else if pont.source?.estReseau == true { "point.3.connected.trianglepath.dotted" } else { "cable.connector" }
+    }
+
     private var libelleSource: String {
         switch pont.source {
         case .demo: "Démo"
@@ -218,12 +256,13 @@ struct PanneauConnexion: View {
 
     private var libelleTransport: String {
         switch pont.etatTransport {
-        case .ferme: "Port fermé"
+        case .ferme: pont.source?.estReseau == true ? "Session réseau fermée" : "Port fermé"
         case .ouverture: "Ouverture…"
         case .ouvert: "Ouvert · \(pont.phase.libelle)"
         case .attente(let prochain, let raison):
             "\(raison)\nRéouverture \(prochain.formatted(.relative(presentation: .numeric)))"
-        case .libere: "Port libéré (json 0) : flasher est possible"
+        case .libere:
+            pont.source?.estReseau == true ? "Session réseau fermée (json 0)" : "Port libéré (json 0) : flasher est possible"
         case .erreur(let e): "Erreur : \(e)"
         }
     }

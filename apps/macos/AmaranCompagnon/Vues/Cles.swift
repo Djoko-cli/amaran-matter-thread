@@ -57,7 +57,8 @@ struct CarteCles: View {
                     Button("Depuis la copie de ce Mac") { confirmerChargement = .trousseau }
                         .disabled(pont.copie == nil)
                 }
-                .disabled(!pont.peutCommander || pont.chargement.actif)
+                .disabled(!pont.peutCommander || pont.aDistance || pont.chargement.actif)
+                .help(pont.aDistance ? "Le chargement des clés passe par l'USB : le pont le refuse par le réseau." : "")
                 .fixedSize()
             }
             .controlSize(.small)
