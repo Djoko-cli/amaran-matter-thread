@@ -238,6 +238,8 @@ par :
 
 ````
 
+> **Amendement (exécution, 05/10)** : la relecture de cette tâche a montré qu'un ordre refusé faute de Bluetooth Mesh (`lampes_ordre`, Mesh pas prêt) gardait le délai et l'essai de l'ordre précédent. Correctif en un commit à part : `p->debut_ms = maintenant_ms; p->essai = 0;` avant `finir`, et deux vérifications de plus dans `test_mesh_perdu_pendant_un_ordre` (`lampes : 162 verifications`).
+
 - [ ] **Step 2 : lancer les tests, ils échouent.**
 
 Run: `sh tests/hote/lancer.sh`
@@ -764,7 +766,7 @@ L'app confirme avant d'envoyer `redemarre`, `decommission`, `mesh oublie`, `mesh
 
 ### 7.1 `ordre` : fin d'un ordre de lampe
 
-`lampe` ; `issue` : `confirme` (l'état relu égale la consigne), `abandon` (trois essais sans confirmation, ou Bluetooth Mesh pas prêt), `tenu` (la lampe était déjà dans cet état : rien n'est émis) ; `delai_ms` (depuis le dernier ordre de la chaîne ; 0 pour `tenu`) ; `essai` (1 à 3 ; 0 pour `tenu`) ; `ids` (les `id` des ordres de l'app couverts, 4 au plus ; vide pour un ordre de Maison ou de la console sans `id`) ; `ids_perdus` (au-delà de 4).
+`lampe` ; `issue` : `confirme` (l'état relu égale la consigne), `abandon` (trois essais sans confirmation, ou Bluetooth Mesh pas prêt), `tenu` (la lampe était déjà dans cet état : rien n'est émis) ; `delai_ms` (depuis le dernier ordre de la chaîne ; 0 pour `tenu`, et pour un ordre refusé faute de Bluetooth Mesh) ; `essai` (1 à 3 ; 0 pour `tenu`, et pour un ordre refusé faute de Bluetooth Mesh) ; `ids` (les `id` des ordres de l'app couverts, 4 au plus ; vide pour un ordre de Maison ou de la console sans `id`) ; `ids_perdus` (au-delà de 4).
 
 ### 7.2 `alerte`
 
