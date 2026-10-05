@@ -394,7 +394,7 @@ uint8_t Queue::dropLate(uint32_t now, uint32_t lateMs) {
   uint8_t dropped = 0;
   while (n_) {
     const Queued &q = q_[head_];
-    if (q.item == Item::Reply || now - q.at <= lateMs) break;
+    if (q.item == Item::Reply || (int32_t)(now - q.at) <= (int32_t)lateMs) break;
     pop();
     dropped++;
   }
@@ -422,7 +422,8 @@ uint8_t Queue::dropSession() {
 bool leaseExpired(uint32_t now, uint32_t lastRx, uint32_t lastCmd, uint16_t leaseS) {
   if (!leaseS) return false;
   const uint32_t last = (int32_t)(lastRx - lastCmd) > 0 ? lastRx : lastCmd;
-  return now - last >= (uint32_t)leaseS * 1000u;
+  const int32_t ecart = (int32_t)(now - last);  // octet recu apres l'echantillon de now : pas d'expiration
+  return ecart >= 0 && (uint32_t)ecart >= (uint32_t)leaseS * 1000u;
 }
 
 }  // namespace jsonp

@@ -384,6 +384,9 @@ static void testQueueDrain() {
   q.push(Item::HelloBase, 0, false);
   q.push(Item::HelloBase, 300, true);
   CHECK(!q.front()->session && q.front()->at == 0, "periodique fondue dans une demande explicite : ni session, ni retard remis");
+  Queue q2;
+  q2.push(Item::EtatPont, 1003, true);
+  CHECK(q2.dropLate(1000) == 0 && q2.size() == 1, "ligne poussee apres l'echantillon de now : pas en retard");
 }
 
 static void testLease() {
@@ -395,6 +398,7 @@ static void testLease() {
   CHECK(!leaseExpired(rx + 29999u, rx, rx - 0x1000u, 30) && leaseExpired(rx + 30000u, rx, rx - 0x1000u, 30),
         "a travers le retour a zero de l'horloge");
   CHECK(!leaseExpired(9999, 0, 0, 10) && leaseExpired(600000, 0, 0, 600), "bornes 10 et 600 s");
+  CHECK(!leaseExpired(5000, 5003, 0, 30), "dernier octet recu apres l'echantillon de now : pas expire");
 }
 
 // ---------------------------------------------------------------------------
