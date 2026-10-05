@@ -45,6 +45,44 @@ struct CleReseauTests {
     }
 }
 
+@Suite("Etat de l'acces reseau")
+struct EtatAccesReseauTests {
+    static let nom = "1A2B3C4D5E6F7081"
+
+    static func ip(srp: String? = nom, cle: Bool? = true, empreinte: String? = "CA2A4FE7", ouvert: Bool? = true,
+                  sansUdp: Bool = false) -> ReseauIp {
+        var u = ReseauIp.Udp()
+        u.port = 5480
+        u.cle = cle
+        u.empreinte = empreinte
+        u.ouvert = ouvert
+        var r = ReseauIp()
+        r.srp = srp
+        r.udp = sansUdp ? nil : u
+        return r
+    }
+
+    @Test func etats() {
+        let connue: (String) -> String? = { $0 == Self.nom ? "CA2A4FE7" : nil }
+        let autre: (String) -> String? = { _ in "11111111" }
+        let aucune: (String) -> String? = { _ in nil }
+        #expect(EtatAccesReseau.depuis(ip: nil, empreinteDuMac: connue) == .inconnu)
+        #expect(EtatAccesReseau.depuis(ip: Self.ip(srp: nil), empreinteDuMac: connue) == .inconnu)
+        #expect(EtatAccesReseau.depuis(ip: Self.ip(srp: ""), empreinteDuMac: connue) == .inconnu)
+        #expect(EtatAccesReseau.depuis(ip: Self.ip(sansUdp: true), empreinteDuMac: connue) == .inconnu)
+        #expect(EtatAccesReseau.depuis(ip: Self.ip(cle: false, empreinte: nil, ouvert: false), empreinteDuMac: connue)
+                == .sansCle(nom: Self.nom))
+        #expect(EtatAccesReseau.depuis(ip: Self.ip(), empreinteDuMac: connue) == .cleConnue(nom: Self.nom, empreinte: "CA2A4FE7"))
+        #expect(EtatAccesReseau.depuis(ip: Self.ip(), empreinteDuMac: autre) == .cleInconnue(nom: Self.nom, empreinte: "CA2A4FE7"))
+        #expect(EtatAccesReseau.depuis(ip: Self.ip(), empreinteDuMac: aucune) == .cleInconnue(nom: Self.nom, empreinte: "CA2A4FE7"))
+        // Sans le champ `cle` (firmware plus ancien) : le port ouvert dit la cle.
+        #expect(EtatAccesReseau.depuis(ip: Self.ip(cle: nil), empreinteDuMac: connue) == .cleConnue(nom: Self.nom, empreinte: "CA2A4FE7"))
+        #expect(EtatAccesReseau.depuis(ip: Self.ip(cle: nil, ouvert: false), empreinteDuMac: connue) == .sansCle(nom: Self.nom))
+        #expect(EtatAccesReseau.cleConnue(nom: Self.nom, empreinte: "CA2A4FE7").nom == Self.nom)
+        #expect(EtatAccesReseau.inconnu.nom == nil)
+    }
+}
+
 extension Reponse {
     func avecId(_ n: Int) -> Reponse {
         var r = self
