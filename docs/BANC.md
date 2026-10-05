@@ -301,3 +301,18 @@ Firmware de la Task 3 (`c5128fa`) flashé sans effacement ; Djoko présent.
 - **Trames**, lampe 1 (déjà allumée : `on` est « tenu », `ids` [3], rien n'est émis) : `off` donne `tx ordre` (marche faux, essai 1), `tx demande` à la lampe 1, `rx etat` (éteinte), puis `ordre confirme` `ids` [4] en 384 ms ; entre les ordres, les relectures (`tx demande` au groupe, deux `rx etat` par lampe) ; plus aucune trame après `json trames 0`. La lampe s'éteint, Maison suit.
 - **Secteur** : sur un chargeur USB, voyant éteint avec la lueur blanche toutes les 10 s, une lampe répond à Maison. De retour sur le Mac : mise en service faite, Thread attaché (la cause lue ensuite est « réinitialisation par l'USB » : l'ouverture du port par `outils/console.py` a redémarré la carte).
 - **Marges** (`taches`) : pile libre au plus bas `json` 1 900 o, `console` 3 868 o, `udp` 3 352 o, `distant` 5 704 o ; tas libre 114 Ko, 108 Ko au plus bas.
+
+## Plan 3b-2 : banc B, l'app par Thread (05/10/2026)
+
+Firmware du banc A (`c5128fa`) ; app de `main` (`75b88fe`), signée de l'équipe de Djoko ; Djoko présent.
+
+- **Clé par l'USB** : Réglages › Accès réseau Thread › « Activer l'accès réseau… », confirmé : « Clé … connue de ce Mac », le pont listé dans « Ponts connus de ce Mac » avec la même empreinte que le pont ; aucune clé ni aléa à l'écran ou dans la console (la ligne envoyée est masquée).
+- **Session par Thread** : Source › Réseau › le pont ; le tableau de bord se remplit ; la carte « Thread et Matter » montre le nom réseau, les adresses OMR et ML-EID, le port 5480 ouvert, l'empreinte de la clé et la session ; la carte du Mesh dit « Compteurs du Mesh non relevés à distance ».
+- **Console à distance** : `lampes`, `lampe 1`, `matter` rendent leur texte rattaché à leur `id` ; `redemarre` n'est pas envoyée (« la liste blanche du pont la refuse »).
+- **Ordres à distance** : lampe 1 allumée puis éteinte, confirmées en 360 et 461 ms (essai 1) ; la lampe et Maison suivent. Trames : `tx` et `rx` décodées (demandes au groupe, états des deux lampes) ; coupées par le pont au bout de 60 s, l'écran le dit.
+- **Retirer de Maison, puis remettre** : non refait ici, déjà vérifié par Thread au banc du prototype (lampe 2).
+- **Sur secteur, une heure à distance** (22:19 à 23:20) : au branchement, le chargeur a coupé puis remis la tension deux fois (il ajuste sa tension quand plusieurs appareils y sont branchés) : deux redémarrages (cause « mise sous tension »), l'app a rouvert la session seule à chaque fois, en moins de 5 s. Ensuite, la session est restée ouverte toute l'heure, sans aucune reprise.
+  - Bloc `udp` à la fin : 408 datagrammes reçus, 5 180 émis ; 1 rejet, 0 perdu au pont ; côté app, 34 lignes manquantes sur le fil (0,7 %), 0 ligne abîmée.
+  - Graphiques continus sur l'heure : relectures répondues entre 94 et 100 % pour les deux lampes, tas libre plat (112 Ko).
+  - À la fin : lampe 1 allumée et éteinte deux fois, confirmées en 348 à 367 ms (essai 1) ; Maison suit.
+  - `taches` à distance : pile libre au plus bas `udp` 1 612 o, `json` 1 820 o, `distant` 4 428 o, `console` 5 768 o ; tas libre 114 Ko, 106 Ko au plus bas. Le chemin distant (HMAC, lignes envoyées par la tâche `udp`) prend 1,7 Ko de plus à `udp` qu'au banc A : c'est la marge la plus serrée, à surveiller si ce chemin grossit.
