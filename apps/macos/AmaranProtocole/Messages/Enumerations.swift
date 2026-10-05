@@ -50,6 +50,12 @@ public enum CodeReponse: String, EnumeTolerante {
     case commandeInconnue = "inconnue"
     case tropLong = "trop_long"
     case cadence
+    /// A distance, commande hors de la liste blanche (10.5) : rien n'est execute.
+    case interdite
+    /// A distance, `id` plus ancien que les 8 dernieres reponses gardees : sa reponse est
+    /// oubliee, aucune autre ne viendra (10.4). Le renvoi d'un `id` encore en cours, lui,
+    /// est ignore en silence.
+    case dejaTraite = "deja_traite"
     case inconnu
 }
 
@@ -106,4 +112,49 @@ public enum TypeAppareil: String, EnumeTolerante {
 /// `log.niv`.
 public enum NiveauLog: String, EnumeTolerante {
     case notice, alerte, inconnu
+}
+
+/// `hello.base.session.transport` (5.1).
+public enum TransportSession: String, EnumeTolerante {
+    case usb, udp, inconnu
+}
+
+/// `trame.sens` (7.6) : emise ou recue par le pont.
+public enum SensTrame: String, EnumeTolerante {
+    case tx, rx, inconnu
+}
+
+/// `trame.quoi` (7.6).
+public enum QuoiTrame: String, EnumeTolerante {
+    /// Marche ou intensite vers une lampe.
+    case ordre
+    /// Demande d'etat au groupe des lampes.
+    case demande
+    /// Etat renvoye par une lampe.
+    case etat
+    case inconnu
+}
+
+/// Type d'une adresse du bloc `reseau` `ip` (5.5).
+public enum TypeAdresse: String, EnumeTolerante {
+    /// Joignable du reseau local, par le routeur de bordure.
+    case omr
+    /// Interne au maillage Thread.
+    case mlEid = "ml_eid"
+    case autre
+    case inconnu
+}
+
+/// Capacites annoncees par `hello` `identite` (`caps`, 5.1). L'app se regle sur
+/// elles, pas sur la version du firmware ; une capacite inconnue est ignoree.
+public enum CapPont: String, Sendable, CaseIterable {
+    case matter, thread, mesh, catalogue, ordres, led, log
+    /// Messages `trame` (7.6).
+    case trames
+    /// Canal par Thread (section 10).
+    case udp
+    /// `json cle` (10.2).
+    case cle
+    /// Texte des commandes a distance, en messages `texte` (10.4).
+    case texte
 }

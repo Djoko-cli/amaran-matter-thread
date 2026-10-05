@@ -29,6 +29,7 @@ public enum MessageCarte: Sendable, Equatable {
     case compteursMesh(CompteursMesh)
     case reseauMatter(ReseauMatter)
     case reseauThread(ReseauThread)
+    case reseauIp(ReseauIp)
     case battement(Battement)
     case fin(FinSession)
     case reponse(Reponse)
@@ -37,6 +38,8 @@ public enum MessageCarte: Sendable, Equatable {
     case lampe(EvenementLampe)
     case led(ChangementLed)
     case log(MessageLog)
+    case trame(Trame)
+    case texte(TexteCommande)
     /// Type ou bloc inconnu : ignore (section 8).
     case inconnu
 
@@ -44,11 +47,18 @@ public enum MessageCarte: Sendable, Equatable {
     public var estPeriodique: Bool {
         switch self {
         case .helloBase, .helloIdentite, .configCatalogue, .configMesh, .configLampe, .etatPont, .etatLampe,
-             .etatSante, .compteursMesh, .reseauMatter, .reseauThread, .battement:
+             .etatSante, .compteursMesh, .reseauMatter, .reseauThread, .reseauIp, .battement:
             true
         default:
             false
         }
+    }
+
+    /// La meme valeur, sans la cle si c'est une `reponse` a `json cle nouvelle` (6.3, 10.2) :
+    /// pour tout historique qui garde le message entier (journal des trames).
+    public var sansCle: MessageCarte {
+        if case .reponse(let r) = self { return .reponse(r.sansCle) }
+        return self
     }
 }
 
@@ -63,6 +73,15 @@ public struct LigneMachine: Sendable, Equatable {
         self.enveloppe = enveloppe
         self.message = message
         self.json = json
+    }
+
+    /// La meme ligne, sans la cle UDP : ni dans le message (`sansCle`), ni dans le JSON
+    /// garde (`"cle":"<hexa>"` masque). A appliquer avant tout journal.
+    public var sansCle: LigneMachine {
+        // Une reponse a `json cle nouvelle` porte la cle dans un champ "cle" (6.3) ; une
+        // ligne alteree mais encore valide la porterait sous un autre nom : le JSON passe
+        // toujours par le masque (32 hexa d'un bloc compris).
+        LigneMachine(enveloppe: enveloppe, message: message.sansCle, json: PolitiqueCommandes.masquerCle(json))
     }
 }
 
@@ -120,6 +139,7 @@ public enum DecodeurMessages {
         case ("compteurs", "mesh"): return .compteursMesh(try d.decode(CompteursMesh.self, from: json))
         case ("reseau", "matter"): return .reseauMatter(try d.decode(ReseauMatter.self, from: json))
         case ("reseau", "thread"): return .reseauThread(try d.decode(ReseauThread.self, from: json))
+        case ("reseau", "ip"): return .reseauIp(try d.decode(ReseauIp.self, from: json))
         case ("hb", _): return .battement(try d.decode(Battement.self, from: json))
         case ("fin", _): return .fin(try d.decode(FinSession.self, from: json))
         case ("reponse", _): return .reponse(try d.decode(Reponse.self, from: json))
@@ -128,6 +148,8 @@ public enum DecodeurMessages {
         case ("lampe", _): return .lampe(try d.decode(EvenementLampe.self, from: json))
         case ("led", _): return .led(try d.decode(ChangementLed.self, from: json))
         case ("log", _): return .log(try d.decode(MessageLog.self, from: json))
+        case ("trame", _): return .trame(try d.decode(Trame.self, from: json))
+        case ("texte", _): return .texte(try d.decode(TexteCommande.self, from: json))
         default: return .inconnu
         }
     }

@@ -33,10 +33,10 @@ enum ExemplesSpec {
     }
 }
 
-@Suite("Exemples de la specification (section 9)")
+@Suite("Exemples de la specification (sections 9 et 10)")
 struct ExemplesSpecTests {
     @Test func toutesLesLignesSontLues() throws {
-        #expect(try ExemplesSpec.lignes().count == 47)
+        #expect(try ExemplesSpec.lignes().count == 60)
     }
 
     @Test(arguments: (try? ExemplesSpec.lignes()) ?? [])
@@ -60,13 +60,19 @@ struct ExemplesSpecTests {
         #expect(h.fw == "0.1.0-d569f01")
         #expect(h.boot == "3FA2C901")
         #expect(h.reset == "logiciel")
+        #expect(h.rev == 1)
+        #expect(h.session?.transport == .usb)
         #expect(h.session?.lampesMs == 10000)
         #expect(h.session?.bailS == 30)
+        #expect(h.session?.trames == false)
         #expect(h.limites?.cmdMax == 127)
 
         guard case .helloIdentite(let i) = l[1].message else { Issue.record("identite"); return }
         #expect(i.id?.serie == "AMARAN-F0F5BD0A0B0C")
         #expect(i.caps?.contains("ordres") == true)
+        var e = EtatPont()
+        e.appliquer(l[1], recueA: Date())
+        #expect(CapPont.allCases.allSatisfy { e.a($0) }, "rev 1 : trames, udp, cle, texte en plus")
 
         guard case .configCatalogue(let c) = l[2].message else { Issue.record("catalogue"); return }
         #expect(c.modeles?.first?.code == 40065)
@@ -126,5 +132,86 @@ struct ExemplesSpecTests {
         #expect(!Interpretation.ordre(refuse).contains("ne répond pas"))
         let abandon = EvenementOrdre(lampe: 1, issue: .abandon, delaiMs: 3700, essai: 3, ids: [4], idsPerdus: 0)
         #expect(Interpretation.ordre(abandon) == "abandonné après 3 essai(s), 3700 ms : la lampe ne répond pas")
+    }
+
+    /// Section 10.6 : chaque champ des exemples a distance.
+    @Test func aDistance() throws {
+        let tout = try ExemplesSpec.decoder()
+        let hellos = tout.compactMap { if case .helloBase(let h) = $0.message { return h } else { return nil } }
+        let h = try #require(hellos.last)
+        #expect(h.session == HelloBase.ReglagesSession(transport: .udp, periodeMs: 2000, lampesMs: 30000, compteursMs: 0,
+                                                       reseauMs: 30000, bailS: 60, log: false, trames: false))
+        #expect(h.upS == 900)
+
+        let ips = tout.compactMap { if case .reseauIp(let r) = $0.message { return r } else { return nil } }
+        #expect(ips.count == 2)
+        let ip = ips[0]
+        #expect(ip.srp == "1A2B3C4D5E6F7081")
+        #expect(ip.hote == "1A2B3C4D5E6F7081.local")
+        #expect(ip.adresses?.map(\.type) == [.omr, .mlEid])
+        #expect(ip.adresseOmr == "fd00:aaaa:bbbb:0:1111:2222:3333:4444")
+        #expect(ip.adresses?.last?.adresse == "fd00:cccc:dddd:1:5555:6666:7777:8888")
+        #expect(ip.udp?.port == 5480)
+        #expect(ip.udp?.cle == true)
+        #expect(ip.udp?.empreinte == "CA2A4FE7")
+        #expect(ip.udp?.ouvert == true)
+        #expect(ip.udp?.sessions == 1)
+        #expect(ip.udp?.recus == 412 && ip.udp?.emis == 980 && ip.udp?.rejets == 3 && ip.udp?.perdus == 0)
+        let sans = ips[1]
+        #expect(sans.adresses == [] && sans.adresseOmr == nil)
+        #expect(sans.udp?.cle == false && sans.udp?.empreinte == nil && sans.udp?.ouvert == false)
+
+        let reponses = tout.compactMap { if case .reponse(let r) = $0.message { return r } else { return nil } }
+        let cle = try #require(reponses.first { $0.cle != nil })
+        #expect(cle.cmd == "json cle nouvelle", "le pont ne cite jamais l'alea")
+        #expect(cle.empreinte == "CA2A4FE7")
+        #expect(CleReseau.verifier(cle).map(\.empreinte) == .success("CA2A4FE7"), "empreinte = SHA-256 de la cle")
+        #expect(cle.sansCle.cle == nil && cle.sansCle.empreinte == "CA2A4FE7")
+        let interdite = try #require(reponses.first { $0.code == .interdite })
+        #expect(interdite.cmd == "redemarre" && !interdite.ok)
+        #expect(interdite.msg == PolitiqueCommandes.autoriseeADistance("redemarre"), "meme raison que le miroir de l'app")
+        let deja = try #require(reponses.first { $0.code == .dejaTraite })
+        #expect(deja.id == 29 && deja.etape == .fin && deja.msg == "id deja traite : reponse oubliee")
+
+        let textes = tout.compactMap { if case .texte(let t) = $0.message { return t } else { return nil } }
+        #expect(textes == [TexteCommande(id: 32, txt: "lampe 1 : Lampe bureau"), TexteCommande(id: 32, txt: "  Maison    : EP2")])
+
+        let trames = tout.compactMap { if case .trame(let t) = $0.message { return t } else { return nil } }
+        #expect(trames == [
+            Trame(sens: .tx, quoi: .ordre, lampe: 1, marche: true, intensite: 500, essai: 1, sautes: 0),
+            Trame(sens: .tx, quoi: .demande, lampe: nil, marche: nil, intensite: nil, essai: nil, sautes: 0),
+            Trame(sens: .rx, quoi: .etat, lampe: 1, marche: true, intensite: 500, essai: nil, sautes: 2),
+        ])
+        #expect(trames.map(Interpretation.trame) == [
+            "→ lampe 1 : ordre allumée, 50 % (essai 1)",
+            "→ groupe : demande d'état",
+            "← lampe 1 : état allumée, 50 % — 2 trame(s) non émise(s) avant",
+        ])
+    }
+
+    /// La lecture a distance (`id=32 lampe 1`) se deroule dans le correlateur comme par
+    /// l'USB : `debut`, le texte rattache a la commande, puis `fin`.
+    @Test func lectureADistanceCorrelee() throws {
+        let tout = try ExemplesSpec.decoder()
+        let premiere = try #require(tout.firstIndex {
+            if case .reponse(let r) = $0.message { r.id == 32 && r.cmd == "lampe 1" } else { false }
+        })
+        var c = Correlateur()
+        c.politique = .reseau
+        // Le correlateur numerote lui-meme : amener le prochain numero a 32.
+        for _ in 1..<32 { _ = c.reserverNumero() }
+        let a = c.soumettre("lampe 1", origine: .console, maintenant: 0)
+        let p = c.prochainEnvoi(maintenant: 0)
+        #expect(p.map { texte($0.octets) } == "id=32 lampe 1\n")
+        for l in tout[premiere...] {
+            switch l.message {
+            case .reponse(let r) where r.id == 32: _ = c.recevoir(r, maintenant: 1)
+            case .texte(let t): c.texte(t.txt ?? "", id: t.id, maintenant: 1)
+            default: break
+            }
+        }
+        #expect(c.suivi(a)?.etat == .terminee)
+        #expect(c.suivi(a)?.texte == ["lampe 1 : Lampe bureau", "  Maison    : EP2"])
+        #expect(c.suivi(a)?.fin?.dureeMs == 6)
     }
 }

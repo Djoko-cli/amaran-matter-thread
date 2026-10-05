@@ -55,6 +55,7 @@ enum CouvertureCles {
         case .compteursMesh(let v): return try e.encode(v)
         case .reseauMatter(let v): return try e.encode(v)
         case .reseauThread(let v): return try e.encode(v)
+        case .reseauIp(let v): return try e.encode(v)
         case .battement(let v): return try e.encode(v)
         case .fin(let v): return try e.encode(v)
         case .reponse(let v): return try e.encode(v)
@@ -63,6 +64,8 @@ enum CouvertureCles {
         case .lampe(let v): return try e.encode(v)
         case .led(let v): return try e.encode(v)
         case .log(let v): return try e.encode(v)
+        case .trame(let v): return try e.encode(v)
+        case .texte(let v): return try e.encode(v)
         case .inconnu: return nil
         }
     }
@@ -98,6 +101,11 @@ enum CouvertureCles {
         #"{"v":1,"t":"ordre","n":9,"ms":9,"lampe":4,"issue":"confirme","delai_ms":1210,"essai":2,"ids":[5,6,7,8],"ids_perdus":2}"#,
         #"{"v":1,"t":"alerte","n":10,"ms":10,"quoi":"releves","lampe":4,"manque":false,"part":96}"#,
         #"{"v":1,"t":"lampe","n":11,"ms":11,"lampe":5,"quoi":"echec","endpoint":null}"#,
+        // Trame d'ordre eteint par Thread, avec trames non emises ; adresse d'un autre type.
+        #"{"v":1,"t":"trame","n":13,"ms":13,"sens":"tx","quoi":"ordre","lampe":16,"marche":false,"intensite":null,"essai":3,"sautes":9}"#,
+        #"{"v":1,"t":"reseau","n":14,"ms":14,"bloc":"ip","srp":null,"adresses":[{"type":"autre","adresse":"fd12:34:5678:0:aaaa:bbbb:ccc:dddd"}],"udp":{"port":5480,"cle":true,"empreinte":"1A2B3C4D","ouvert":false,"sessions":2,"recus":1,"emis":2,"rejets":0,"perdus":5}}"#,
+        // Session distante en trames et journal.
+        #"{"v":1,"t":"hello","n":15,"ms":15,"bloc":"base","rev":1,"session":{"transport":"udp","periode_ms":0,"lampes_ms":0,"compteurs_ms":5000,"reseau_ms":0,"bail_s":120,"log":true,"trames":true}}"#,
         // Reponse complete : msg, suite aucune, lampe, bail.
         #"{"v":1,"t":"reponse","n":12,"ms":12,"id":17,"etape":"fin","cmd":"json ping","ok":true,"code":"ok","msg":"bail renouvele","duree_ms":1,"suite":"aucune","lampe":3,"bail_s":30,"up_s":90}"#,
     ]
@@ -115,6 +123,24 @@ struct CouvertureClesTests {
     func chaqueChampHorsExemplesEstLu(_ json: String) throws {
         let perdus = try CouvertureCles.perdus(json)
         #expect(perdus.isEmpty, "champs perdus au decodage : \(perdus)")
+    }
+
+    /// A distance, le bloc `matter` porte `code_manuel` et `qr` a null (5.5, 10.1) : rien de
+    /// secret ne passe par Thread. Le bloc se decode, et le reste de ses champs avec.
+    @Test func matterADistanceSansCodes() throws {
+        let json = #"{"v":1,"t":"reseau","n":15,"ms":83622,"bloc":"matter","demarre":true,"fabriques":1,"ble":false,"identifie":false,"abonnements":{"demandes":2,"plafonnes":2,"etablis":2,"termines":1,"plafond_s":20},"code_manuel":null,"qr":null}"#
+        #expect(try CouvertureCles.perdus(json).isEmpty)
+        var r = RecepteurLignes()
+        guard case .machine(let l)? = r.alimenter(ligneMachine(json)).first, case .reseauMatter(let m) = l.message else {
+            Issue.record("bloc matter attendu")
+            return
+        }
+        #expect(m.codeManuel == nil && m.qr == nil)
+        #expect(m.fabriques == 1 && m.abonnements?.actifs == 1)
+        var e = EtatPont()
+        e.appliquer(l, recueA: Date())
+        #expect(e.enService == true)
+        #expect(e.matter?.valeur.codeManuel == nil)
     }
 
     @Test func leTestVoitUneCleMalNommee() throws {

@@ -27,6 +27,8 @@ public struct EtatPont: Sendable, Equatable {
     public private(set) var compteurs: Instantane<CompteursMesh>?
     public private(set) var matter: Instantane<ReseauMatter>?
     public private(set) var thread: Instantane<ReseauThread>?
+    /// Bloc `reseau` `ip` (5.5) : nom SRP, adresses, canal UDP.
+    public private(set) var ip: Instantane<ReseauIp>?
     public private(set) var battement: Instantane<Battement>?
 
     /// Motif du voyant : bloc `sante` ou evenement `led`, le plus recent.
@@ -124,6 +126,7 @@ public struct EtatPont: Sendable, Equatable {
         case .compteursMesh(let v): compteurs = inst(v)
         case .reseauMatter(let v): matter = inst(v)
         case .reseauThread(let v): thread = inst(v)
+        case .reseauIp(let v): ip = inst(v)
         case .battement(let v): battement = inst(v)
         case .led(let v):
             motifLed = v.motif
@@ -155,6 +158,21 @@ public struct EtatPont: Sendable, Equatable {
     }
 
     public var capacites: Set<String> { Set(identite?.valeur.caps ?? []) }
+
+    /// Capacite annoncee par le dernier `hello` `identite` (5.1).
+    public func a(_ c: CapPont) -> Bool { capacites.contains(c.rawValue) }
+
+    /// Revision mineure du protocole (0 avant Thread, `trame` et `texte`).
+    public var rev: Int? { helloBase?.valeur.rev }
+
+    /// Transport de la session, tel que le dernier `hello` l'annonce.
+    public var transport: TransportSession? { helloBase?.valeur.session?.transport }
+
+    /// MAC de la puce (`hello` `identite`), 12 hexa majuscules.
+    public var mac: String? { identite?.valeur.mac }
+
+    /// Nom SRP publie par le pont (bloc `ip`), sans `.local`.
+    public var srp: String? { ip?.valeur.srp }
 
     /// Numeros des lampes connues, dans l'ordre (liste du pont).
     public var numerosLampes: [Int] {

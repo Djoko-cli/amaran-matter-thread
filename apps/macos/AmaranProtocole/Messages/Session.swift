@@ -8,21 +8,28 @@ import Foundation
 /// `hello`, bloc `base`.
 public struct HelloBase: Codable, Sendable, Equatable {
     public struct ReglagesSession: Codable, Sendable, Equatable {
+        /// `usb` ou `udp` (rev 1).
+        public var transport: TransportSession?
         public var periodeMs: Int?
         public var lampesMs: Int?
         public var compteursMs: Int?
         public var reseauMs: Int?
         public var bailS: Int?
         public var log: Bool?
+        /// Messages `trame` demandes (`json trames 1`, rev 1).
+        public var trames: Bool?
 
-        public init(periodeMs: Int? = nil, lampesMs: Int? = nil, compteursMs: Int? = nil, reseauMs: Int? = nil,
-                    bailS: Int? = nil, log: Bool? = nil) {
+        public init(transport: TransportSession? = nil, periodeMs: Int? = nil, lampesMs: Int? = nil,
+                    compteursMs: Int? = nil, reseauMs: Int? = nil, bailS: Int? = nil, log: Bool? = nil,
+                    trames: Bool? = nil) {
+            self.transport = transport
             self.periodeMs = periodeMs
             self.lampesMs = lampesMs
             self.compteursMs = compteursMs
             self.reseauMs = reseauMs
             self.bailS = bailS
             self.log = log
+            self.trames = trames
         }
     }
 
@@ -89,9 +96,14 @@ public struct Reponse: Codable, Sendable, Equatable {
     public var lampe: Int?
     public var bailS: Int?
     public var upS: Int?
+    /// `json cle nouvelle` : la cle, rendue une seule fois (jamais gardee, voir `sansCle`).
+    public var cle: String?
+    /// `json cle nouvelle` : empreinte de la cle (8 premiers hexa majuscules de son SHA-256).
+    public var empreinte: String?
 
     public init(id: Int, etape: EtapeReponse, cmd: String? = nil, ok: Bool, code: CodeReponse, msg: String? = nil,
-                dureeMs: Int? = nil, suite: SuiteReponse? = nil, lampe: Int? = nil, bailS: Int? = nil, upS: Int? = nil) {
+                dureeMs: Int? = nil, suite: SuiteReponse? = nil, lampe: Int? = nil, bailS: Int? = nil, upS: Int? = nil,
+                cle: String? = nil, empreinte: String? = nil) {
         self.id = id
         self.etape = etape
         self.cmd = cmd
@@ -103,5 +115,15 @@ public struct Reponse: Codable, Sendable, Equatable {
         self.lampe = lampe
         self.bailS = bailS
         self.upS = upS
+        self.cle = cle
+        self.empreinte = empreinte
+    }
+
+    /// La meme reponse, sans la cle : aucun historique (suivis de commandes, journal des
+    /// trames) ne doit jamais la garder, seule l'empreinte y a sa place.
+    public var sansCle: Reponse {
+        var r = self
+        r.cle = nil
+        return r
     }
 }

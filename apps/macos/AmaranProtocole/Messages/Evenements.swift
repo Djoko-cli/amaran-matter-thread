@@ -44,3 +44,42 @@ public struct MessageLog: Codable, Sendable, Equatable {
     public var txt: String?
     public var sautes: Int?
 }
+
+/// `trame` (7.6) : un message de lampe que le pont emet ou recoit, decode
+/// (seulement avec `json trames 1`).
+public struct Trame: Codable, Sendable, Equatable {
+    public var sens: SensTrame?
+    public var quoi: QuoiTrame?
+    /// Numero de la lampe ; nil : le groupe des lampes (demande d'etat).
+    public var lampe: Int?
+    public var marche: Bool?
+    public var intensite: Int?
+    /// Ordre seulement : essai 1 a 3.
+    public var essai: Int?
+    /// Trames non emises depuis la precedente (plafond de debit).
+    public var sautes: Int?
+
+    public init(sens: SensTrame? = nil, quoi: QuoiTrame? = nil, lampe: Int? = nil, marche: Bool? = nil,
+                intensite: Int? = nil, essai: Int? = nil, sautes: Int? = nil) {
+        self.sens = sens
+        self.quoi = quoi
+        self.lampe = lampe
+        self.marche = marche
+        self.intensite = intensite
+        self.essai = essai
+        self.sautes = sautes
+    }
+}
+
+/// `texte` (10.4) : a distance, une ligne que la console imprimerait pour la
+/// commande `id`, entre sa `reponse` `debut` et sa `reponse` `fin`.
+public struct TexteCommande: Codable, Sendable, Equatable {
+    public var id: Int
+    /// 127 octets au plus.
+    public var txt: String?
+
+    public init(id: Int, txt: String?) {
+        self.id = id
+        self.txt = txt
+    }
+}

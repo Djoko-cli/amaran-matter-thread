@@ -236,3 +236,49 @@ public struct ReseauThread: Codable, Sendable, Equatable {
     public var role: String?
     public var attache: Bool?
 }
+
+/// `reseau`, bloc `ip` (5.5) : le nom SRP, les adresses et le canal UDP du pont.
+public struct ReseauIp: Codable, Sendable, Equatable {
+    public struct Adresse: Codable, Sendable, Equatable {
+        public var type: TypeAdresse?
+        public var adresse: String?
+
+        public init(type: TypeAdresse?, adresse: String?) {
+            self.type = type
+            self.adresse = adresse
+        }
+    }
+
+    public struct Udp: Codable, Sendable, Equatable {
+        public var port: Int?
+        /// Une cle UDP existe (jamais la cle elle-meme : seulement son empreinte).
+        public var cle: Bool?
+        /// 8 hexa majuscules, ou nil sans cle.
+        public var empreinte: String?
+        /// Le port ecoute.
+        public var ouvert: Bool?
+        /// Sessions H1 etablies.
+        public var sessions: Int?
+        public var recus: Int?
+        public var emis: Int?
+        /// Datagrammes refuses en silence (10.3).
+        public var rejets: Int?
+        public var perdus: Int?
+    }
+
+    /// Nom que le pont publie par SRP (16 hexa) ; l'app le resout en `<srp>.local`.
+    public var srp: String?
+    public var adresses: [Adresse]?
+    public var udp: Udp?
+
+    /// Adresse joignable du reseau local (OMR), la premiere.
+    public var adresseOmr: String? {
+        adresses?.first { $0.type == .omr }?.adresse
+    }
+
+    /// Nom a resoudre pour la session par le reseau : `<srp>.local`.
+    public var hote: String? {
+        guard let srp, !srp.isEmpty else { return nil }
+        return srp + ".local"
+    }
+}

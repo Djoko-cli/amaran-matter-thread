@@ -28,6 +28,8 @@ public enum Interpretation {
         case .commandeInconnue: "commande inconnue"
         case .tropLong: "ligne trop longue"
         case .cadence: "trop de lignes par seconde"
+        case .interdite: "interdite à distance"
+        case .dejaTraite: "déjà traitée"
         case .inconnu: "code inconnu"
         }
     }
@@ -47,6 +49,33 @@ public enum Interpretation {
         case .inconnu, nil:
             return "issue inconnue"
         }
+    }
+
+    /// `trame` (7.6) : « → lampe 1 : ordre allumée, 50 % (essai 1) », « → groupe : demande
+    /// d'état », « ← lampe 1 : état allumée, 50 % ».
+    public static func trame(_ t: Trame) -> String {
+        let sens = switch t.sens {
+        case .tx: "→"
+        case .rx: "←"
+        case .inconnu, nil: "?"
+        }
+        let qui = t.lampe.map { "lampe \($0)" } ?? "groupe"
+        var texte = "\(sens) \(qui) : "
+        switch t.quoi {
+        case .ordre: texte += "ordre"
+        case .demande: texte += "demande d'état"
+        case .etat: texte += "état"
+        case .inconnu, nil: texte += "trame inconnue"
+        }
+        if t.marche != nil || t.intensite != nil {
+            var champs: [String] = []
+            if let m = t.marche { champs.append(m ? "allumée" : "éteinte") }
+            if let i = t.intensite { champs.append(intensite(i)) }
+            texte += " " + champs.joined(separator: ", ")
+        }
+        if let e = t.essai, t.quoi == .ordre { texte += " (essai \(e))" }
+        if let s = t.sautes, s > 0 { texte += " — \(s) trame(s) non émise(s) avant" }
+        return texte
     }
 
     /// Intensite au dixieme de pour cent : « 43 % », « 43,5 % ».

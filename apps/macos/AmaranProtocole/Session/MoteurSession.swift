@@ -1,5 +1,5 @@
-// Repris de Halo Compagnon (commit e114cd5) : par l'USB seulement (Thread au plan 3b-2),
-// avec les blocs et l'evenement ordre du pont amaran (docs/PROTOCOLE-JSON.md 3 et 6).
+// Repris de Halo Compagnon (commit e114cd5) : par l'USB et par Thread (cas UDP de Halo),
+// avec les blocs et l'evenement ordre du pont amaran (docs/PROTOCOLE-JSON.md 3, 6 et 10).
 import Foundation
 
 /// Compteurs de sante du lien, cote app.
@@ -28,7 +28,8 @@ public struct MoteurSession: Sendable {
         public var delaiHello: TimeInterval = 2
         /// ... 3 fois.
         public var renvoisHello = 3
-        /// Puis `\x15\n` et `json 1` toutes les 30 s, pas plus souvent.
+        /// Puis `\x15\n` et `json 1` toutes les 30 s, pas plus souvent. A
+        /// distance, une nouvelle poignee de main a la place (voir `tic`).
         public var relanceLente: TimeInterval = 30
         /// `json ping` apres 10 s sans autre commande (bail de 30 s) ; plus tot
         /// si le bail est plus court (`json 1 bail 10` : au tiers du bail).
@@ -37,6 +38,15 @@ public struct MoteurSession: Sendable {
         /// (un instantane a 16 lampes part en moins d'une demi-seconde) ; au-dela
         /// elle est tenue pour perdue et la file repart.
         public var delaiFinJson1: TimeInterval = 3
+        /// A distance : l'instantane de `json 1` (42 lignes, ~11 Ko a 16 lampes) passe a
+        /// 3 000 octets par seconde au plus sur Thread, partages entre deux sessions
+        /// (10.3) : 3,6 s seul, un peu plus de 8 s a deux ; sa `fin` est attendue 12 s,
+        /// comme celle de `json etat` et `json hello` (`PolitiqueDelais.delaiInstantane`).
+        public var delaiFinJson1Reseau: TimeInterval = PolitiqueDelais.reseau.delaiInstantane
+        /// Bail demande a distance (`json 1 bail <s>`, 10 a 120 s permis, 10.5) : plus
+        /// long que par l'USB, Thread perd des datagrammes ; le ping part au plus tard
+        /// toutes les 10 s.
+        public var bailDistantS = 60
         /// Silence : aucune ligne depuis 3 x max(periode, 2 s).
         public var facteurSilence: Double = 3
         public var silenceMin: TimeInterval = 2
@@ -58,7 +68,8 @@ public struct MoteurSession: Sendable {
         case resynchro
         /// `Unrecognized command` : firmware sans mode JSON.
         case ancienFirmware
-        /// Aucune reponse : ecoute, `json 1` toutes les 30 s.
+        /// Aucune reponse : ecoute, `json 1` toutes les 30 s (a distance :
+        /// nouvelle poignee de main toutes les 30 s).
         case sansReponse
         /// `hello` d'une version majeure non geree : console seule.
         case versionInconnue(Int)
@@ -91,6 +102,11 @@ public struct MoteurSession: Sendable {
         case resynchroSansReponse
         /// `fin` `bail` : `json 1` renvoye.
         case bailEchu
+        /// A distance, toujours aucun `hello` (relance de 30 s ou "Reessayer") :
+        /// nouvelle poignee de main. Le pont a oublie la session H1 provisoire (30 s
+        /// sans premier message, 10.3) : un `json 1` scelle pour elle serait ecarte
+        /// sans bruit.
+        case reseauSansHello
 
         /// Montree en bandeau (echec de la connexion).
         public var grave: Bool {
@@ -118,6 +134,8 @@ public struct MoteurSession: Sendable {
                 "Pas de réponse à json 1 sous 5 s : fermeture et réouverture du port."
             case .bailEchu:
                 "Le pont a quitté le mode machine (bail échu) : json 1 renvoyé."
+            case .reseauSansHello:
+                "Aucune réponse au json 1 par le réseau : nouvelle poignée de main."
             }
         }
     }
@@ -137,14 +155,16 @@ public struct MoteurSession: Sendable {
     }
 
     public var parametres = Parametres()
+    /// Transport de la connexion en cours (regles du reseau, 10.4).
+    public private(set) var genre: GenreTransport = .usb
     public private(set) var phase: Phase = .ferme
     public private(set) var correlateur = Correlateur()
     public private(set) var statistiques = StatistiquesLien()
     /// Reglages de session en vigueur : ceux du `hello`, puis ceux des
-    /// commandes `json periode|lampes|compteurs|reseau|log` acceptees (3.3).
-    /// Valeurs par defaut de `json 1` tant qu'aucun `hello` n'est arrive.
-    public private(set) var reglages = HelloBase.ReglagesSession(
-        periodeMs: 1000, lampesMs: 10000, compteursMs: 1000, reseauMs: 5000, bailS: 30, log: false)
+    /// commandes `json periode|lampes|compteurs|reseau|log|trames` acceptees (3.3).
+    /// Valeurs par defaut de `json 1` (profil USB ou distant) tant qu'aucun `hello`
+    /// n'est arrive.
+    public private(set) var reglages = Self.reglagesParDefaut(.usb, bailDistantS: 60)
     public var periodeMs: Int { reglages.periodeMs ?? 1000 }
     public var bailS: Int? { reglages.bailS }
     public private(set) var boot: String?
@@ -156,7 +176,10 @@ public struct MoteurSession: Sendable {
     /// de la file ne part avant (une seule commande en vol, 6.5).
     public var instantaneEnCours: Bool { json1 != nil }
 
-    private var json1: (numero: Int, envoyeA: TimeInterval)?
+    /// `json 1` en attente de sa `reponse` `fin` ; `repondu` : une `fin` est arrivee
+    /// sans le `hello` de cette tentative, ou `deja_traite` (reponse oubliee) : le renvoi
+    /// prend alors un id neuf.
+    private var json1: (numero: Int, envoyeA: TimeInterval, repondu: Bool)?
     private var dernierEssaiA: TimeInterval = 0
     private var dernierRecuA: TimeInterval = 0
     private var ouvertA: TimeInterval = 0
@@ -168,8 +191,22 @@ public struct MoteurSession: Sendable {
 
     // MARK: - Entrees
 
-    /// Transport ouvert : `\x15\n` puis `id=1 json 1` (3.2).
-    public mutating func ouvert(maintenant: TimeInterval) -> [Effet] {
+    /// Reglages qu'annonce `json 1` (3.3) : profil de l'USB, ou profil distant (10.5).
+    public static func reglagesParDefaut(_ genre: GenreTransport, bailDistantS: Int) -> HelloBase.ReglagesSession {
+        genre == .udp
+            ? HelloBase.ReglagesSession(transport: .udp, periodeMs: 2000, lampesMs: 30000, compteursMs: 0, reseauMs: 30000,
+                                        bailS: bailDistantS, log: false, trames: false)
+            : HelloBase.ReglagesSession(transport: .usb, periodeMs: 1000, lampesMs: 10000, compteursMs: 1000,
+                                        reseauMs: 5000, bailS: 30, log: false, trames: false)
+    }
+
+    /// Transport ouvert : `\x15\n` puis `id=1 json 1` (3.2). A distance, pas de
+    /// Ctrl-U (pas de ligne en cours a effacer ; le pont ignore une ligne sans id),
+    /// la politique reseau du correlateur, et un bail permis a distance.
+    public mutating func ouvert(maintenant: TimeInterval, genre: GenreTransport = .usb) -> [Effet] {
+        self.genre = genre
+        correlateur.politique = .pour(genre)
+        reglages = Self.reglagesParDefaut(genre, bailDistantS: parametres.bailDistantS)
         correlateur.reinitialiser(maintenant: maintenant)
         statistiques.connexions += 1
         phase = .attenteHello(essai: 1)
@@ -182,7 +219,7 @@ public struct MoteurSession: Sendable {
         return effacement + envoyerJson1(maintenant: maintenant)
     }
 
-    private var effacement: [Effet] { [.envoyer(LigneCommande.effacement)] }
+    private var effacement: [Effet] { genre == .udp ? [] : [.envoyer(LigneCommande.effacement)] }
 
     /// Transport ferme (cable, re-enumeration, liberation du port).
     public mutating func ferme(maintenant: TimeInterval) {
@@ -215,8 +252,10 @@ public struct MoteurSession: Sendable {
     }
 
     /// Relance manuelle apres un echec (firmware flashe depuis, bouton "Reessayer").
+    /// A distance : nouvelle poignee de main, comme la relance de 30 s.
     public mutating func reessayer(maintenant: TimeInterval) -> [Effet] {
         guard phase != .ferme else { return [] }
+        if genre == .udp { return rouvrirADistance(maintenant: maintenant) }
         phase = .attenteHello(essai: 1)
         return effacement + envoyerJson1(maintenant: maintenant)
     }
@@ -258,7 +297,7 @@ public struct MoteurSession: Sendable {
             if let j = json1, maintenant - j.envoyeA >= parametres.delaiHello {
                 if essai <= parametres.renvoisHello {
                     phase = .attenteHello(essai: essai + 1)
-                    effets += envoyerJson1(maintenant: maintenant)
+                    effets += envoyerJson1(maintenant: maintenant, renvoi: true)
                 } else {
                     phase = .sansReponse
                     json1 = nil
@@ -270,11 +309,16 @@ public struct MoteurSession: Sendable {
             }
         case .sansReponse:
             if maintenant - dernierEssaiA >= parametres.relanceLente {
-                effets += effacement
-                effets += envoyerJson1(maintenant: maintenant)
+                if genre == .udp {
+                    effets += rouvrirADistance(maintenant: maintenant)
+                } else {
+                    effets += effacement
+                    effets += envoyerJson1(maintenant: maintenant)
+                }
             }
         case .connecte:
-            if let j = json1, maintenant - j.envoyeA >= parametres.delaiFinJson1 {
+            let delaiFin = genre == .udp ? parametres.delaiFinJson1Reseau : parametres.delaiFinJson1
+            if let j = json1, maintenant - j.envoyeA >= delaiFin {
                 // hello recu mais pas la reponse fin (ligne perdue ou abimee) : la file repart.
                 json1 = nil
                 statistiques.sansReponse += 1
@@ -300,6 +344,7 @@ public struct MoteurSession: Sendable {
         }
 
         if phase.modeMachine {
+            for d in correlateur.renvoisDus(maintenant: maintenant) { effets.append(.envoyer(d)) }
             for s in correlateur.verifierOrdres(maintenant: maintenant) { effets.append(.ordrePerdu(s.id)) }
             for s in correlateur.verifierDelais(maintenant: maintenant) {
                 statistiques.sansReponse += 1
@@ -333,13 +378,35 @@ public struct MoteurSession: Sendable {
         return min(parametres.pingApres, Double(b) / 3)
     }
 
-    /// `json 1`, idempotent : chaque renvoi a son propre `id`.
-    private mutating func envoyerJson1(maintenant: TimeInterval) -> [Effet] {
-        let n = correlateur.reserverNumero()
-        json1 = (n, maintenant)
+    /// Ligne `json 1` : par l'USB, le bail par defaut (30 s) ; a distance, `json 1
+    /// bail <bailDistantS>`, ramene dans les bornes permises (10 a 120 s, 10.5).
+    public var ligneJson1: String {
+        genre == .udp ? "json 1 bail \(min(max(parametres.bailDistantS, 10), 120))" : "json 1"
+    }
+
+    /// `json 1`, idempotent : par l'USB, chaque renvoi a son propre `id`. A distance,
+    /// un renvoi garde son `id` (10.4) : si le premier est arrive, le pont ne refait
+    /// pas l'instantane (il ignore le renvoi tant qu'il l'envoie, puis rend sa
+    /// reponse gardee) ; mais un `json 1` dont la `fin` est arrivee sans `hello`
+    /// (hello perdu), ou dont la reponse est oubliee (`deja_traite`), repart avec un
+    /// id neuf, pour un nouvel instantane.
+    private mutating func envoyerJson1(maintenant: TimeInterval, renvoi: Bool = false) -> [Effet] {
+        let n: Int
+        if renvoi, genre == .udp, let j = json1, !j.repondu { n = j.numero } else { n = correlateur.reserverNumero() }
+        json1 = (n, maintenant, false)
         dernierEssaiA = maintenant
         correlateur.noterEnvoiHorsFile(maintenant: maintenant)
-        return [.envoyer(Data("id=\(n) json 1\n".utf8))]
+        return [.envoyer(Data("id=\(n) \(ligneJson1)\n".utf8))]
+    }
+
+    /// A distance, relancer c'est refaire la poignee de main : le pont oublie la
+    /// session H1 provisoire 30 s apres son SALUT (10.3). `dernierEssaiA` repousse la
+    /// relance suivante : pas de second `.rouvrir` avant que la fermeture ne remette
+    /// le moteur a `.ferme` (puis `ouvert` au transport suivant).
+    private mutating func rouvrirADistance(maintenant: TimeInterval) -> [Effet] {
+        dernierEssaiA = maintenant
+        statistiques.reouvertures += 1
+        return [.rouvrir(.reseauSansHello)]
     }
 
     private mutating func pomper(maintenant: TimeInterval) -> [Effet] {
@@ -405,11 +472,20 @@ public struct MoteurSession: Sendable {
                 // La session ne s'etablit qu'avec le hello de cette tentative : une
                 // reponse sans hello (hello perdu, coupe par un log, ok:false,
                 // cadence) laisse json1 pose et le minuteur renvoie json 1
-                // (idempotent). Apres le hello, la reponse fin libere la file.
-                if r.etape == .fin, phase == .connecte { json1 = nil }
+                // (idempotent ; a distance, avec un id neuf). Apres le hello, la reponse
+                // fin libere la file. `deja_traite` (10.4) est une fin comme les autres :
+                // la reponse est oubliee, aucune autre ne viendra pour cet id.
+                if r.etape == .fin {
+                    if phase == .connecte { json1 = nil } else { json1?.repondu = true }
+                }
             } else if case .fin(let id, _) = correlateur.recevoir(r, maintenant: maintenant) {
                 if r.ok, let s = correlateur.suivi(id) { appliquerReglage(s.commande) }
+                // A distance, `deja_traite` : le pont a oublie la reponse (10.4), l'etat a
+                // pu changer sans que l'app le sache : instantane, comme Halo.
+                if r.code == .dejaTraite { correlateur.soumettre("json etat", origine: .session, maintenant: maintenant) }
             }
+        case .texte(let t):
+            correlateur.texte(t.txt ?? "", id: t.id, maintenant: maintenant)
         case .ordre(let o):
             correlateur.recevoir(o, maintenant: maintenant)
         case .fin(let f):
@@ -452,27 +528,65 @@ public struct MoteurSession: Sendable {
 
     /// Reglages annonces par un `hello` (les champs absents gardent leur valeur).
     private mutating func adopterReglages(_ s: HelloBase.ReglagesSession) {
+        if let v = s.transport { reglages.transport = v }
         if let v = s.periodeMs { reglages.periodeMs = v }
         if let v = s.lampesMs { reglages.lampesMs = v }
         if let v = s.compteursMs { reglages.compteursMs = v }
         if let v = s.reseauMs { reglages.reseauMs = v }
         if let v = s.bailS { reglages.bailS = v }
         if let v = s.log { reglages.log = v }
+        if let v = s.trames { reglages.trames = v }
     }
 
-    /// `json periode|lampes|compteurs|reseau <ms>`, `json log 0|1` acceptes (y
+    /// `json periode|lampes|compteurs|reseau <ms>`, `json log|trames 0|1` acceptes (y
     /// compris tapes dans la console) : les reglages suivent, et le seuil de
-    /// silence avec la periode.
+    /// silence avec la periode. La commande est lue comme la console du pont la
+    /// decoupe (`LigneCommande.argv`, sensible a la casse) : `js\xon compteurs 5000`,
+    /// que le pont execute comme `json compteurs 5000`, regle bien les compteurs.
     private mutating func appliquerReglage(_ commande: String) {
-        let m = LigneCommande.mots(commande)
-        guard m.count == 3, m[0] == "json" else { return }
-        switch m[1] {
-        case "periode": if let v = Int(m[2]) { reglages.periodeMs = v }
-        case "lampes": if let v = Int(m[2]) { reglages.lampesMs = v }
-        case "compteurs": if let v = Int(m[2]) { reglages.compteursMs = v }
-        case "reseau": if let v = Int(m[2]) { reglages.reseauMs = v }
-        case "log" where m[2] == "0" || m[2] == "1": reglages.log = m[2] == "1"
+        let a = LigneCommande.argv(commande.trimmingCharacters(in: .whitespaces))
+        guard a.count == 3, a[0] == "json" else { return }
+        switch a[1] {
+        case "periode": if let v = Int(a[2]) { reglages.periodeMs = v }
+        case "lampes": if let v = Int(a[2]) { reglages.lampesMs = v }
+        case "compteurs": if let v = Int(a[2]) { reglages.compteursMs = v }
+        case "reseau": if let v = Int(a[2]) { reglages.reseauMs = v }
+        case "log" where a[2] == "0" || a[2] == "1": reglages.log = a[2] == "1"
+        case "trames" where a[2] == "0" || a[2] == "1": reglages.trames = a[2] == "1"
         default: break
         }
+    }
+
+    // MARK: - Cadences (3.3, 10.5)
+
+    /// Les cadences de session que l'app peut demander.
+    public enum Cadence: String, Sendable, CaseIterable {
+        /// Blocs `etat` `pont` et `sante`.
+        case periode
+        /// Toutes les lignes `etat` `lampe`.
+        case lampes
+        case compteurs
+        case reseau
+    }
+
+    /// Bornes d'une cadence non nulle (0 la coupe) : celles de la commande `json`
+    /// (3.3) par l'USB, celles de la liste blanche (10.5) a distance.
+    public static func bornes(_ c: Cadence, genre: GenreTransport) -> ClosedRange<Int> {
+        if genre == .udp, let min = PolitiqueCommandes.bornesDistantes.first(where: { $0.0 == c.rawValue })?.1 {
+            return min...60_000
+        }
+        switch c {
+        case .periode, .compteurs: return 200...60_000
+        case .lampes, .reseau: return 1_000...60_000
+        }
+    }
+
+    /// Ligne `json <cadence> <ms>` ramenee dans les bornes du transport en cours :
+    /// le moteur ne demande jamais a distance une cadence que la liste blanche
+    /// refuserait (0 reste 0 : coupe).
+    public func ligneCadence(_ c: Cadence, ms: Int) -> String {
+        let b = Self.bornes(c, genre: genre)
+        let v = ms <= 0 ? 0 : min(max(ms, b.lowerBound), b.upperBound)
+        return "json \(c.rawValue) \(v)"
     }
 }

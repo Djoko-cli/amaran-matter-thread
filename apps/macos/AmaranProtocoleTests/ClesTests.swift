@@ -106,8 +106,9 @@ struct ClesTests {
     @Test func masquage() {
         let c = Factice.reseau().commandes()[0]
         #expect(PolitiqueCommandes.masquerCle(c) == "mesh cles •••••••• ••••••••")
+        // Apres `mesh cles`, tout ce qui suit est masque, un masque par mot (ici la cle et « x »).
         #expect(PolitiqueCommandes.masquerCle("id=7 MESH  Cles 00112233445566778899aabbccddeeff x")
-                == "id=7 MESH  Cles •••••••• •••••••• x")
+                == "id=7 MESH  Cles •••••••• ••••••••")
         #expect(PolitiqueCommandes.masquerCle("ok cles 1A2B3C4D 5E6F7A8B (redemarrer)") == "ok cles 1A2B3C4D 5E6F7A8B (redemarrer)",
                 "les empreintes restent visibles")
         #expect(PolitiqueCommandes.verdictConsole(c)
