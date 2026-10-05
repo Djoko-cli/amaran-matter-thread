@@ -229,7 +229,7 @@ static int cmd_mesh(int argc, char **argv) {
 static int cmd_matter(int argc, char **argv) {
   (void)argc;
   (void)argv;
-  pont_afficher();
+  pont_afficher(json_pont_tache_distante());  // par Thread : sans les codes d'appairage
   return 0;
 }
 
@@ -239,7 +239,7 @@ static int cmd_decommission(int argc, char **argv) {
     printf("erreur : decommission ne prend pas d'argument\n");
     return 1;
   }
-  printf("Retrait de toutes les fabriques Matter, puis redemarrage (cles et lampes gardees)...\n");
+  printf("Retrait de toutes les fabriques Matter et de la cle UDP, puis redemarrage (cles Mesh et lampes gardees)...\n");
   pont_desappairer();
   return 0;
 }
@@ -252,7 +252,7 @@ static int cmd_redemarre(int argc, char **argv) {
 }
 
 const char *const CONSOLE_PONT_TACHES[CONSOLE_PONT_NB_TACHES] = {
-    "lampes", "socle", "json", "console", "amaran_tx", "nimble_host", "mesh_adv_task", "CHIP", "ot_task"};
+    "lampes", "socle", "json", "console", "udp", "distant", "amaran_tx", "nimble_host", "mesh_adv_task", "CHIP", "ot_task"};
 
 static void tache_console(void *arg) {
   (void)arg;

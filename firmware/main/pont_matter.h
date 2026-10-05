@@ -63,7 +63,9 @@ bool pont_ble_annonce(void);
 // Thread attache (enfant, routeur ou chef), d'apres le dernier evenement de role.
 bool pont_thread_attache(void);
 // La commande `matter` : mise en service, fabriques, Thread, abonnements, codes.
-void pont_afficher(void);
+// distant : la sortie part par Thread (json_pont_tache_distante) ; jamais les codes
+// d'appairage (docs/PROTOCOLE-JSON.md, 10.1).
+void pont_afficher(bool distant);
 // Releve pour le protocole JSON, depuis n'importe quelle tache, sans verrou.
 void pont_lire(pont_infos_t *infos);
 // Retire toutes les fabriques Matter, puis la pile redemarre la carte. Les

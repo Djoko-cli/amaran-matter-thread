@@ -4,6 +4,7 @@
 // (plafond des abonnements, identite, fenetre rouverte quand la derniere fabrique
 // part).
 #include "pont_matter.h"
+#include "net_udp.h"
 
 #include <inttypes.h>
 #include <stdio.h>
@@ -464,6 +465,12 @@ bool pont_thread_attache(void) {
 }
 
 void pont_desappairer(void) {
+  // L'acces par Thread ne survit pas au retrait : la cle UDP part avec les fabriques.
+  // La NVS s'efface meme si l'acces par Thread n'a pas demarre (net_udp_cle_effacer).
+  const esp_err_t err = net_udp_cle_effacer();
+  if (err != ESP_OK) {
+    printf("erreur : cle UDP pas effacee de la NVS (%s) : elle reviendra au redemarrage\n", esp_err_to_name(err));
+  }
   if (!esp_matter::is_started()) {
     printf("Matter non demarre : rien a desappairer\n");
     return;
@@ -501,7 +508,7 @@ bool pont_identifie(void) {
   return false;
 }
 
-void pont_afficher(void) {
+void pont_afficher(bool distant) {
   if (!esp_matter::is_started()) {  // sans la pile, ses fournisseurs n'existent pas (VerifyOrDie)
     printf("Matter non demarre (voir le journal de demarrage)\n");
     return;
@@ -521,8 +528,9 @@ void pont_afficher(void) {
     if (!infos || infos->GetVendorName(fabricant, sizeof(fabricant)) != CHIP_NO_ERROR) snprintf(fabricant, sizeof(fabricant), "?");
     if (!infos || infos->GetProductName(produit, sizeof(produit)) != CHIP_NO_ERROR) snprintf(produit, sizeof(produit), "?");
     if (!infos || infos->GetSerialNumber(serie, sizeof(serie)) != CHIP_NO_ERROR) snprintf(serie, sizeof(serie), "?");
-    if (fabriques == 0) {
-      // Codes d'appairage montres seulement avant la mise en service (lecon du Halo).
+    if (fabriques == 0 && !distant) {
+      // Codes d'appairage montres seulement avant la mise en service (lecon du Halo),
+      // et jamais par Thread.
       chip::MutableCharSpan qr_span(qr), manuel_span(manuel);
       const chip::RendezvousInformationFlags ble(chip::RendezvousInformationFlag::kBLE);
       codes = GetQRCode(qr_span, ble) == CHIP_NO_ERROR && GetManualPairingCode(manuel_span, ble) == CHIP_NO_ERROR;
@@ -543,6 +551,8 @@ void pont_afficher(void) {
   if (codes) {
     printf("  code manuel     : %s\n", manuel);
     printf("  QR code         : %s\n", qr);
+  } else if (fabriques == 0 && distant) {
+    printf("  codes           : par l'USB seulement\n");
   }
   printf("  identite        : %s, %s, n/s %s\n", fabricant, produit, serie);
   printf("  version         : %s\n", esp_app_get_description()->version);

@@ -407,8 +407,8 @@ static void testQueue() {
   n += q.push(Item::EtatPont, 0, true);
   for (uint8_t i = 0; i < LISTE_CAPACITE; i++) n += q.push(Item::EtatLampe, 0, true, i);
   n += q.push(Item::EtatSante, 0, true) + q.push(Item::CptMesh, 0, true) + q.push(Item::NetMatter, 0, true) +
-       q.push(Item::NetThread, 0, true) + q.push(Item::Reply, 0, false, 0);
-  CHECK(n == 42 && q.size() == 42, "instantane a 16 lampes : %d lignes en file", n);
+       q.push(Item::NetThread, 0, true) + q.push(Item::NetIp, 0, true) + q.push(Item::Reply, 0, false, 0);
+  CHECK(n == 43 && q.size() == 43, "instantane a 16 lampes : %d lignes en file", n);
 }
 
 // A distance (10.3) : la tete part avec 7 places libres dans la file de net_udp (une
@@ -1114,16 +1114,16 @@ static void testPiresCas() {
   etatPont(gW, M, M, ep);
   s = finish(gW, &ok);
   CHECK(ok && s.size() <= kBudget, "etat pont : %zu octets", s.size());
-  Pile piles[9];
-  const char *noms[9] = {"lampes", "json", "console", "socle", "CHIP", "ot_task", "nimble_host", "mesh_adv_task",
-                         "amaran_tx"};
-  for (int i = 0; i < 9; i++) piles[i] = Pile{noms[i], 2147483647};
+  Pile piles[11];
+  const char *noms[11] = {"lampes", "json", "console", "socle", "udp", "distant", "CHIP", "ot_task", "nimble_host",
+                          "mesh_adv_task", "amaran_tx"};
+  for (int i = 0; i < 11; i++) piles[i] = Pile{noms[i], 2147483647};
   EtatSante e;
   e.boot = e.upS = e.depuisMs = e.heap = e.heapMin = e.heapBloc = e.perdus = e.tropLongs = e.rejets = M;
   e.cmdId = kIdMax;
   e.motif = "identification";
   e.piles = piles;
-  e.nPiles = 9;
+  e.nPiles = 11;
   etatSante(gW, M, M, e);
   s = finish(gW, &ok);
   CHECK(ok && s.size() <= kBudget, "etat sante : %zu octets", s.size());

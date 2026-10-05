@@ -9,7 +9,7 @@ extern "C" {
 #endif
 
 // Taches dont `taches` et le bloc sante du protocole JSON donnent la marge de pile.
-#define CONSOLE_PONT_NB_TACHES 9
+#define CONSOLE_PONT_NB_TACHES 11
 extern const char *const CONSOLE_PONT_TACHES[CONSOLE_PONT_NB_TACHES];
 
 // Demarre la console sur l'USB natif, apres json_pont_demarrer. cfg reste la

@@ -252,7 +252,7 @@ constexpr uint8_t kPlacesPeriodique = 7;
 // EtatLampe, la place de la reponse differee pour Reply.
 enum class Item : uint8_t {
   HelloBase, HelloId, ConfigCatalogue, ConfigMesh, ConfigLampe, EtatPont, EtatLampe, EtatSante, CptMesh,
-  NetMatter, NetThread, Heartbeat, Reply
+  NetMatter, NetThread, NetIp, Heartbeat, Reply
 };
 struct Queued {
   Item item;
@@ -263,7 +263,7 @@ struct Queued {
 
 class Queue {
  public:
-  static constexpr uint8_t kN = 48;  // un instantane complet a 16 lampes : 42 lignes
+  static constexpr uint8_t kN = 48;  // un instantane complet a 16 lampes : 43 lignes
   // Ajoute en queue. Un element deja en file (meme item et meme arg, hors
   // Reply) n'est pas double ; une demande explicite (session faux) fondue
   // dedans le rend explicite et repart de maintenant (son retard ne compte

@@ -9,6 +9,7 @@
 #include "console_pont.h"
 #include "json_pont.h"
 #include "mesh_amaran.h"
+#include "net_udp.h"
 #include "pont_matter.h"
 #include "socle.h"
 #include "tache_lampes.h"
@@ -58,6 +59,7 @@ extern "C" void app_main(void) {
     marge_main();
     return;
   }
+  if (net_udp_demarrer() != ESP_OK) ESP_LOGE(TAG, "socket UDP non ouverte");
   if (!cfg.cles_presentes) {
     ESP_LOGW(TAG, "cles absentes : lancer outils/cles_amaran.py");
     marge_main();

@@ -29,6 +29,7 @@ typedef struct {
   uint16_t intensite;
   uint32_t releve_ms;
   uint32_t id;  // ordre de l'app (mode JSON) ; 0 : aucun
+  uint8_t origine;  // session de l'app qui l'a donne, marquee par json_pont (tache_lampes.h)
 } message_t;
 
 static QueueHandle_t s_file;
@@ -43,13 +44,49 @@ static volatile diagnostic_t s_diag_etat;
 // Id des ordres de l'app en cours, par lampe : le prochain signal de la lampe les
 // porte (un ordre arrive pendant un autre se fond dans le sien). Tache lampes.
 static uint32_t s_ids[LAMPES_CAPACITE][JSON_PONT_IDS_MAX];
+static uint8_t s_origines[LAMPES_CAPACITE][JSON_PONT_IDS_MAX];  // octet origine de chaque id, tel quel
 static uint8_t s_nb_ids[LAMPES_CAPACITE];
 static uint32_t s_ids_perdus[LAMPES_CAPACITE];
 
 static uint32_t maintenant_ms(void) { return (uint32_t)(esp_timer_get_time() / 1000); }
 
+// Index de la lampe a cette adresse ; -1 : aucune (le groupe). Sous s_verrou.
+static int lampe_a(uint16_t adresse) {
+  for (int i = 0; i < s_lampes.n; i++)
+    if (s_lampes.lampes[i].adresse == adresse) return i;
+  return -1;
+}
+
+// Trafic Bluetooth Mesh decode, pour json trames 1 (7.6). Sous s_verrou.
+static void montrer_emise(uint16_t dst, const uint8_t t[TELINK_TAILLE]) {
+  if (!json_pont_trames_actives()) return;
+  const int i = lampe_a(dst);
+  const uint8_t essai = i >= 0 ? s_lampes.lampes[i].essai : 0;
+  switch (t[9]) {
+    case TELINK_CMD_ETAT:
+      json_pont_trame(false, "demande", i, -1, -1, 0);
+      break;
+    case TELINK_CMD_MARCHE:
+      json_pont_trame(false, "ordre", i, (int8_t)(t[8] & 0x01), -1, essai);
+      break;
+    case TELINK_CMD_INTENSITE:
+      json_pont_trame(false, "ordre", i, -1, (int32_t)((((unsigned)t[8] << 2) | (t[7] >> 6)) & 0x3FF), essai);
+      break;
+    default:
+      break;
+  }
+}
+
+static void montrer_recue(uint16_t src, const uint8_t t[TELINK_TAILLE]) {
+  if (!json_pont_trames_actives()) return;
+  telink_etat_t e;
+  if (!telink_lire_etat(t, &e)) return;
+  json_pont_trame(true, "etat", lampe_a(src), e.marche, e.intensite, 0);
+}
+
 static bool sortie_envoyer(void *ctx, uint16_t dst, const uint8_t trame[TELINK_TAILLE], uint8_t repetitions) {
   (void)ctx;
+  montrer_emise(dst, trame);
   return mesh_envoyer(dst, trame, repetitions) == ESP_OK;
 }
 
@@ -69,7 +106,7 @@ static void sortie_signaler(void *ctx, int lampe, lampes_signal_t signal) {
   }
   const lampe_t *p = &s_lampes.lampes[lampe];
   json_pont_ordre(lampe, signal, p->dernier_delai_ms, signal == LAMPES_SIGNAL_TENU ? 0 : p->essai, s_ids[lampe],
-                  s_nb_ids[lampe], s_ids_perdus[lampe]);
+                  s_origines[lampe], s_nb_ids[lampe], s_ids_perdus[lampe]);
   s_nb_ids[lampe] = 0;
   s_ids_perdus[lampe] = 0;
 }
@@ -145,9 +182,11 @@ static void traiter(const message_t *m) {
     const int i = m->lampe;
     if (s_nb_ids[i] == JSON_PONT_IDS_MAX) {  // le plus ancien sort
       memmove(s_ids[i], s_ids[i] + 1, (JSON_PONT_IDS_MAX - 1) * sizeof(s_ids[i][0]));
+      memmove(s_origines[i], s_origines[i] + 1, (JSON_PONT_IDS_MAX - 1) * sizeof(s_origines[i][0]));
       s_nb_ids[i]--;
       s_ids_perdus[i]++;
     }
+    s_origines[i][s_nb_ids[i]] = m->origine;
     s_ids[i][s_nb_ids[i]++] = m->id;
   }
   lampes_ordre(&s_lampes, m->lampe, m->a_marche ? &m->marche : NULL, m->a_intensite ? &m->intensite : NULL,
@@ -189,6 +228,7 @@ static void tache(void *arg) {
     while (evenements && xQueueReceive(evenements, &ev, 0) == pdTRUE) {
       if (ev.type == MESH_EV_ETAT_LAMPE) {
         xSemaphoreTake(s_verrou, portMAX_DELAY);
+        montrer_recue(ev.src, ev.acces + 1);
         lampes_trame_recue(&s_lampes, ev.src, ev.acces + 1, maintenant_ms());
         xSemaphoreGive(s_verrou);
       }
@@ -222,9 +262,10 @@ esp_err_t tache_lampes_demarrer(const amaran_config_t *cfg) {
   return xTaskCreate(tache, "lampes", 6144, NULL, 4, NULL) == pdPASS ? ESP_OK : ESP_ERR_NO_MEM;
 }
 
-static bool envoyer_ordre(int lampe, const bool *marche, const uint16_t *intensite, bool depuis_matter, uint32_t id) {
+static bool envoyer_ordre(int lampe, const bool *marche, const uint16_t *intensite, bool depuis_matter, uint32_t id,
+                          uint8_t origine) {
   if (!s_file || lampe < 0 || lampe >= LAMPES_CAPACITE) return false;
-  message_t m = {.type = MSG_ORDRE, .lampe = (int8_t)lampe, .depuis_matter = depuis_matter, .id = id};
+  message_t m = {.type = MSG_ORDRE, .lampe = (int8_t)lampe, .depuis_matter = depuis_matter, .id = id, .origine = origine};
   if (marche) {
     m.a_marche = true;
     m.marche = *marche;
@@ -241,11 +282,11 @@ static bool envoyer_ordre(int lampe, const bool *marche, const uint16_t *intensi
 }
 
 void tache_lampes_ordre(int lampe, const bool *marche, const uint16_t *intensite, bool depuis_matter) {
-  envoyer_ordre(lampe, marche, intensite, depuis_matter, 0);
+  envoyer_ordre(lampe, marche, intensite, depuis_matter, 0, JSON_PONT_USB);
 }
 
-bool tache_lampes_ordre_id(int lampe, const bool *marche, const uint16_t *intensite, uint32_t id) {
-  return envoyer_ordre(lampe, marche, intensite, false, id);
+bool tache_lampes_ordre_id(int lampe, const bool *marche, const uint16_t *intensite, uint32_t id, uint8_t origine) {
+  return envoyer_ordre(lampe, marche, intensite, false, id, origine);
 }
 
 void tache_lampes_regler_releve(uint32_t releve_ms) {
