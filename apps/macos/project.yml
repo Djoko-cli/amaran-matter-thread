@@ -1,0 +1,101 @@
+# Amaran Compagnon (docs/superpowers/specs/2026-10-05-pont-amaran-app-compagnon-design.md) :
+# copie adaptee de Halo Compagnon. Ce fichier fait foi : le projet Xcode est genere
+# (xcodegen generate) et n'est pas versionne.
+name: AmaranCompagnon
+options:
+  bundleIdPrefix: fr.djoko.amaran
+  deploymentTarget:
+    macOS: "15.0"
+  developmentLanguage: fr
+  createIntermediateGroups: true
+  generateEmptyDirectories: false
+configFiles:
+  Debug: Signature.xcconfig
+  Release: Signature.xcconfig
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+    GCC_TREAT_WARNINGS_AS_ERRORS: YES
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    DEAD_CODE_STRIPPING: YES
+    MACOSX_DEPLOYMENT_TARGET: "15.0"
+targets:
+  AmaranProtocole:
+    type: framework
+    platform: macOS
+    sources:
+      - path: AmaranProtocole
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: fr.djoko.amaran.protocole
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_NSHumanReadableCopyright: ""
+        SKIP_INSTALL: YES
+        DEFINES_MODULE: YES
+  AmaranCompagnon:
+    type: application
+    platform: macOS
+    sources:
+      - path: AmaranCompagnon
+    dependencies:
+      - target: AmaranProtocole
+    settings:
+      base:
+        PRODUCT_NAME: Amaran Compagnon
+        PRODUCT_MODULE_NAME: AmaranCompagnon
+        PRODUCT_BUNDLE_IDENTIFIER: fr.djoko.amaran.compagnon
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Amaran Compagnon
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
+        INFOPLIST_KEY_NSHumanReadableCopyright: ""
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        CODE_SIGN_ENTITLEMENTS: AmaranCompagnon/AmaranCompagnon.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
+        # ASSETCATALOG_COMPILER_APPICON_NAME : dans Signature.xcconfig, pour que
+        # Local.xcconfig puisse choisir l'icone M2 (non versionnee).
+  AmaranProtocoleTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: AmaranProtocoleTests
+    dependencies:
+      - target: AmaranProtocole
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: fr.djoko.amaran.protocole.tests
+        GENERATE_INFOPLIST_FILE: YES
+  AmaranCompagnonTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: AmaranCompagnonTests
+    dependencies:
+      - target: AmaranCompagnon
+      - target: AmaranProtocole
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: fr.djoko.amaran.compagnon.tests
+        GENERATE_INFOPLIST_FILE: YES
+        # Le produit s'appelle "Amaran Compagnon" (avec une espace), pas comme la cible.
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Amaran Compagnon.app/Contents/MacOS/Amaran Compagnon"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+schemes:
+  AmaranCompagnon:
+    build:
+      targets:
+        AmaranCompagnon: all
+        AmaranProtocole: all
+        AmaranProtocoleTests: [test]
+        AmaranCompagnonTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - AmaranProtocoleTests
+        - AmaranCompagnonTests
+    archive:
+      config: Release

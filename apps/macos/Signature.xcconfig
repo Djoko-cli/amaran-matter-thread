@@ -1,0 +1,14 @@
+// Signature de l'app et des tests (repris de Halo Compagnon).
+// Par defaut : ad hoc (le depot compile partout, sans compte Apple). Pour que le
+// trousseau et le dossier d'amaran Desktop autorise tiennent d'une compilation a
+// l'autre, signer avec son equipe : creer Local.xcconfig (ignore par git) avec
+//   DEVELOPMENT_TEAM = <equipe, 10 caracteres>
+//   CODE_SIGN_IDENTITY = Apple Development
+// L'equipe : security find-certificate -c "Apple Development" -p | openssl x509 -noout -subject (champ OU).
+// Icone : AppIcon (A2, versionnee) ; Local.xcconfig peut la remplacer par une icone
+// locale, non versionnee (ASSETCATALOG_COMPILER_APPICON_NAME = AppIconM2).
+CODE_SIGN_IDENTITY = -
+CODE_SIGN_STYLE = Manual
+DEVELOPMENT_TEAM =
+ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon
+#include? "Local.xcconfig"
