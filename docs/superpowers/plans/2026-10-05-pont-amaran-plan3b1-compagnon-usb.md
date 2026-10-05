@@ -36,7 +36,7 @@ amaran Desktop (base, lue en memoire) ──► Amaran Compagnon ──USB──
 - Le dépôt est public : ni MAC complète (lampes, carte), ni numéro de série USB, ni numéro `AMARAN-…`, ni empreinte réelle de clé. Les exemples et le mode démo n'utilisent que des valeurs inventées (MAC `02:00:…`, empreintes `1A2B3C4D`).
 - **L'icône M2 (le A d'Aputure) n'est jamais versionnée** : `apps/macos/AmaranCompagnon/Ressources/AppIconM2.icon` est ignoré par git. Le dépôt porte l'icône libre A2.
 - Firmware : français partout (console, commits, docs) ; les commentaires du code sont **sans accents** (style du pont Halo). App : mêmes règles ; les textes de l'interface portent leurs accents. Français seulement : pas de catalogue de traduction.
-- App : Swift 6, concurrence stricte complète, avertissements traités comme des erreurs, macOS 15 ou plus, sandbox (`device.serial`, `files.user-selected.read-write`, `files.bookmarks.app-scope`, rien d'autre en 3b-1) et runtime durci. `project.yml` fait foi : le projet Xcode est généré (`xcodegen generate`) et ignoré par git.
+- App : Swift 6, concurrence stricte complète, avertissements traités comme des erreurs, macOS 15 ou plus, sandbox (`device.serial`, `files.user-selected.read-write`, `files.bookmarks.app-scope`, rien d'autre en 3b-1) ; runtime durci quand l'app est signée avec une équipe (`Local.xcconfig`) : signée ad hoc, elle ne chargerait pas son framework. `project.yml` fait foi : le projet Xcode est généré (`xcodegen generate`) et ignoré par git.
 - Commits : directement sur `main`, message en français, terminé par une ligne `Co-Authored-By: Claude …` (le modèle qui écrit le commit). **Aucun push sans l'accord de Djoko.**
 - **Les sous-agents ne flashent jamais, n'ouvrent jamais de port série, ne lancent jamais l'app sur un vrai port.** Le mode démo et les tests sont permis.
   - Claude flashe avec l'accord de Djoko.
@@ -6951,6 +6951,8 @@ public enum CodeAppairage {
 
 Run: `cd apps/macos && xcodegen generate && xcodebuild -project AmaranCompagnon.xcodeproj -scheme AmaranCompagnon -destination 'platform=macOS' -derivedDataPath build/dd test 2>&1 | /usr/bin/grep -E '(swift:[0-9]+:[0-9]+: (error|warning)|Test run with|[*][*] TEST)' ; cd ../..`
 Expected : `Test run with 23 tests in 4 suites passed` (`AmaranProtocoleTests`) et `Test run with 1 test in 0 suites passed` (`AmaranCompagnonTests`), puis `** TEST SUCCEEDED **`, sans avertissement.
+
+> **Amendement (exécution, 05/10)** : la relecture a montré qu'une app Release signée ad hoc s'arrête au lancement : le runtime durci refuse `AmaranProtocole.framework` (pas d'équipe commune). Correctif en un commit à part : `ENABLE_HARDENED_RUNTIME` quitte `project.yml` ; `Signature.xcconfig` le met à `NO`, et `Local.xcconfig` l'active avec l'équipe (`ENABLE_HARDENED_RUNTIME = YES`). Les Tasks 10 (README de l'app) et 11 (banc B) en tiennent compte.
 
 - [ ] **Step 9 : commit.** `git status` ne doit montrer ni `AmaranCompagnon.xcodeproj` ni `build/` (ignorés).
 
@@ -14163,7 +14165,7 @@ Expected : `Test run with 85 tests in 13 suites passed` et `Test run with 9 test
 - [ ] **Step 7 : l'app démarre en mode démo.** Pas de port réel : le mode démo seulement. L'app tourne 20 s, puis une alarme l'arrête (`timeout` n'existe pas sur macOS) :
 
 ```bash
-perl -e 'alarm 20; exec @ARGV' "apps/macos/build/dd/Build/Products/Debug/Amaran Compagnon.app/Contents/MacOS/Amaran Compagnon" -demo -ecran commandes >/dev/null 2>&1; echo "code $?"
+perl -e 'alarm 20; exec { $ARGV[0] } @ARGV' "apps/macos/build/dd/Build/Products/Debug/Amaran Compagnon.app/Contents/MacOS/Amaran Compagnon" -demo -ecran commandes >/dev/null 2>&1; echo "code $?"
 ```
 
 Expected : `code 142` : l'app tournait encore quand l'alarme l'a arrêtée. Un autre code : elle s'est arrêtée seule ; le plus récent des rapports `Amaran Compagnon-*.ips` de `~/Library/Logs/DiagnosticReports/` dit pourquoi.
@@ -14228,6 +14230,7 @@ Par défaut, l'app est signée ad hoc : le dépôt compile partout, sans compte 
 ```
 DEVELOPMENT_TEAM = <équipe, 10 caractères>
 CODE_SIGN_IDENTITY = Apple Development
+ENABLE_HARDENED_RUNTIME = YES
 ```
 
 L'équipe : `security find-certificate -c "Apple Development" -p | openssl x509 -noout -subject` (champ OU). Un compte développeur gratuit suffit : l'app n'a aucun droit restreint.
@@ -14629,7 +14632,7 @@ Pourquoi : la spec 3b, section 11 (banc 3b-1) et section 12 (le risque du signet
 ```bash
 cd apps/macos
 EQUIPE=$(security find-certificate -c "Apple Development" -p | openssl x509 -noout -subject | sed -E 's/.*OU ?= ?([A-Z0-9]{10}).*/\1/')
-printf 'DEVELOPMENT_TEAM = %s\nCODE_SIGN_IDENTITY = Apple Development\nASSETCATALOG_COMPILER_APPICON_NAME = AppIconM2\n' "$EQUIPE" > Local.xcconfig
+printf 'DEVELOPMENT_TEAM = %s\nCODE_SIGN_IDENTITY = Apple Development\nENABLE_HARDENED_RUNTIME = YES\nASSETCATALOG_COMPILER_APPICON_NAME = AppIconM2\n' "$EQUIPE" > Local.xcconfig
 cp -R ~/Dev/amaran/.superpowers/icones/final/AppIcon.icon AmaranCompagnon/Ressources/AppIconM2.icon
 xcodegen generate && xcodebuild -project AmaranCompagnon.xcodeproj -scheme AmaranCompagnon -destination 'platform=macOS' -derivedDataPath build/dd build 2>&1 | tail -1
 git status --short
