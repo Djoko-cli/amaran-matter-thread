@@ -15,6 +15,7 @@ struct AmaranCompagnonApp: App {
         let suite = "fr.djoko.amaran.hote.tests"
         UserDefaults.standard.removePersistentDomain(forName: suite)
         return Pont(trousseau: TrousseauMemoire(), trousseauDemo: TrousseauMemoire(ReseauDemo.reseau),
+                    trousseauPonts: TrousseauPontsMemoire(), trousseauPontsDemo: TrousseauPontsMemoire(),
                     preferences: UserDefaults(suiteName: suite)!)
     }
 

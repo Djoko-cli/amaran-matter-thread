@@ -21,6 +21,7 @@ func attendre(_ delai: Duration = .seconds(15), _ condition: () -> Bool) async -
 @MainActor
 func pontDemo(copie: ReseauMesh? = ReseauDemo.reseau) -> Pont {
     let p = Pont(trousseau: TrousseauMemoire(), trousseauDemo: TrousseauMemoire(copie),
+                 trousseauPonts: TrousseauPontsMemoire(), trousseauPontsDemo: TrousseauPontsMemoire(),
                  preferences: UserDefaults(suiteName: "amaran.tests.\(UUID().uuidString)")!)
     p.vitesseDemo = 20
     p.connecter(.demo)
@@ -215,19 +216,39 @@ struct PortDuPontTests {
         #expect(Pont.sourceParDefaut(ports: [port("/dev/cu.usbmodem3301", vid: 0x043E, serie: pont)], dernierPont: pont) == nil)
     }
 
-    @Test func etiquettesDesPortsEtConfirmationDuPont() {
+    /// Titres des ports comme Halo Compagnon : "MODELE · MAC" (modele du repertoire ; `AMARAN`
+    /// pour le dernier pont confirme pas encore note ; sinon "ESP32"), le nom court sans MAC.
+    @Test func titresDesPortsEtConfirmationDuPont() {
         func port(_ chemin: String, vid: Int, serie: String?) -> PortUSB {
             PortUSB(chemin: chemin, vid: vid, pid: 0x1001, serie: serie, produit: nil)
         }
         let pont = "02:00:00:00:00:AA"
         let autre = "02:00:00:00:00:BB"
-        #expect(Pont.libellePort(port("/dev/cu.usbmodem2201", vid: 0x303A, serie: pont), dernierPont: pont) == "Pont amaran (…00:AA)")
-        #expect(Pont.libellePort(port("/dev/cu.usbmodem1101", vid: 0x303A, serie: autre), dernierPont: pont) == "Autre carte Espressif (…00:BB)")
-        // Aucun pont confirme : toute carte Espressif est "autre".
-        #expect(Pont.libellePort(port("/dev/cu.usbmodem1101", vid: 0x303A, serie: pont), dernierPont: nil) == "Autre carte Espressif (…00:AA)")
-        // Sans numero de serie : le nom court du port.
-        #expect(Pont.libellePort(port("/dev/cu.usbmodem1101", vid: 0x303A, serie: nil), dernierPont: pont) == "usbmodem1101")
-        #expect(Pont.libellePort(port("/dev/cu.usbmodem1101", vid: 0x303A, serie: ""), dernierPont: pont) == "usbmodem1101")
+        let prefs = UserDefaults(suiteName: "amaran.tests.\(UUID().uuidString)")!
+        prefs.set(pont, forKey: Pont.cleDernierPont)
+        let p = Pont(trousseau: TrousseauMemoire(), trousseauDemo: TrousseauMemoire(),
+                     trousseauPonts: TrousseauPontsMemoire(), trousseauPontsDemo: TrousseauPontsMemoire(),
+                     preferences: prefs)
+        // Dernier pont confirme, repertoire encore vide : le modele AMARAN ; l'autre carte : ESP32.
+        #expect(p.titre(port: port("/dev/cu.usbmodem2201", vid: 0x303A, serie: pont)) == "AMARAN · 02:00:00:00:00:AA")
+        #expect(p.titre(port: port("/dev/cu.usbmodem1101", vid: 0x303A, serie: autre)) == "ESP32 · 02:00:00:00:00:BB")
+        // Le repertoire fait foi des qu'il connait la carte (modele appris au hello).
+        p.repertoire.noter(mac: autre, serie: "AMARAN-0200000000BB", srp: nil)
+        #expect(p.titre(port: port("/dev/cu.usbmodem1101", vid: 0x303A, serie: autre)) == "AMARAN · 02:00:00:00:00:BB")
+        p.repertoire.noter(mac: pont, serie: "BANC-0200000000AA", srp: nil)
+        #expect(p.titre(port: port("/dev/cu.usbmodem2201", vid: 0x303A, serie: pont)) == "BANC · 02:00:00:00:00:AA")
+        // Sans numero de serie lisible : le nom court du port.
+        #expect(p.titre(port: port("/dev/cu.usbmodem1101", vid: 0x303A, serie: nil)) == "usbmodem1101")
+        #expect(p.titre(port: port("/dev/cu.usbmodem1101", vid: 0x303A, serie: "")) == "usbmodem1101")
+        #expect(p.titre(port: port("/dev/cu.usbmodem1101", vid: 0x303A, serie: "pas-une-mac")) == "usbmodem1101")
+        // La source serie choisie, debranchee ou non, porte le meme titre.
+        #expect(p.titre(serie: autre, chemin: "/dev/cu.usbmodem1101") == "AMARAN · 02:00:00:00:00:BB")
+        #expect(p.titre(serie: nil, chemin: "/dev/cu.usbmodem1101") == "usbmodem1101")
+        // Aucun pont confirme : toute carte inconnue est ESP32.
+        let vierge = Pont(trousseau: TrousseauMemoire(), trousseauDemo: TrousseauMemoire(),
+                          trousseauPonts: TrousseauPontsMemoire(), trousseauPontsDemo: TrousseauPontsMemoire(),
+                          preferences: UserDefaults(suiteName: "amaran.tests.\(UUID().uuidString)")!)
+        #expect(vierge.titre(port: port("/dev/cu.usbmodem1101", vid: 0x303A, serie: pont)) == "ESP32 · 02:00:00:00:00:AA")
 
         // Un pont est confirme par la capacite `mesh` ou par un numero de serie AMARAN-.
         func identite(caps: [String]?, serie: String?) -> HelloIdentite? {

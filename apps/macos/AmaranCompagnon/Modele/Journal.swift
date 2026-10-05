@@ -1,5 +1,5 @@
-// Repris de Halo Compagnon (commit e114cd5) : la console et les rejets (les trames et
-// les courbes viendront au plan 3b-2).
+// Repris de Halo Compagnon (commit e114cd5) : la console, les rejets et le journal des
+// trames Bluetooth Mesh (les courbes sont dans AmaranProtocole, SeriesCourbes).
 import AmaranProtocole
 import Foundation
 
@@ -33,6 +33,13 @@ struct Rejet: Identifiable, Sendable {
     let date: Date
     let raison: String
     let brut: String
+}
+
+/// Trame Bluetooth Mesh decodee par le pont (`trame`, 7.6), avec sa date (ancre du `hello`).
+struct TrameRecue: Identifiable, Sendable, Equatable {
+    let id: Int
+    let date: Date
+    let trame: Trame
 }
 
 /// Tableau borne : les plus anciens sortent.

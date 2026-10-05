@@ -4,6 +4,7 @@
 // repond comme le firmware (docs/PROTOCOLE-JSON.md) ; il sert aussi aux tests de bout
 // en bout.
 import AmaranProtocole
+import CryptoKit
 import Foundation
 
 /// Memoire du pont simule (sa NVS) : elle survit a ses redemarrages.
@@ -19,6 +20,9 @@ struct MemoireDemo: Sendable {
     }
 
     var empreintes: (reseau: String, application: String)?
+    /// Empreinte de la cle UDP (10.2) ; nil : pas de cle, port 5480 ferme. La cle
+    /// elle-meme n'est jamais gardee par le simulateur : seule l'app la range.
+    var empreinteUdp: String?
     var lampes: [Lampe]
     var releveMs = 2000
     var prochainEndpoint = 5
@@ -112,6 +116,9 @@ actor SimulateurDemo {
     private var bailS = 30
     private var dernierRx: TimeInterval = 0
     private var log = false
+    private var trames = false
+    /// Prochaine demande d'etat au groupe des lampes (trames `json trames 1`), en secondes simulees.
+    private var prochaineDemande = 0.0
     private var periodes = (etat: 1000, lampes: 10000, compteurs: 1000, reseau: 5000)
     private var prochains = (etat: 0.0, lampes: 0.0, compteurs: 0.0, reseau: 0.0, regard: 0.0)
     private var lampes: [LampeSim]
@@ -176,8 +183,12 @@ actor SimulateurDemo {
     private func reponse(_ id: Int?, _ cmd: String, debut: Bool = false, ok: Bool = true, code: String = "ok",
                          msg: String? = nil, extra: [(String, J)] = []) {
         guard let id else { return }
+        // Comme le pont : `cmd` ne cite jamais une cle (mesh cles) ni l'alea (json cle nouvelle).
+        let m = LigneCommande.mots(cmd)
+        let vue = m.starts(with: ["json", "cle", "nouvelle"]) ? "json cle nouvelle"
+            : PolitiqueCommandes.masquerCle(cmd) == cmd ? String(cmd.prefix(40)) : "mesh cles"
         var c: [(String, J)] = [("id", .i(id)), ("etape", .s(debut ? "debut" : "fin")),
-                                ("cmd", .s(PolitiqueCommandes.masquerCle(cmd) == cmd ? String(cmd.prefix(40)) : "mesh cles")),
+                                ("cmd", .s(vue)),
                                 ("ok", .b(ok)), ("code", .s(debut ? "en_cours" : code))]
         if let msg { c.append(("msg", .s(msg))) }
         if !debut { c.append(("duree_ms", .i(1))) }
@@ -188,19 +199,20 @@ actor SimulateurDemo {
 
     private func hello() {
         ligne("hello", bloc: "base", [
-            ("rev", .i(0)), ("fw", .s("0.1.0-demo")), ("date", .s("Oct  5 2026")), ("heure", .s("14:02:11")),
+            ("rev", .i(1)), ("fw", .s("0.1.0-demo")), ("date", .s("Oct  5 2026")), ("heure", .s("14:02:11")),
             ("idf", .s("v5.5.4")), ("puce", .s("esp32c6")), ("boot", .s(boot)), ("reset", .s("logiciel")),
             ("reset_n", .i(3)), ("up_s", .i(Int(ms / 1000))),
-            ("session", .o([("periode_ms", .i(periodes.etat)), ("lampes_ms", .i(periodes.lampes)),
+            ("session", .o([("transport", .s("usb")), ("periode_ms", .i(periodes.etat)), ("lampes_ms", .i(periodes.lampes)),
                             ("compteurs_ms", .i(periodes.compteurs)), ("reseau_ms", .i(periodes.reseau)),
-                            ("bail_s", .i(bailS)), ("log", .b(log))])),
+                            ("bail_s", .i(bailS)), ("log", .b(log)), ("trames", .b(trames))])),
             ("limites", .o([("ligne_max", .i(1024)), ("cmd_max", .i(127))])),
         ])
         ligne("hello", bloc: "identite", [
             ("boot", .s(boot)), ("mac", .s("02000000DE00")),
             ("id", .o([("fabricant", .s("TEST_VENDOR")), ("produit", .s("TEST_PRODUCT")),
                        ("serie", .s("AMARAN-02000000DE00")), ("nom", .s("Pont amaran"))])),
-            ("caps", .a(["matter", "thread", "mesh", "catalogue", "ordres", "led", "log"].map { .s($0) })),
+            ("caps", .a(["matter", "thread", "mesh", "catalogue", "ordres", "led", "log", "trames", "udp", "cle", "texte"]
+                .map { .s($0) })),
         ])
         ligne("config", bloc: "catalogue", [
             ("modeles", .a([.o([("code", .i(40065)), ("nom", .s("amaran COB 60d")), ("capacites", .a([.s("intensite")])),
@@ -298,7 +310,49 @@ actor SimulateurDemo {
             ("code_manuel", .s("34970112332")), ("qr", .s("MT:Y.K9042C00KA0648G00")),
         ])
         ligne("reseau", bloc: "thread", [("role", .s("child")), ("attache", .b(true))])
+        let e = memoire.empreinteUdp
+        ligne("reseau", bloc: "ip", [
+            ("srp", .s(Self.srpDemo)),
+            ("adresses", .a([.o([("type", .s("omr")), ("adresse", .s("fd12:34:5678:0:aaaa:bbbb:ccc:dddd"))]),
+                             .o([("type", .s("ml_eid")), ("adresse", .s("fd12:34:5678:1:1111:2222:3333:4444"))])])),
+            ("udp", .o([("port", .i(5480)), ("cle", .b(e != nil)), ("empreinte", .s(e)), ("ouvert", .b(e != nil)),
+                        ("sessions", .i(0)), ("recus", .i(0)), ("emis", .i(0)), ("rejets", .i(0)), ("perdus", .i(0))])),
+        ])
     }
+
+    /// Nom SRP du pont simule : jamais 16 hexa, pour ne jamais se confondre avec un vrai
+    /// pont (le trousseau de la demo est isole, mais un nom distinct le dit aussi).
+    static let srpDemo = "DEMO-AMARAN"
+
+    // MARK: - Trames (7.6)
+
+    /// Une ligne `trame`, seulement avec `json trames 1` (le pont simule suit l'USB : pas de
+    /// coupure a 60 s). `lampe` nil : le groupe des lampes.
+    private func trame(_ sens: String, _ quoi: String, lampe: Int?, marche: Bool? = nil, intensite: Int? = nil,
+                       essai: Int? = nil) {
+        guard machine, trames, !ferme else { return }
+        var c: [(String, J)] = [("sens", .s(sens)), ("quoi", .s(quoi)), ("lampe", lampe.map(J.i) ?? .s(nil)),
+                                ("marche", marche.map(J.b) ?? .s(nil)), ("intensite", intensite.map(J.i) ?? .s(nil))]
+        if let essai { c.append(("essai", .i(essai))) }
+        c.append(("sautes", .i(0)))
+        ligne("trame", c)
+    }
+
+    /// Demande d'etat au groupe, puis l'etat que chaque lampe entendue renvoie (`seulement`
+    /// : une seule lampe, pour `lampe <n> releve`).
+    private func demandeEtDonnees(seulement k: Int? = nil) {
+        trame("tx", "demande", lampe: nil)
+        for i in lampes.indices where lampes[i].entendue && (k == nil || k == i + 1) {
+            trame("rx", "etat", lampe: i + 1, marche: lampes[i].marche, intensite: lampes[i].intensite)
+        }
+    }
+
+    /// Reemission d'un ordre (essais 2 et 3) tant que la lampe ne repond pas.
+    private func renvoyerOrdre(_ k: Int, marche: Bool?, intensite: Int?, essai: Int) {
+        guard lampes[k - 1].consigne != nil else { return }
+        trame("tx", "ordre", lampe: k, marche: marche, intensite: intensite, essai: essai)
+    }
+
 
     private func instantane() {
         etatPont()
@@ -352,6 +406,10 @@ actor SimulateurDemo {
         if now >= prochains.regard {
             for i in lampes.indices where montrees.count > i && montrees[i] != resume(i) { etatLampe(i) }
             prochains.regard = now + 0.1
+        }
+        if trames, now >= prochaineDemande {
+            demandeEtDonnees()
+            prochaineDemande = now + Double(memoire.releveMs) / 1000
         }
         if periodes.compteurs > 0, now >= prochains.compteurs {
             compteurs()
@@ -425,6 +483,7 @@ actor SimulateurDemo {
             bailS = m.count == 4 ? Int(m[3]) ?? 30 : 30
             periodes = (1000, 10000, 1000, 5000)
             log = false
+            trames = false
             let now = t
             prochains = (now + 1, now + 10, now + 1, now + 5, now)
             hello()
@@ -461,8 +520,34 @@ actor SimulateurDemo {
         case "log":
             log = m.count == 3 && m[2] == "1"
             reponse(id, l)
+        case "trames" where m.count == 3 && (m[2] == "0" || m[2] == "1"):
+            trames = m[2] == "1"
+            prochaineDemande = t + 1
+            reponse(id, l)
+        case "cle":
+            commandeCle(id, l, m)
         default:
             reponse(id, l, ok: false, code: "usage", msg: "json [1|0|etat|hello|ping|...]")
+        }
+    }
+
+    /// `json cle nouvelle <64 hexa>` et `json cle efface` (10.2), comme le firmware : la
+    /// cle vaut HMAC-SHA256(alea de l'app, alea du pont), rendue une seule fois.
+    private func commandeCle(_ id: Int?, _ l: String, _ m: [String]) {
+        if m.count == 4, m[2] == "nouvelle", let alea = H1.octets(hexa: m[3].uppercased()), alea.count == 32 {
+            let cle = Data(HMAC<SHA256>.authenticationCode(for: H1.aleatoire(32), using: SymmetricKey(data: alea)))
+            let empreinte = H1.kid(cle: cle)
+            memoire.empreinteUdp = empreinte
+            sauver(memoire)
+            if id == nil { texte("ok cle UDP \(empreinte), port 5480 ouvert") }
+            reponse(id, l, extra: [("cle", .s(H1.hexa(cle))), ("empreinte", .s(empreinte))])
+        } else if m.count == 3, m[2] == "efface" {
+            memoire.empreinteUdp = nil
+            sauver(memoire)
+            if id == nil { texte("ok cle UDP effacee, port 5480 ferme") }
+            reponse(id, l)
+        } else {
+            reponse(id, l, ok: false, code: "usage", msg: "json cle nouvelle <64 hexa> | json cle efface")
         }
     }
 
@@ -474,6 +559,7 @@ actor SimulateurDemo {
         if m[2] == "releve" {
             reponse(id, l, debut: true)
             texte("ok demande d'etat a la lampe \(k)")
+            demandeEtDonnees(seulement: k)
             return reponse(id, l)
         }
         var marche: Bool?
@@ -498,9 +584,21 @@ actor SimulateurDemo {
         }
         lampes[i].consigne = (marche, intensite)
         let attente = Int((lampes[i].entendue ? 430 : 3700) / vitesse)
+        trame("tx", "ordre", lampe: k, marche: marche, intensite: intensite, essai: 1)
+        // Copies : les taches ci-dessous ne capturent pas les `var` de la fonction.
+        let (voulueMarche, voulueIntensite) = (marche, intensite)
+        if !lampes[i].entendue {
+            // Sans reponse : le pont renvoie l'ordre aux essais 2 et 3 avant d'abandonner.
+            Task { [weak self] in
+                for essai in 2...3 {
+                    try? await Task.sleep(for: .milliseconds(attente / 3))
+                    await self?.renvoyerOrdre(k, marche: voulueMarche, intensite: voulueIntensite, essai: essai)
+                }
+            }
+        }
         Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(attente))
-            await self?.finirConsigne(i, marche: marche, intensite: intensite)
+            await self?.finirConsigne(i, marche: voulueMarche, intensite: voulueIntensite)
         }
     }
 
@@ -511,6 +609,8 @@ actor SimulateurDemo {
             if let marche { lampes[i].marche = marche }
             if let intensite { lampes[i].intensite = intensite }
             lampes[i].consigne = nil
+            trame("tx", "demande", lampe: nil)
+            trame("rx", "etat", lampe: i + 1, marche: lampes[i].marche, intensite: lampes[i].intensite)
             ordres.confirmes += 1
             ordres.delai += 430
             finirOrdre(i, issue: "confirme", delai: 430, essai: 1)
