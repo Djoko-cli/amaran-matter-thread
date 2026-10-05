@@ -14174,6 +14174,8 @@ perl -e 'alarm 20; exec { $ARGV[0] } @ARGV' "apps/macos/build/dd/Build/Products/
 
 Expected : `code 142` : l'app tournait encore quand l'alarme l'a arrêtée. Un autre code : elle s'est arrêtée seule ; le plus récent des rapports `Amaran Compagnon-*.ips` de `~/Library/Logs/DiagnosticReports/` dit pourquoi.
 
+> **Amendement (exécution, 05/10)** : la relecture a montré que « Connecter », sans source choisie, ouvrait le premier port Espressif (peut-être la C6 du maillage BenQ). Correctif en un commit à part : l'app retient le numéro de série du dernier pont choisi au menu, « Connecter » ne vise que lui (grisé sinon), avec un test ; le dialogue « Charger le pont » prend la forme `presenting:` ; la feuille d'import relâche le réseau déchiffré. `AmaranCompagnonTests` compte désormais 11 tests ; le README de l'app (Task 10) le dit.
+
 - [ ] **Step 8 : commit.**
 
 ```bash
@@ -14260,7 +14262,7 @@ et refaire `xcodegen generate`. Seule l'icône nommée entre dans l'app.
 - `open "<DerivedData>/Build/Products/Debug/Amaran Compagnon.app" --args -demo` : démarre en mode démo (pont simulé à trois lampes) ;
 - `--args -ecran commandes` : ouvre l'écran des commandes.
 
-L'app ne s'ouvre jamais seule sur un port : choisir le pont (VID 303A) dans la barre latérale, puis « Connecter ». Ouvrir le port ne redémarre pas le pont : DTR et RTS passent à 0 en un seul appel. « Libérer le port » rend la console texte au pont (`json 0`) et ferme le port, pour flasher.
+L'app ne s'ouvre jamais seule sur un port : choisir le pont (VID 303A) dans le menu de la barre latérale, la connexion part aussitôt. Ensuite, « Connecter » vise ce même pont, reconnu à son numéro de série USB, jamais un autre port Espressif. Ouvrir le port ne redémarre pas le pont : DTR et RTS passent à 0 en un seul appel. « Libérer le port » rend la console texte au pont (`json 0`) et ferme le port, pour flasher.
 
 ## Structure
 
