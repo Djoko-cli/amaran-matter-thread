@@ -19,6 +19,12 @@ const catalogue_modele_t *catalogue_trouver(uint32_t code) {
 
 bool catalogue_connu(uint32_t code) { return code != 0 && catalogue_trouver(code) != &REPLI; }
 
+unsigned catalogue_nombre(void) { return sizeof(MODELES) / sizeof(MODELES[0]); }
+
+const catalogue_modele_t *catalogue_modele(unsigned i) { return i < catalogue_nombre() ? &MODELES[i] : &REPLI; }
+
+const catalogue_modele_t *catalogue_repli(void) { return &REPLI; }
+
 const char *catalogue_capacites_texte(uint8_t capacites) {
   switch (capacites & (CATALOGUE_INTENSITE | CATALOGUE_CCT | CATALOGUE_COULEUR)) {
     case CATALOGUE_INTENSITE:

@@ -258,6 +258,9 @@ static void test_catalogue(void) {
   VERIFIE(!strcmp(catalogue_capacites_texte(0), "aucune"), "texte : aucune");
   VERIFIE(LISTE_CODE_V1 == CATALOGUE_CODE_COB_60D && catalogue_connu(LISTE_CODE_V1),
           "les lampes converties du plan 2 sont des 60d cataloguees");
+  // Parcours du catalogue (protocole JSON) : chaque modele une fois, puis le repli.
+  VERIFIE(catalogue_nombre() == 1 && catalogue_modele(0) == m, "un modele : la 60d");
+  VERIFIE(catalogue_modele(catalogue_nombre()) == r && catalogue_repli() == r, "au-dela : le repli");
 }
 
 int main(void) {

@@ -44,9 +44,12 @@ typedef struct {
   uint16_t intensite;  // 0..1000, pas de 0,1 %
 } lampe_etat_t;
 
+// Chaque ordre finit par un signal : confirme, abandon, ou tenu ; un ordre arrive
+// pendant un autre se fond dans le sien, et le signal de celui-ci vaut pour les deux.
 typedef enum {
   LAMPES_SIGNAL_CONFIRME,  // ordre confirme par l'etat lu (voyant : eclat vert)
   LAMPES_SIGNAL_ABANDON,   // ordre abandonne : 3 essais, ou Mesh pas pret (rouge x3)
+  LAMPES_SIGNAL_TENU,      // deja tenu par le dernier etat lu : rien n'est emis (6.4)
 } lampes_signal_t;
 
 typedef struct {
@@ -97,6 +100,7 @@ typedef struct {
   uint32_t echeance_ms;
   uint32_t demande_ms;           // demande d'etat de l'essai en cours
   uint32_t debut_ms;             // arrivee du dernier ordre de la chaine (delai de confirmation)
+  uint32_t dernier_delai_ms;     // dernier ordre fini : confirme ou abandonne apres ce delai ; tenu : 0
   bool a_refaire;                // consigne changee depuis les dernieres trames
   // Ce que Matter montre (publie par nous, ou ecrit par un controleur)
   bool montre_connu;
@@ -111,7 +115,7 @@ typedef struct {
   uint32_t periode_ms;
   uint32_t prochaine_releve_ms;
   lampes_sorties_t sorties;
-  uint32_t ordres, confirmes, abandons, releves, trames_recues;
+  uint32_t ordres, confirmes, abandons, tenus, releves, trames_recues;
   uint32_t delai_total_ms, delai_max_ms;  // ordre -> confirmation (banc C, regle 5.8 : 1 s)
   uint32_t lents;                         // confirmations en plus d'une seconde
   uint8_t fen_tranche;                    // tranche courante (0..LAMPES_ALERTE_TRANCHES-1)

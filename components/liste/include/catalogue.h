@@ -39,6 +39,11 @@ bool catalogue_connu(uint32_t code);
 // "intensite", "intensite+cct", "intensite+couleur"... : les capacites, en mots
 // (console, et reponse de `mesh lampe` que lit outils/cles_amaran.py).
 const char *catalogue_capacites_texte(uint8_t capacites);
+// Les modeles catalogues un a un (i < catalogue_nombre()), et le repli : le
+// catalogue du protocole JSON (docs/PROTOCOLE-JSON.md, config.catalogue).
+unsigned catalogue_nombre(void);
+const catalogue_modele_t *catalogue_modele(unsigned i);
+const catalogue_modele_t *catalogue_repli(void);
 
 #ifdef __cplusplus
 }

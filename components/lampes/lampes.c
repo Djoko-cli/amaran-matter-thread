@@ -106,8 +106,9 @@ static void finir(lampes_t *l, int i, lampes_signal_t signal, uint32_t maintenan
   p->phase = LAMPE_REPOS;
   p->veut_marche = p->veut_intensite = false;
   p->a_refaire = false;
+  const uint32_t delai = maintenant_ms - p->debut_ms;
+  p->dernier_delai_ms = delai;
   if (signal == LAMPES_SIGNAL_CONFIRME) {
-    const uint32_t delai = maintenant_ms - p->debut_ms;
     l->confirmes++;
     l->delai_total_ms += delai;
     if (delai > l->delai_max_ms) l->delai_max_ms = delai;
@@ -182,6 +183,9 @@ void lampes_ordre(lampes_t *l, int lampe, const bool *marche, const uint16_t *in
   // Une valeur egale au dernier etat lu ne fait jamais emettre (6.4).
   if (p->connu && consigne_tenue(p, &p->lu)) {
     p->veut_marche = p->veut_intensite = false;
+    p->dernier_delai_ms = 0;
+    l->tenus++;
+    l->sorties.signaler(l->sorties.ctx, lampe, LAMPES_SIGNAL_TENU);
     montrer(l, lampe, false);
     return;
   }

@@ -55,7 +55,7 @@ static void sortie_signaler(void *ctx, int lampe, lampes_signal_t signal) {
   (void)lampe;
   if (signal == LAMPES_SIGNAL_CONFIRME) {
     s_confirmes++;
-  } else {
+  } else if (signal == LAMPES_SIGNAL_ABANDON) {
     s_abandons++;
   }
 }

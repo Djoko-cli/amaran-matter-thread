@@ -288,6 +288,8 @@ static void test_ordre_confirme(void) {
   VERIFIE(g_nb_sigs == 1 && g_sigs[0].s == LAMPES_SIGNAL_CONFIRME, "ordre confirme");
   VERIFIE(g_nb_pubs == 1 && g_pubs[0].e.marche && g_pubs[0].e.intensite == 500, "etat confirme publie");
   VERIFIE(L.confirmes == 1 && L.lampes[0].phase == LAMPE_REPOS, "compteur et repos");
+  VERIFIE(L.lampes[0].dernier_delai_ms == 400 && L.lampes[0].essai == 1,
+          "delai du dernier ordre (%u ms), au premier essai", (unsigned)L.lampes[0].dernier_delai_ms);
 }
 
 static void test_niveau_puis_marche_en_une_salve(void) {
@@ -360,6 +362,8 @@ static void test_trois_essais_puis_abandon(void) {
           "Maison revient au dernier etat lu");
   VERIFIE(L.abandons == 1 && L.lampes[0].phase == LAMPE_REPOS && !L.lampes[0].veut_marche,
           "consigne effacee");
+  VERIFIE(L.lampes[0].dernier_delai_ms == 3700 && L.lampes[0].essai == LAMPES_ESSAIS,
+          "abandon : delai depuis l'ordre (%u ms), au dernier essai", (unsigned)L.lampes[0].dernier_delai_ms);
 }
 
 static void test_curseur_glisse_sans_empilement(void) {
@@ -410,7 +414,10 @@ static void test_valeur_egale_n_emet_pas(void) {
   avancer(1500);
   VERIFIE(compter(0x0002, TELINK_CMD_MARCHE) == 0 && compter(0x0002, TELINK_CMD_INTENSITE) == 0,
           "rien n'est emis");
-  VERIFIE(g_nb_sigs == 0, "ni confirmation ni abandon");
+  VERIFIE(g_nb_sigs == 1 && g_sigs[0].s == LAMPES_SIGNAL_TENU && g_sigs[0].lampe == 0,
+          "un signal : deja tenu (%d signaux)", g_nb_sigs);
+  VERIFIE(L.tenus == 1 && L.confirmes == 0 && L.abandons == 0 && L.lampes[0].dernier_delai_ms == 0,
+          "compte comme tenu, sans delai");
 }
 
 static void test_muette_apres_trois_releves(void) {
@@ -612,7 +619,7 @@ static void test_intensite_au_pour_cent(void) {
   avancer(1500);
   VERIFIE(compter(0x0002, TELINK_CMD_INTENSITE) == 0, "433 egale 430 relu : aucune trame d'intensite");
   VERIFIE(compter(0x0002, TELINK_CMD_ETAT) == 0, "aucune demande d'etat pour cet ordre");
-  VERIFIE(g_nb_sigs == 0, "ni confirmation ni abandon");
+  VERIFIE(g_nb_sigs == 1 && g_sigs[0].s == LAMPES_SIGNAL_TENU, "ni confirmation ni abandon : deja tenu");
 }
 
 // --- Lampe noire (banc du 01/10) : molette a 0 %, la lampe reste en marche a
@@ -752,7 +759,7 @@ static void test_on_sur_allumee_n_emet_pas(void) {
   ordre_matter(0, &on, NULL);
   avancer(1500);
   VERIFIE(g_nb_envois == 0, "aucune trame (%d)", g_nb_envois);
-  VERIFIE(g_nb_sigs == 0, "ni confirmation ni abandon");
+  VERIFIE(g_nb_sigs == 1 && g_sigs[0].s == LAMPES_SIGNAL_TENU, "ni confirmation ni abandon : deja tenu");
 }
 
 // Une lampe jamais lue n'est pas connue noire : un On n'invente aucune intensite.
