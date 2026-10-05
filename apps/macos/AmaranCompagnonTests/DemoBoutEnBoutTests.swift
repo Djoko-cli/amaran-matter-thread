@@ -195,4 +195,22 @@ struct PortDuPontTests {
         #expect(Pont.portDuPont(memeChemin, chemin: "/dev/cu.usbmodem1101", serie: nil)?.vid == 0x303A)
         #expect(Pont.portDuPont(memeChemin, chemin: "/dev/cu.usbmodem1101", serie: nil)?.chemin == "/dev/cu.usbmodem1101")
     }
+
+    @Test func sourceParDefautVisaSeulementLeDernierPontChoisi() {
+        func port(_ chemin: String, vid: Int, serie: String?) -> PortUSB {
+            PortUSB(chemin: chemin, vid: vid, pid: 0x1001, serie: serie, produit: nil)
+        }
+        let pont = "02:00:00:00:00:AA"
+        let autre = "02:00:00:00:00:BB"
+        // Numero retenu present sur un port Espressif : ce port, sous son nom actuel.
+        let deux = [port("/dev/cu.usbmodem1101", vid: 0x303A, serie: autre),
+                    port("/dev/cu.usbmodem2201", vid: 0x303A, serie: pont)]
+        #expect(Pont.sourceParDefaut(ports: deux, dernierPont: pont) == .serie(chemin: "/dev/cu.usbmodem2201", serie: pont))
+        // Numero retenu absent alors qu'un autre port Espressif est branche : rien.
+        #expect(Pont.sourceParDefaut(ports: [deux[0]], dernierPont: pont) == nil)
+        // Aucun numero retenu, meme avec un seul port Espressif : rien.
+        #expect(Pont.sourceParDefaut(ports: [deux[1]], dernierPont: nil) == nil)
+        // Un port qui n'est pas Espressif ne convient jamais, meme avec le numero retenu.
+        #expect(Pont.sourceParDefaut(ports: [port("/dev/cu.usbmodem3301", vid: 0x043E, serie: pont)], dernierPont: pont) == nil)
+    }
 }

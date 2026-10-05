@@ -187,9 +187,15 @@ struct PanneauConnexion: View {
                 switch pont.etatTransport {
                 case .ferme, .erreur, .libere:
                     Button(pont.source == nil ? "Connecter" : "Reconnecter") {
-                        if pont.source == nil { pont.connecter(pont.sourceParDefaut) } else { pont.reconnecter() }
+                        if pont.source == nil {
+                            if let s = pont.sourceParDefaut { pont.connecter(s) }
+                        } else {
+                            pont.reconnecter()
+                        }
                     }
                     .buttonStyle(.borderedProminent)
+                    .disabled(pont.source == nil && pont.sourceParDefaut == nil)
+                    .help(pont.source == nil ? "Choisir le pont dans le menu ci-dessus" : "")
                 default:
                     Button("Déconnecter") { pont.deconnecter() }
                 }

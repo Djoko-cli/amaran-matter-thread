@@ -73,11 +73,10 @@ struct CarteCles: View {
             .controlSize(.small)
         }
         .confirmationDialog("Charger le pont ?", isPresented: Binding(get: { confirmerChargement != nil },
-                                                                      set: { if !$0 { confirmerChargement = nil } })) {
-            Button("Charger et redémarrer le pont") {
-                if let s = confirmerChargement { pont.chargerPont(depuis: s) }
-            }
-        } message: {
+                                                                      set: { if !$0 { confirmerChargement = nil } }),
+                            presenting: confirmerChargement) { s in
+            Button("Charger et redémarrer le pont") { pont.chargerPont(depuis: s) }
+        } message: { _ in
             Text("Le pont reçoit les clés et la liste des lampes par l'USB, les vérifie, puis redémarre. Maison garde les lampes déjà connues (même MAC).")
         }
         .sheet(isPresented: $exporter) { FeuilleExport() }
@@ -192,11 +191,15 @@ private struct FeuilleImport: View {
             if let erreur { Text(verbatim: erreur).foregroundStyle(.red) }
             HStack {
                 Spacer()
-                Button("Annuler", role: .cancel) { fermer() }
+                Button("Annuler", role: .cancel) {
+                    lue = nil
+                    fermer()
+                }
                 if let lue {
                     Button("Remplacer la copie de ce Mac") {
                         do {
                             try pont.remplacerCopie(par: lue)
+                            self.lue = nil
                             fermer()
                         } catch {
                             erreur = String(describing: error)
@@ -221,5 +224,7 @@ private struct FeuilleImport: View {
         }
         .padding(20)
         .frame(width: 460)
+        // Meilleur effort : Swift ne garantit pas l'effacement, on lache au moins la reference.
+        .onDisappear { lue = nil }
     }
 }

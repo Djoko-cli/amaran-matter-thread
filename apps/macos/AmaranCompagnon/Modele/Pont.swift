@@ -149,13 +149,23 @@ final class Pont {
 
     // MARK: - Connexion
 
-    /// Source proposee par defaut : le premier port Espressif, sinon la demo.
-    var sourceParDefaut: Source {
-        if let p = ports.first(where: \.estEspressif) { return .serie(chemin: p.chemin, serie: p.serie) }
-        return .demo
+    /// Cle des preferences : numero de serie USB du dernier pont choisi par l'utilisateur.
+    static let cleDernierPont = "dernierPont"
+
+    /// Source proposee par "Connecter" : seulement le dernier pont choisi, reconnu a son
+    /// numero de serie USB. Jamais "le premier port Espressif" (la C6 BenQ en est un aussi).
+    var sourceParDefaut: Source? {
+        Self.sourceParDefaut(ports: ports, dernierPont: preferences.string(forKey: Self.cleDernierPont))
+    }
+
+    static func sourceParDefaut(ports: [PortUSB], dernierPont: String?) -> Source? {
+        guard let dernierPont,
+              let p = ports.first(where: { $0.estEspressif && $0.serie == dernierPont }) else { return nil }
+        return .serie(chemin: p.chemin, serie: p.serie)
     }
 
     func connecter(_ s: Source) {
+        if case .serie(_, let serie?) = s { preferences.set(serie, forKey: Self.cleDernierPont) }
         let changement = s != source
         if changement {
             // Autre pont ou demo : le pont quitte retrouve la console texte, et rien de
