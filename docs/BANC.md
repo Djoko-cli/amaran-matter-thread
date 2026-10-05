@@ -290,3 +290,14 @@ App signée avec l'équipe de Djoko (`Local.xcconfig`, runtime durci), icône M2
 - **Mode démo** : trois lampes, la jamais vue entre dans Maison.
 
 Remarques de Djoko : les trames en direct et les graphiques manquent (prévus au plan 3b-2) ; le port série doit porter un nom lisible plutôt que `usbmodem…` (à corriger).
+
+## Plan 3b-2 : banc A, le pont par l'USB (05/10/2026)
+
+Firmware de la Task 3 (`c5128fa`) flashé sans effacement ; Djoko présent.
+
+- **Console texte** : `help` cite `json` ; `taches` suit `udp` et `distant` ; `json` décrit le mode texte ; `matter` : mise en service faite (2 fabriques), Thread attaché.
+- **Mode machine** : `hello` `base` en révision 1, `session` `transport` `usb`, `trames` faux ; capacités `trames`, `udp`, `cle`, `texte` ; bloc `reseau` `ip` : nom SRP de 16 hexa, adresses `omr` et `ml_eid`, `udp` port 5480 ; `reponse` `ok`.
+- **Clé UDP par l'USB** : `id=9 json cle nouvelle <aléa>` en mode texte est refusée (`usage`, « en mode machine seulement ») avant toute création, la commande citée masquée ; `json cle nouvelle <aléa>` sans `id` : `ok cle UDP <empreinte>, port 5480 ouvert`, la même empreinte dans le bloc `ip` (`cle` vrai, `ouvert` vrai) ; `json cle efface` : `ok cle UDP effacee, port 5480 ferme`, bloc `ip` `cle` faux, `ouvert` faux. Aucune suite de 64 hexa dans le journal (ni clé ni aléa).
+- **Trames**, lampe 1 (déjà allumée : `on` est « tenu », `ids` [3], rien n'est émis) : `off` donne `tx ordre` (marche faux, essai 1), `tx demande` à la lampe 1, `rx etat` (éteinte), puis `ordre confirme` `ids` [4] en 384 ms ; entre les ordres, les relectures (`tx demande` au groupe, deux `rx etat` par lampe) ; plus aucune trame après `json trames 0`. La lampe s'éteint, Maison suit.
+- **Secteur** : sur un chargeur USB, voyant éteint avec la lueur blanche toutes les 10 s, une lampe répond à Maison. De retour sur le Mac : mise en service faite, Thread attaché (la cause lue ensuite est « réinitialisation par l'USB » : l'ouverture du port par `outils/console.py` a redémarré la carte).
+- **Marges** (`taches`) : pile libre au plus bas `json` 1 900 o, `console` 3 868 o, `udp` 3 352 o, `distant` 5 704 o ; tas libre 114 Ko, 108 Ko au plus bas.
