@@ -222,8 +222,8 @@ esp_err_t tache_lampes_demarrer(const amaran_config_t *cfg) {
   return xTaskCreate(tache, "lampes", 6144, NULL, 4, NULL) == pdPASS ? ESP_OK : ESP_ERR_NO_MEM;
 }
 
-static void envoyer_ordre(int lampe, const bool *marche, const uint16_t *intensite, bool depuis_matter, uint32_t id) {
-  if (!s_file || lampe < 0 || lampe >= LAMPES_CAPACITE) return;
+static bool envoyer_ordre(int lampe, const bool *marche, const uint16_t *intensite, bool depuis_matter, uint32_t id) {
+  if (!s_file || lampe < 0 || lampe >= LAMPES_CAPACITE) return false;
   message_t m = {.type = MSG_ORDRE, .lampe = (int8_t)lampe, .depuis_matter = depuis_matter, .id = id};
   if (marche) {
     m.a_marche = true;
@@ -237,15 +237,15 @@ static void envoyer_ordre(int lampe, const bool *marche, const uint16_t *intensi
   // de la lampe (la relecture ne republie rien tant que la lampe ne change pas). Cela n'arrive
   // en pratique jamais : la tache CHIP produit elle-meme les ecritures, et la tache lampes
   // vide la file en continu.
-  xQueueSend(s_file, &m, 0);
+  return xQueueSend(s_file, &m, 0) == pdTRUE;
 }
 
 void tache_lampes_ordre(int lampe, const bool *marche, const uint16_t *intensite, bool depuis_matter) {
   envoyer_ordre(lampe, marche, intensite, depuis_matter, 0);
 }
 
-void tache_lampes_ordre_id(int lampe, const bool *marche, const uint16_t *intensite, uint32_t id) {
-  envoyer_ordre(lampe, marche, intensite, false, id);
+bool tache_lampes_ordre_id(int lampe, const bool *marche, const uint16_t *intensite, uint32_t id) {
+  return envoyer_ordre(lampe, marche, intensite, false, id);
 }
 
 void tache_lampes_regler_releve(uint32_t releve_ms) {

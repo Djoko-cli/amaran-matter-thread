@@ -291,7 +291,9 @@ void console_pont_demarrer(amaran_config_t *cfg) {
   linenoiseHistorySetMaxLen(20);
   linenoiseSetMaxLineLen(LIGNE_MAX);
   linenoiseAllowEmpty(false);
-  if (linenoiseProbe() != 0) linenoiseSetDumbMode(1);  // terminal sans sequences d'echappement (l'app)
+  // Toujours en mode simple : l'app partage cette console, et en mode evolue chaque linenoise()
+  // ecrit ESC[6n puis lit stdin jusqu'a la reponse : la ligne de l'app serait prise pour elle.
+  linenoiseSetDumbMode(1);
   const esp_console_cmd_t cmds[] = {
       {.command = "lampes", .help = "une ligne par lampe : Maison, etat lu, joignabilite, relectures ; ordres",
        .func = cmd_lampes},

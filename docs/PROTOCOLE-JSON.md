@@ -24,7 +24,7 @@ Chaque exemple de la section 9 est formé tel quel par `tests/hote/test_json.cpp
 - **consigne** : l'état voulu pour une lampe (Maison, la console ou l'app) ; **état lu** : le dernier état que la lampe a renvoyé.
 
 Principes :
-1. **Le pont n'attend jamais l'app.** Une ligne machine qui ne tient pas dans le tampon d'émission de l'USB est perdue et comptée (`json_perdus`).
+1. **Le pont n'attend jamais l'app.** Une ligne machine qui ne tient pas dans le tampon d'émission de l'USB est perdue et comptée (`json_perdus`) ; `json_perdus` compte aussi les événements perdus parce que leur file interne était pleine (ils n'ont pas de `n`).
 2. **L'état est périodique, les événements sont des indices.** Une ligne perdue ou abîmée ne fausse rien durablement : l'instantané suivant corrige. L'app ne reconstruit jamais un état en cumulant des événements.
 3. **Rien de nouveau ne part vers les lampes** à cause du protocole : l'app passe par les mêmes ordres que Maison et la console (`tache_lampes_ordre`).
 
@@ -207,7 +207,7 @@ Réglages lents : émis avec `hello`, et de nouveau après toute commande `mesh`
 
 Une lampe lue en marche à l'intensité 0 est noire : Maison la montre éteinte. Sa place dans Maison se déduit de `maison` : un `endpoint` ; sinon `masquee` ; sinon jamais vue ; sinon (vue, non masquée, sans endpoint) hors de Maison après un échec.
 
-**Bloc `sante`** (toutes les `periode_ms`) : `boot`, `up_s` ; `commande` : l'`id` de la commande de la console en cours, ou `null` (6.2) ; `led` (`motif` du voyant, `test`, `depuis_ms` : âge de la phase du motif) ; `matter` (`en_service`, `thread` attaché, `identifie`, `ble` : annonce de mise en service en cours) ; `sys` (`heap`, `heap_min`, `heap_bloc`, `piles` : octets jamais utilisés de chaque tâche, `null` si elle n'existe pas, `json_perdus`, `json_trop_longs`, `rejets` : lignes refusées pour longueur ou cadence).
+**Bloc `sante`** (toutes les `periode_ms`) : `boot`, `up_s` ; `commande` : l'`id` de la commande de la console en cours, ou `null` (6.2) ; `led` (`motif` du voyant, `test`, `depuis_ms` : âge de la phase du motif) ; `matter` (`en_service`, `thread` attaché, `identifie`, `ble` : annonce de mise en service en cours) ; `sys` (`heap`, `heap_min`, `heap_bloc`, `piles` : octets jamais utilisés de chaque tâche, `null` si elle n'existe pas, `json_perdus` : lignes perdues, et événements perdus file pleine, `json_trop_longs`, `rejets` : lignes refusées pour longueur ou cadence).
 
 ### 5.4 `compteurs`
 
@@ -221,7 +221,7 @@ Une lampe lue en marche à l'intensité 0 est noire : Maison la montre éteinte.
 
 ### 5.6 `hb` et `fin`
 
-`hb` : battement quand les `etat` sont coupés ou lents (3.5) : `boot`, `up_s`, `json_perdus`, et `commande` comme le bloc `sante`.
+`hb` : battement quand les `etat` sont coupés ou lents (3.5) : `boot`, `up_s`, `json_perdus` (comme dans le bloc `sante` : lignes et événements perdus), et `commande` comme le bloc `sante`.
 
 `fin` : dernier message d'une session machine. `cause` : `commande` (`json 0`) ou `bail`.
 
@@ -242,7 +242,7 @@ Le préfixe est retiré avant l'aiguillage. Sans `id`, rien ne change : texte se
 | Commande | Déroulement |
 |---|---|
 | famille `json` | `reponse` `fin` aussitôt ; après la dernière ligne pour `json 1`, `json etat`, `json hello` |
-| `lampe <n> on\|off\|niveau <0-1000>` | **asynchrone** : `reponse` `fin`, code `accepte`, `suite` `ordre`, en quelques millisecondes ; puis l'événement `ordre` qui porte l'`id` (7.1) |
+| `lampe <n> on\|off\|niveau <0-1000>` | **asynchrone** : `reponse` `fin`, code `accepte`, `suite` `ordre`, en quelques millisecondes ; puis l'événement `ordre` qui porte l'`id` (7.1) ; si la file des lampes est pleine : `erreur`, « file des lampes pleine », sans `suite` |
 | toute autre commande | `reponse` `debut`, le texte de la commande, puis `reponse` `fin` : `ok` si elle a réussi, `erreur` sinon (le texte dit pourquoi), `inconnue` pour une commande inconnue |
 
 La tâche `json` émet pendant qu'une commande tourne. Le bloc `sante` et le battement `hb` portent l'`id` de la commande en cours (`commande`) : il y entre avec la `reponse` `debut` et en sort avec la `fin`. Un bloc `sante` ou un `hb` sans cet `id`, reçu après le `debut`, dit que la `fin` s'est perdue.
@@ -267,7 +267,7 @@ Ordres de lampe : un numéro hors de la liste, ou un argument hors bornes, reço
 | Code | ok | Sens |
 |---|---|---|
 | `ok` | oui | exécutée |
-| `accepte` | oui | ordre de lampe accepté : un `ordre` suivra |
+| `accepte` | oui | ordre de lampe accepté : un `ordre` suivra (si la file des lampes ne peut pas le prendre, la réponse est `erreur`, « file des lampes pleine », sans `suite`) |
 | `en_cours` | oui | étape `debut` |
 | `erreur` | non | la commande a échoué : son texte dit pourquoi |
 | `usage` | non | arguments invalides (famille `json`, ordres de lampe) |

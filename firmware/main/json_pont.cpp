@@ -45,7 +45,7 @@ static_assert(JSON_PONT_IDS_MAX == kIdsMax, "json_pont.h et json_amaran.h : meme
 #define TIC_MS 10            // une ligne de la file par tic (2.3)
 #define REGARD_MS 100        // changements des lampes
 #define BATTEMENT_MS 2000    // hb, quand les etat sont coupes ou lents (3.5)
-#define FILE_EVENEMENTS 16
+#define FILE_EVENEMENTS 32   // 32 x sizeof(evenement_t) en RAM
 #define FILE_JOURNAL 6
 #define PLAFOND_JOURNAL 20   // log par seconde (7.5)
 #define DIFFEREES 4          // reponses qui attendent la fin d'un instantane
@@ -109,6 +109,8 @@ static resume_t s_resumes[LISTE_CAPACITE];
 static Writer s_w;
 static uint32_t s_n;
 static uint32_t s_perdus, s_trop_longs, s_rejets;
+// Evenements refuses par une file pleine, postes depuis plusieurs taches : increment atomique.
+static volatile uint32_t s_evenements_perdus;
 
 // Copies de l'etat des lampes, relues sous s_verrou quand une ligne en a besoin.
 static lampes_t s_lampes;
@@ -331,7 +333,7 @@ static void former(const Queued &q) {
       }
       e.piles = piles;
       e.nPiles = CONSOLE_PONT_NB_TACHES;
-      e.perdus = s_perdus;
+      e.perdus = s_perdus + s_evenements_perdus;
       e.tropLongs = s_trop_longs;
       e.rejets = s_rejets;
       etatSante(s_w, s_n, ms, e);
@@ -386,7 +388,7 @@ static void former(const Queued &q) {
       reseauThread(s_w, s_n, ms, pont.role, pont.thread_attache);
       break;
     case Item::Heartbeat:
-      heartbeat(s_w, s_n, ms, s_boot, up_s(), s_perdus, s_cmd_id);
+      heartbeat(s_w, s_n, ms, s_boot, up_s(), s_perdus + s_evenements_perdus, s_cmd_id);
       break;
     case Item::Reply: {
       differee_t *d = &s_differees[q.arg % DIFFEREES];
@@ -618,7 +620,7 @@ static void commande_json(uint32_t id, const char *vue, int argc, char **argv, u
     printf("json : mode %s, bail %u s, etat %" PRIu32 " ms, lampes %" PRIu32 " ms, compteurs %" PRIu32
            " ms, reseau %" PRIu32 " ms, log %s ; lignes %" PRIu32 ", perdues %" PRIu32 ", refusees %" PRIu32 "\n",
            s_machine ? "machine" : "texte", (unsigned)s_reglages.bailS, s_reglages.periodeMs, s_reglages.lampesMs,
-           s_reglages.compteursMs, s_reglages.reseauMs, s_reglages.log ? "oui" : "non", s_n, s_perdus, s_rejets);
+           s_reglages.compteursMs, s_reglages.reseauMs, s_reglages.log ? "oui" : "non", s_n, s_perdus + s_evenements_perdus, s_rejets);
   } else if (!strcmp(sous, "1")) {
     if (argc == 2 || (argc == 4 && !strcmp(argv[2], "bail") && lire_ms(argv[3], 10, 600, &v))) {
       entrer(argc == 4 ? (uint16_t)v : 30, t);
@@ -779,15 +781,18 @@ void json_pont_executer(char *ligne, bool trop_long) {
       // L'id part avec l'ordre : l'evenement ordre qui le finira le portera (7.1).
       const bool m = marche == 1;
       const uint16_t v = (uint16_t)intensite;
-      tache_lampes_ordre_id(lampe, marche >= 0 ? &m : nullptr, intensite >= 0 ? &v : nullptr, id);
-      Reply r;
-      r.id = id;
-      r.cmd = vue;
-      r.code = "accepte";
-      r.suite = Reply::SuiteOrder;
-      r.lampe = (uint8_t)(lampe + 1);
-      r.durMs = maintenant_ms() - debut;
-      reponse(r);
+      if (tache_lampes_ordre_id(lampe, marche >= 0 ? &m : nullptr, intensite >= 0 ? &v : nullptr, id)) {
+        Reply r;
+        r.id = id;
+        r.cmd = vue;
+        r.code = "accepte";
+        r.suite = Reply::SuiteOrder;
+        r.lampe = (uint8_t)(lampe + 1);
+        r.durMs = maintenant_ms() - debut;
+        reponse(r);
+      } else {
+        repondre(id, vue, false, "erreur", "file des lampes pleine", debut);
+      }
     }
     s_derniere_cmd = maintenant_ms();
     xSemaphoreGive(s_verrou);
@@ -844,7 +849,8 @@ bool json_pont_machine(void) { return s_machine; }
 // --- Evenements, depuis les autres taches
 
 static void poster(const evenement_t &e) {
-  if (s_machine && s_evenements) xQueueSend(s_evenements, &e, 0);
+  if (s_machine && s_evenements && xQueueSend(s_evenements, &e, 0) != pdTRUE)
+    __atomic_fetch_add(&s_evenements_perdus, 1, __ATOMIC_RELAXED);
 }
 
 void json_pont_ordre(int lampe, lampes_signal_t signal, uint32_t delai_ms, uint8_t essai, const uint32_t *ids,

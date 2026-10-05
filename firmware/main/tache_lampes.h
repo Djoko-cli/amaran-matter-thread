@@ -23,7 +23,8 @@ esp_err_t tache_lampes_demarrer(const amaran_config_t *cfg);
 // CHIP comprise). marche/intensite : NULL = inchange.
 void tache_lampes_ordre(int lampe, const bool *marche, const uint16_t *intensite, bool depuis_matter);
 // Ordre de l'app (mode JSON) : son id reviendra dans l'evenement ordre qui le finira.
-void tache_lampes_ordre_id(int lampe, const bool *marche, const uint16_t *intensite, uint32_t id);
+// Rend false si l'ordre n'a pas pu entrer dans la file (pleine, ou lampe inconnue).
+bool tache_lampes_ordre_id(int lampe, const bool *marche, const uint16_t *intensite, uint32_t id);
 // Nouvelle periode de relecture (ms).
 void tache_lampes_regler_releve(uint32_t releve_ms);
 // Copie coherente de l'etat, pour la console.
