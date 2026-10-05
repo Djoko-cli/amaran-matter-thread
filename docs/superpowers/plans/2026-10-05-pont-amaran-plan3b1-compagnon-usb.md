@@ -10114,6 +10114,8 @@ public enum VerificationChargement {
 Run: `cd apps/macos && xcodegen generate && xcodebuild -project AmaranCompagnon.xcodeproj -scheme AmaranCompagnon -destination 'platform=macOS' -derivedDataPath build/dd test 2>&1 | /usr/bin/grep -E '(swift:[0-9]+:[0-9]+: (error|warning)|Test run with|[*][*] TEST)' ; cd ../..`
 Expected : `Test run with 85 tests in 13 suites passed` et `Test run with 1 test in 0 suites passed`, puis `** TEST SUCCEEDED **`, sans avertissement.
 
+> **Amendement (exécution, 05/10)** : la relecture (Opus) a montré que `ApercuReseau.dePont` faisait planter l'app sur des données du pont mal formées (MAC de longueur impaire, nombre de lampes négatif). Correctif en un commit à part : 0 à 16 lampes, une lampe ignorée sauf MAC de 12 chiffres hexa ; et la phrase de passe est normalisée en NFC avant PBKDF2 (format v1 fixé avant toute sauvegarde), ses octets effacés après usage. Deux tests de plus : `AmaranProtocoleTests` compte désormais 87 tests (les Tasks 8 et 9 aussi).
+
 - [ ] **Step 6 : commit.**
 
 ```bash
