@@ -306,7 +306,7 @@ L'app confirme avant d'envoyer `redemarre`, `decommission`, `mesh oublie`, `mesh
 
 ### 7.1 `ordre` : fin d'un ordre de lampe
 
-`lampe` ; `issue` : `confirme` (l'état relu égale la consigne), `abandon` (trois essais sans confirmation, ou Bluetooth Mesh pas prêt), `tenu` (la lampe était déjà dans cet état : rien n'est émis) ; `delai_ms` (depuis le dernier ordre de la chaîne ; 0 pour `tenu`, et pour un ordre refusé faute de Bluetooth Mesh) ; `essai` (1 à 3 ; 0 pour `tenu`, et pour un ordre refusé faute de Bluetooth Mesh) ; `ids` (les `id` des ordres de l'app couverts, 4 au plus ; vide pour un ordre de Maison ou de la console sans `id`) ; `ids_perdus` (au-delà de 4).
+`lampe` ; `issue` : `confirme` (l'état relu égale la consigne), `abandon` (trois essais sans confirmation, ou Bluetooth Mesh pas prêt), `tenu` (la lampe était déjà dans cet état : rien n'est émis) ; `delai_ms` (depuis le dernier ordre de la chaîne ; 0 pour `tenu`, et pour un ordre refusé faute de Bluetooth Mesh) ; `essai` (1 à 3 ; 0 pour `tenu`, et pour un ordre refusé faute de Bluetooth Mesh) ; `ids` (les `id` des ordres de l'app couverts, 4 au plus ; vide pour un ordre de Maison ou de la console sans `id`) ; `ids_perdus` (au-delà de 4 ; ce compte est celui de la lampe, toutes origines confondues : une session peut y lire des `id` perdus d'une autre).
 
 ### 7.2 `alerte`
 

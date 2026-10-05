@@ -534,7 +534,10 @@ actor SimulateurDemo {
     /// `json cle nouvelle <64 hexa>` et `json cle efface` (10.2), comme le firmware : la
     /// cle vaut HMAC-SHA256(alea de l'app, alea du pont), rendue une seule fois.
     private func commandeCle(_ id: Int?, _ l: String, _ m: [String]) {
-        if m.count == 4, m[2] == "nouvelle", let alea = H1.octets(hexa: m[3].uppercased()), alea.count == 32 {
+        if m.count == 4, m[2] == "nouvelle", id != nil, !machine {
+            // Comme le firmware (c5128fa) : avec un id, en mode machine seulement. Rien ne change.
+            reponse(id, l, ok: false, code: "usage", msg: "json cle nouvelle avec id : en mode machine seulement (json 1)")
+        } else if m.count == 4, m[2] == "nouvelle", let alea = H1.octets(hexa: m[3].uppercased()), alea.count == 32 {
             let cle = Data(HMAC<SHA256>.authenticationCode(for: H1.aleatoire(32), using: SymmetricKey(data: alea)))
             let empreinte = H1.kid(cle: cle)
             memoire.empreinteUdp = empreinte

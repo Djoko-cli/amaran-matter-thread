@@ -49,7 +49,7 @@ esp_err_t net_udp_demarrer(void);
 // pleine (ligne perdue, a compter).
 bool net_udp_envoyer(uint8_t slot, uint32_t gen, const uint8_t *ligne, size_t n);
 
-// Places libres de la file d'emission (6, partagees par les sessions et les DEFI) ;
+// Places libres de la file d'emission (12, partagees par les sessions et les DEFI) ;
 // 0 si net_udp n'est pas demarre ou si le port est ferme.
 uint8_t net_udp_libres(void);
 
