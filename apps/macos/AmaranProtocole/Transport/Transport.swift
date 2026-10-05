@@ -1,4 +1,4 @@
-// Repris de Halo Compagnon (commit e114cd5) : sans le transport UDP (plan 3b-2).
+// Repris de Halo Compagnon (commit e114cd5) : le transport UDP est dans Transport/TransportUDP.swift.
 import Foundation
 
 /// Ce qu'un transport remonte.
@@ -9,9 +9,13 @@ public enum EvenementTransport: Sendable, Equatable {
     case ferme(raison: String)
 }
 
-/// Transport d'octets : port serie USB, rejeu de demonstration (Thread viendra
-/// au plan 3b-2). La couche protocole (tramage, session, correlation) ne connait
+/// Transport d'octets : port serie USB, rejeu de demonstration, UDP sur Thread
+/// (`TransportUDP`). La couche protocole (tramage, session, correlation) ne connait
 /// que ce protocole.
+///
+/// Pour UDP, un datagramme = un message sans RS ni LF : `TransportUDP` ajoute RS et LF
+/// a chaque datagramme recu et scelle chaque ligne envoyee dans son propre datagramme
+/// (enveloppe H1), pour que `RecepteurLignes` serve tel quel.
 public protocol Transport: AnyObject, Sendable {
     var genre: GenreTransport { get }
     /// Nom lisible (chemin du port, "Démo"...).
