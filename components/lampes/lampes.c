@@ -170,6 +170,8 @@ void lampes_ordre(lampes_t *l, int lampe, const bool *marche, const uint16_t *in
     p->consigne.intensite = arrondir_pour_cent(p->memoire ? p->memoire : LAMPES_INTENSITE_RALLUMAGE);
   }
   if (!l->mesh_pret) {
+    p->debut_ms = maintenant_ms;  // rien n'est emis : ni delai ni essai
+    p->essai = 0;
     finir(l, lampe, LAMPES_SIGNAL_ABANDON, maintenant_ms);
     return;
   }

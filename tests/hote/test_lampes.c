@@ -470,6 +470,13 @@ static void test_mesh_perdu_pendant_un_ordre(void) {
   lampes_mesh_pret(&L, false, T);
   VERIFIE(g_nb_sigs == 1 && g_sigs[0].lampe == 0 && g_sigs[0].s == LAMPES_SIGNAL_ABANDON,
           "ordre de la lampe 1 abandonne");
+  VERIFIE(L.lampes[0].dernier_delai_ms == 300, "abandon a la coupure : delai depuis l'ordre (%u)",
+          (unsigned)L.lampes[0].dernier_delai_ms);
+  oublier_sorties();
+  ordre_matter(0, &on, NULL);  // Mesh toujours coupe : refuse sans rien emettre
+  VERIFIE(g_nb_sigs == 1 && g_sigs[0].s == LAMPES_SIGNAL_ABANDON && L.lampes[0].dernier_delai_ms == 0 &&
+              L.lampes[0].essai == 0,
+          "ordre sans Mesh : abandon aussitot, ni delai ni essai");
   lampes_mesh_pret(&L, true, T + 2000);
   oublier_sorties();
   lampes_tic(&L, T + 2000);
