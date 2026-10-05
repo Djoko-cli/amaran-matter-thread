@@ -1,0 +1,83 @@
+// Textes lisibles des messages du pont amaran, pour la console et les cartes : sur
+// le modele d'Interpretation.swift de Halo Compagnon (commit e114cd5).
+import Foundation
+
+public enum Interpretation {
+    /// `reponse` : « id=5 « mesh lampe 2 masquer » : ok (38 ms) ».
+    public static func reponse(_ r: Reponse) -> String {
+        var t = "id=\(r.id)"
+        if let c = r.cmd, !c.isEmpty { t += " « \(c) »" }
+        switch r.etape {
+        case .debut:
+            return t + " : en cours"
+        case .fin, .inconnu:
+            t += " : " + code(r.code)
+            if let m = r.msg, !m.isEmpty { t += " — " + m }
+            if let d = r.dureeMs { t += " (\(d) ms)" }
+            return t
+        }
+    }
+
+    public static func code(_ c: CodeReponse) -> String {
+        switch c {
+        case .ok: "ok"
+        case .accepte: "accepté"
+        case .enCours: "en cours"
+        case .erreur: "erreur (voir le texte)"
+        case .usage: "arguments invalides"
+        case .commandeInconnue: "commande inconnue"
+        case .tropLong: "ligne trop longue"
+        case .cadence: "trop de lignes par seconde"
+        case .inconnu: "code inconnu"
+        }
+    }
+
+    /// `ordre` : « confirmé en 410 ms (essai 1) ».
+    public static func ordre(_ o: EvenementOrdre) -> String {
+        switch o.issue {
+        case .confirme:
+            let essai = o.essai.map { " (essai \($0))" } ?? ""
+            return "confirmé en \(o.delaiMs ?? 0) ms" + essai
+        case .abandon:
+            return "abandonné après \(o.essai ?? 0) essai(s), \(o.delaiMs ?? 0) ms : la lampe ne répond pas"
+        case .tenu:
+            return "déjà tenu : rien n'est parti vers la lampe"
+        case .inconnu, nil:
+            return "issue inconnue"
+        }
+    }
+
+    /// Intensite au dixieme de pour cent : « 43 % », « 43,5 % ».
+    public static func intensite(_ v: Int) -> String {
+        v % 10 == 0 ? "\(v / 10) %" : "\(v / 10),\(v % 10) %"
+    }
+
+    /// Etat lu : « allumée, 43 % », « éteinte (43 %) », « noire (0 %) ».
+    public static func etat(_ e: EtatLu?) -> String {
+        guard let e, let marche = e.marche else { return "jamais lue" }
+        let i = e.intensite.map(intensite) ?? "?"
+        if e.noire { return "noire : en marche à 0 %" }
+        return marche ? "allumée, \(i)" : "éteinte (\(i))"
+    }
+
+    /// Place d'une lampe dans Maison (5.3).
+    public static func maison(_ m: BlocLampe.Maison?) -> String {
+        guard let m else { return "inconnue" }
+        if let ep = m.endpoint { return "dans Maison (EP\(ep))" }
+        if m.masquee == true { return "retirée de Maison" }
+        if m.vue != true { return "jamais vue : entrera dans Maison à sa première réponse" }
+        return "hors de Maison (endpoint non créé)"
+    }
+
+    /// Cause d'un Bluetooth Mesh inoperant, et le remede (spec du pont 7.3).
+    public static func diag(_ d: DiagMesh?) -> String {
+        switch d {
+        case .ok, nil: "opérationnel"
+        case .clesAbsentes: "clés absentes : charger le pont depuis l'onglet Clés"
+        case .pasEntre: "pas encore entré dans le réseau des lampes"
+        case .clesPerimees: "aucune annonce de notre réseau : réseau recréé dans amaran Desktop ? Recopier les clés, puis recharger le pont"
+        case .ivFaux: "NetMIC faux, rien de déchiffré : IV Index faux (mesh iv cherche)"
+        case .inconnu: "cause inconnue"
+        }
+    }
+}

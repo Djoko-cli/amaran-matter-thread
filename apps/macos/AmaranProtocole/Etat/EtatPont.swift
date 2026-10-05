@@ -1,0 +1,169 @@
+// Repris de Halo Compagnon (commit e114cd5) : instantanes et ancre du temps ; les
+// blocs sont ceux du pont amaran, une entree par lampe (docs/PROTOCOLE-JSON.md 5).
+import Foundation
+
+/// Derniere valeur d'un (`t`, `bloc`), avec sa date.
+public struct Instantane<Valeur: Sendable & Equatable>: Sendable, Equatable {
+    public var valeur: Valeur
+    public var n: UInt32
+    public var ms: UInt32?
+    /// Date deduite de `ms` et de l'ancre du `hello` (jamais l'heure d'arrivee,
+    /// sauf avant le premier `hello`).
+    public var date: Date
+}
+
+/// Ce que l'app sait du pont : la derniere valeur de chaque instantane (section 5 :
+/// l'app remplace les valeurs d'un (`t`, `bloc`), et d'un (`t`, `bloc`, `lampe`), a
+/// chaque reception) et les indices tires des evenements.
+public struct EtatPont: Sendable, Equatable {
+    public private(set) var helloBase: Instantane<HelloBase>?
+    public private(set) var identite: Instantane<HelloIdentite>?
+    public private(set) var catalogue: Instantane<ConfigCatalogue>?
+    public private(set) var mesh: Instantane<ConfigMesh>?
+    public private(set) var configLampes: [Int: Instantane<ConfigLampe>] = [:]
+    public private(set) var pont: Instantane<BlocPont>?
+    public private(set) var lampes: [Int: Instantane<BlocLampe>] = [:]
+    public private(set) var sante: Instantane<BlocSante>?
+    public private(set) var compteurs: Instantane<CompteursMesh>?
+    public private(set) var matter: Instantane<ReseauMatter>?
+    public private(set) var thread: Instantane<ReseauThread>?
+    public private(set) var battement: Instantane<Battement>?
+
+    /// Motif du voyant : bloc `sante` ou evenement `led`, le plus recent.
+    public private(set) var motifLed: MotifLed?
+    public private(set) var motifLedDepuis: Date?
+    public private(set) var ledTest = false
+    /// Dernier evenement `ordre` de chaque lampe.
+    public private(set) var derniersOrdres: [Int: Instantane<EvenementOrdre>] = [:]
+
+    public struct Ancre: Sendable, Equatable {
+        public var date: Date
+        public var ms: UInt32
+    }
+
+    /// Ancre du temps : heure locale <-> `ms` du pont. Posee a la reception d'un
+    /// `hello`, puis affinee : la ligne arrivee le plus vite parmi les
+    /// `fenetreAncre` dernieres (ecart a la prediction du `hello` le plus petit)
+    /// la remplace. Le transit ne fait que retarder une ligne : la plus rapide dit
+    /// le mieux l'ecart des horloges, et la fenetre suit leur derive.
+    public private(set) var ancre: Ancre?
+    /// Ancre du dernier `hello` : reference des ecarts de la fenetre.
+    private var ancreHello: Ancre?
+    private var echantillons: [Ancre] = []
+    static let fenetreAncre = 64
+
+    public init() {}
+
+    /// Date d'une ligne : `ms` rapporte a l'ancre (ecart signe sur 32 bits, juste a
+    /// travers le retour a zero de l'horloge du pont).
+    public func dater(ms: UInt32?, recueA: Date) -> Date {
+        guard let ms, let ancre else { return recueA }
+        let ecart = Int32(bitPattern: ms &- ancre.ms)
+        return ancre.date.addingTimeInterval(Double(ecart) / 1000)
+    }
+
+    /// Ancre affinee par la ligne (ms, recueA) : voir `ancre`.
+    private mutating func affinerAncre(ms: UInt32, recueA: Date) {
+        guard let h = ancreHello else { return }
+        echantillons.append(Ancre(date: recueA, ms: ms))
+        if echantillons.count > Self.fenetreAncre { echantillons.removeFirst(echantillons.count - Self.fenetreAncre) }
+        func ecart(_ x: Ancre) -> TimeInterval {
+            x.date.timeIntervalSince(h.date) - Double(Int32(bitPattern: x.ms &- h.ms)) / 1000
+        }
+        if let meilleur = echantillons.min(by: { ecart($0) < ecart($1) }) { ancre = meilleur }
+    }
+
+    /// Depart de la phase du motif du voyant : `ms - depuis_ms`, date par l'ancre.
+    private func departPhase(ms: UInt32?, depuisMs: Int?, date: Date) -> Date? {
+        guard let depuisMs else { return nil }
+        guard let ms, ancre != nil else { return date.addingTimeInterval(-Double(depuisMs) / 1000) }
+        return dater(ms: ms &- UInt32(clamping: depuisMs), recueA: date)
+    }
+
+    /// Applique une ligne machine ; renvoie sa date.
+    @discardableResult
+    public mutating func appliquer(_ l: LigneMachine, recueA: Date) -> Date {
+        let e = l.enveloppe
+        if case .helloBase = l.message, let ms = e.ms {
+            ancre = Ancre(date: recueA, ms: ms)
+            ancreHello = ancre
+            echantillons = []
+        }
+        if let ms = e.ms { affinerAncre(ms: ms, recueA: recueA) }
+        let date = dater(ms: e.ms, recueA: recueA)
+        func inst<T>(_ v: T) -> Instantane<T> { Instantane(valeur: v, n: e.n, ms: e.ms, date: date) }
+        switch l.message {
+        case .helloBase(let v): helloBase = inst(v)
+        case .helloIdentite(let v): identite = inst(v)
+        case .configCatalogue(let v): catalogue = inst(v)
+        case .configMesh(let v):
+            mesh = inst(v)
+            // La liste a pu raccourcir (une liste chargee depuis, puis un redemarrage) :
+            // les lampes au-dela de N n'existent plus.
+            if let n = v.lampes {
+                configLampes = configLampes.filter { $0.key <= n }
+                lampes = lampes.filter { $0.key <= n }
+            }
+        case .configLampe(let v): configLampes[v.lampe] = inst(v)
+        case .etatPont(let v): pont = inst(v)
+        case .etatLampe(let v): lampes[v.lampe] = inst(v)
+        case .etatSante(let v):
+            sante = inst(v)
+            if let m = v.led?.motif {
+                // Avec depuis_ms, la phase suit le pont a chaque ligne ; sans, elle
+                // part de la premiere ligne ou le motif change.
+                if let d = departPhase(ms: e.ms, depuisMs: v.led?.depuisMs, date: date) {
+                    motifLed = m
+                    motifLedDepuis = d
+                } else if m != motifLed {
+                    motifLed = m
+                    motifLedDepuis = date
+                }
+            }
+            ledTest = v.led?.test ?? false
+        case .compteursMesh(let v): compteurs = inst(v)
+        case .reseauMatter(let v): matter = inst(v)
+        case .reseauThread(let v): thread = inst(v)
+        case .battement(let v): battement = inst(v)
+        case .led(let v):
+            motifLed = v.motif
+            motifLedDepuis = departPhase(ms: e.ms, depuisMs: v.depuisMs, date: date) ?? date
+            ledTest = v.test ?? ledTest
+        case .ordre(let v): derniersOrdres[v.lampe] = inst(v)
+        default: break
+        }
+        return date
+    }
+
+    /// Redemarrage : les etats derives sont vides (3.5) ; l'ancre reste jusqu'au
+    /// prochain `hello`.
+    public mutating func viderDerives() {
+        let a = ancre
+        self = EtatPont()
+        ancre = a
+    }
+
+    // MARK: - Lectures pratiques
+
+    public var boot: String? {
+        helloBase?.valeur.boot ?? pont?.valeur.boot ?? sante?.valeur.boot ?? battement?.valeur.boot
+    }
+
+    /// Secondes depuis le demarrage : la plus recente des valeurs connues.
+    public var upS: Int? {
+        [helloBase?.valeur.upS, pont?.valeur.upS, sante?.valeur.upS, battement?.valeur.upS].compactMap { $0 }.max()
+    }
+
+    public var capacites: Set<String> { Set(identite?.valeur.caps ?? []) }
+
+    /// Numeros des lampes connues, dans l'ordre (liste du pont).
+    public var numerosLampes: [Int] {
+        Set(configLampes.keys).union(lampes.keys).sorted()
+    }
+
+    /// Mise en service : faite des qu'une fabrique existe (Maison ou un autre controleur).
+    public var enService: Bool? {
+        if let f = matter?.valeur.fabriques { return f > 0 }
+        return sante?.valeur.matter?.enService
+    }
+}
