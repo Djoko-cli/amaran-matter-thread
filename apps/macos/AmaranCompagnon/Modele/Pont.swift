@@ -55,6 +55,8 @@ final class Pont {
     private(set) var derniereReception: Date?
     /// Commande de la console du pont de plus de 20 min : proposer de fermer le port.
     var propositionFermeture = false
+    /// Numero de serie USB du dernier pont confirme (preferences) : "Pont amaran" dans les menus.
+    private(set) var dernierPont: String?
     /// Reglages de session en vigueur ; nil avant le `hello`.
     private(set) var reglages: HelloBase.ReglagesSession?
     /// Facteur de temps du mode demo (1 : temps reel ; les tests accelerent).
@@ -109,6 +111,7 @@ final class Pont {
         self.trousseau = trousseau
         self.trousseauDemo = trousseauDemo
         self.preferences = preferences
+        dernierPont = preferences.string(forKey: Self.cleDernierPont)
         ports = Self.portsVisibles(SurveillantUSB.lister())
         surveillant.changement = { [weak self] ports in self?.portsChanges(ports) }
         surveillant.demarrer()
@@ -149,13 +152,45 @@ final class Pont {
 
     // MARK: - Connexion
 
-    /// Cle des preferences : numero de serie USB du dernier pont choisi par l'utilisateur.
+    /// Cle des preferences : numero de serie USB du dernier pont confirme (le `hello` a
+    /// montre un pont amaran), jamais d'un port seulement choisi dans le menu.
     static let cleDernierPont = "dernierPont"
 
-    /// Source proposee par "Connecter" : seulement le dernier pont choisi, reconnu a son
+    /// Source proposee par "Connecter" : seulement le dernier pont confirme, reconnu a son
     /// numero de serie USB. Jamais "le premier port Espressif" (la C6 BenQ en est un aussi).
     var sourceParDefaut: Source? {
-        Self.sourceParDefaut(ports: ports, dernierPont: preferences.string(forKey: Self.cleDernierPont))
+        Self.sourceParDefaut(ports: ports, dernierPont: dernierPont)
+    }
+
+    /// Vrai si l'identite du `hello` est celle d'un pont amaran : la capacite `mesh`, ou un
+    /// numero de serie `AMARAN-...`.
+    static func estPontAmaran(_ identite: HelloIdentite?) -> Bool {
+        guard let identite else { return false }
+        return (identite.caps ?? []).contains("mesh") || (identite.id?.serie?.hasPrefix("AMARAN-") ?? false)
+    }
+
+    /// Une carte USB deja confirmee comme pont est retenue pour "Connecter".
+    private func confirmerPont() {
+        guard case .serie(_, let serie?)? = source, serie != dernierPont,
+              Self.estPontAmaran(etat.identite?.valeur) else { return }
+        dernierPont = serie
+        preferences.set(serie, forKey: Self.cleDernierPont)
+    }
+
+    /// Nom d'un port montre a l'utilisateur : le pont confirme, une autre carte Espressif
+    /// (la C6 BenQ, par exemple), ou le nom court du port sans numero de serie.
+    static func libellePort(_ port: PortUSB, dernierPont: String?) -> String {
+        let court = port.chemin.replacingOccurrences(of: "/dev/cu.", with: "")
+        guard let serie = port.serie, !serie.isEmpty else { return court }
+        let fin = "…" + serie.suffix(5)
+        if serie == dernierPont { return "Pont amaran (\(fin))" }
+        return port.estEspressif ? "Autre carte Espressif (\(fin))" : court
+    }
+
+    /// Nom montre pour le port d'une source serie : celui du port branche s'il l'est encore.
+    func libelleSource(chemin: String, serie: String?) -> String {
+        if let p = Self.portDuPont(ports, chemin: chemin, serie: serie) { return Self.libellePort(p, dernierPont: dernierPont) }
+        return chemin.replacingOccurrences(of: "/dev/cu.", with: "")
     }
 
     static func sourceParDefaut(ports: [PortUSB], dernierPont: String?) -> Source? {
@@ -165,7 +200,6 @@ final class Pont {
     }
 
     func connecter(_ s: Source) {
-        if case .serie(_, let serie?) = s { preferences.set(serie, forKey: Self.cleDernierPont) }
         let changement = s != source
         if changement {
             // Autre pont ou demo : le pont quitte retrouve la console texte, et rien de
@@ -252,7 +286,7 @@ final class Pont {
 
     private var nomSource: String? {
         switch source {
-        case .serie(let chemin, _): chemin
+        case .serie(let chemin, let serie): libelleSource(chemin: chemin, serie: serie)
         case .demo: "démo"
         case nil: nil
         }
@@ -452,9 +486,11 @@ final class Pont {
         case .fragment(let s):
             ajouterConsole(.fragment, s)
         case .abimee(let raison, let brut):
-            rejets.ajouter(Rejet(id: prochainId(), date: Date(), raison: "abîmée : \(raison)", brut: brut))
+            rejets.ajouter(Rejet(id: prochainId(), date: Date(), raison: "abîmée : \(raison)",
+                                  brut: PolitiqueCommandes.masquerCle(brut)))
         case .versionInconnue(let v, let t):
-            rejets.ajouter(Rejet(id: prochainId(), date: Date(), raison: "version \(v) inconnue", brut: t))
+            rejets.ajouter(Rejet(id: prochainId(), date: Date(), raison: "version \(v) inconnue",
+                                  brut: PolitiqueCommandes.masquerCle(t)))
         case .invalide(let t, let raison):
             rejets.ajouter(Rejet(id: prochainId(), date: Date(), raison: "\(t) invalide : \(raison)", brut: ""))
         case .debordement(let s):
@@ -570,6 +606,7 @@ final class Pont {
         if suivis != moteur.correlateur.suivis { suivis = moteur.correlateur.suivis }
         if statistiques != moteur.statistiques { statistiques = moteur.statistiques }
         if reception != recepteur.compteurs { reception = recepteur.compteurs }
+        confirmerPont()
         avancerChargement()
     }
 

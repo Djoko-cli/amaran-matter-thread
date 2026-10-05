@@ -115,7 +115,8 @@ struct DemoBoutEnBoutTests {
             try p.exporterSauvegarde(vers: fichier, phrase: phrase, confirmation: phrase + ".")
         }
         try p.exporterSauvegarde(vers: fichier, phrase: phrase, confirmation: phrase)
-        #expect(p.derniereSauvegarde != nil)
+        #expect(p.derniereSauvegarde == nil, "la demo n'ecrit pas dans les preferences")
+        #expect(p.preferences.object(forKey: Pont.cleSauvegarde) == nil)
         var lue = try p.lireSauvegarde(fichier, phrase: phrase)
         #expect(lue.source == .sauvegarde)
         lue.source = .amaranDesktop
@@ -212,5 +213,33 @@ struct PortDuPontTests {
         #expect(Pont.sourceParDefaut(ports: [deux[1]], dernierPont: nil) == nil)
         // Un port qui n'est pas Espressif ne convient jamais, meme avec le numero retenu.
         #expect(Pont.sourceParDefaut(ports: [port("/dev/cu.usbmodem3301", vid: 0x043E, serie: pont)], dernierPont: pont) == nil)
+    }
+
+    @Test func etiquettesDesPortsEtConfirmationDuPont() {
+        func port(_ chemin: String, vid: Int, serie: String?) -> PortUSB {
+            PortUSB(chemin: chemin, vid: vid, pid: 0x1001, serie: serie, produit: nil)
+        }
+        let pont = "02:00:00:00:00:AA"
+        let autre = "02:00:00:00:00:BB"
+        #expect(Pont.libellePort(port("/dev/cu.usbmodem2201", vid: 0x303A, serie: pont), dernierPont: pont) == "Pont amaran (…00:AA)")
+        #expect(Pont.libellePort(port("/dev/cu.usbmodem1101", vid: 0x303A, serie: autre), dernierPont: pont) == "Autre carte Espressif (…00:BB)")
+        // Aucun pont confirme : toute carte Espressif est "autre".
+        #expect(Pont.libellePort(port("/dev/cu.usbmodem1101", vid: 0x303A, serie: pont), dernierPont: nil) == "Autre carte Espressif (…00:AA)")
+        // Sans numero de serie : le nom court du port.
+        #expect(Pont.libellePort(port("/dev/cu.usbmodem1101", vid: 0x303A, serie: nil), dernierPont: pont) == "usbmodem1101")
+        #expect(Pont.libellePort(port("/dev/cu.usbmodem1101", vid: 0x303A, serie: ""), dernierPont: pont) == "usbmodem1101")
+
+        // Un pont est confirme par la capacite `mesh` ou par un numero de serie AMARAN-.
+        func identite(caps: [String]?, serie: String?) -> HelloIdentite? {
+            var champs: [String: Any] = [:]
+            if let caps { champs["caps"] = caps }
+            if let serie { champs["id"] = ["serie": serie] }
+            return try? JSONDecoder().decode(HelloIdentite.self, from: JSONSerialization.data(withJSONObject: champs))
+        }
+        #expect(Pont.estPontAmaran(identite(caps: ["ordres", "mesh"], serie: nil)))
+        #expect(Pont.estPontAmaran(identite(caps: nil, serie: "AMARAN-0000")))
+        #expect(!Pont.estPontAmaran(identite(caps: ["ordres"], serie: "BENQ-0000")))
+        #expect(!Pont.estPontAmaran(identite(caps: nil, serie: nil)))
+        #expect(!Pont.estPontAmaran(nil))
     }
 }

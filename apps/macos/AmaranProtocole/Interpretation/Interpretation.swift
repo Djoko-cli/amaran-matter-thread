@@ -39,6 +39,8 @@ public enum Interpretation {
             let essai = o.essai.map { " (essai \($0))" } ?? ""
             return "confirmé en \(o.delaiMs ?? 0) ms" + essai
         case .abandon:
+            // Essai 0 : l'ordre n'est jamais parti, le Bluetooth Mesh n'etait pas pret.
+            if o.essai == 0 { return "abandonné : Bluetooth Mesh pas prêt, rien n'est parti vers la lampe" }
             return "abandonné après \(o.essai ?? 0) essai(s), \(o.delaiMs ?? 0) ms : la lampe ne répond pas"
         case .tenu:
             return "déjà tenu : rien n'est parti vers la lampe"

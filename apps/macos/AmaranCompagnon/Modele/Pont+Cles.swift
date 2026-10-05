@@ -268,8 +268,11 @@ extension Pont {
         defer { effacer(&r) }
         let fichier = try Sauvegarde.chiffrer(r, phrase: phrase)
         try fichier.write(to: url, options: .atomic)
-        derniereSauvegarde = Date()
-        preferences.set(derniereSauvegarde, forKey: Self.cleSauvegarde)
+        // La demo n'ecrit pas dans les vraies preferences : pas de "derniere sauvegarde" inventee.
+        if !estDemo {
+            derniereSauvegarde = Date()
+            preferences.set(derniereSauvegarde, forKey: Self.cleSauvegarde)
+        }
         note("Sauvegarde chiffrée exportée (empreintes \(r.empreinteReseau) \(r.empreinteApplication)).")
     }
 

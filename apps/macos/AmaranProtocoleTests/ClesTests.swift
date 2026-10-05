@@ -113,6 +113,29 @@ struct ClesTests {
         #expect(PolitiqueCommandes.verdictConsole(c)
                 == .confirmation("Remplace les clés du réseau des lampes dans le pont (effet au redémarrage). « Charger le pont » vérifie en plus les empreintes."))
     }
+
+    /// Le pont retire les guillemets (`esp_console_split_argv`) : les masquer ou les
+    /// confirmer de meme, sinon `"mesh" "cles" ...` passerait sans masque ni confirmation.
+    @Test func guillemetsNeContournentNiMasqueNiConfirmation() {
+        let k1 = "00112233445566778899aabbccddeeff"
+        let k2 = "ffeeddccbbaa99887766554433221100"
+        let confirmeCles = PolitiqueCommandes.verdictConsole("mesh cles \(k1) \(k2)")
+        for ligne in ["\"mesh\" \"cles\" \(k1) \(k2)", "mesh \"cles\" \"\(k1)\" \"\(k2)\"", "\"mesh\" cles \(k1) \(k2)"] {
+            let m = PolitiqueCommandes.masquerCle(ligne)
+            #expect(!m.contains(k1) && !m.contains(k2) && !m.contains("0011") && !m.contains("ffee"), "\(m)")
+            #expect(m.hasSuffix("•••••••• ••••••••"), "\(m)")
+            #expect(PolitiqueCommandes.verdictConsole(ligne) == confirmeCles)
+        }
+        // Ligne affichee avec son id (jamais tapee ainsi) : masquee aussi.
+        #expect(PolitiqueCommandes.masquerCle("id=3 \"MESH\"  \"Cles\" \(k1) \(k2)") == "id=3 \"MESH\"  \"Cles\" •••••••• ••••••••")
+        #expect(PolitiqueCommandes.verdictConsole("\"redemarre\"")
+                == .confirmation("Redémarre le pont (le port USB va se ré-énumérer)."))
+        #expect(PolitiqueCommandes.verdictConsole("\"mesh\" \"oublie\"")
+                == PolitiqueCommandes.verdictConsole("mesh oublie"))
+        #expect(PolitiqueCommandes.verdictConsole("\"json\" \"0\"")
+                == PolitiqueCommandes.verdictConsole("json 0"))
+        #expect(PolitiqueCommandes.attendReenumeration("\"decommission\""))
+    }
 }
 
 @Suite("Base d'amaran Desktop")

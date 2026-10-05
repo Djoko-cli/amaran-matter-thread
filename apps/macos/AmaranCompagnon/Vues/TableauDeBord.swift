@@ -10,12 +10,22 @@ struct TableauDeBord: View {
 
     var body: some View {
         if pont.etat.helloBase == nil && pont.etat.lampes.isEmpty {
-            ContentUnavailableView {
-                Label("Aucun état reçu", systemImage: "antenna.radiowaves.left.and.right.slash")
-            } description: {
-                Text("Choisir le port du pont (VID 303A) ou le mode démo dans la barre latérale.")
-            } actions: {
-                Button("Lancer la démo") { pont.connecter(.demo) }
+            // Les clés se copient, s'exportent et s'importent sans pont : leur carte reste là.
+            ScrollView {
+                VStack(spacing: 16) {
+                    ContentUnavailableView {
+                        Label("Aucun état reçu", systemImage: "antenna.radiowaves.left.and.right.slash")
+                    } description: {
+                        Text("Choisir le port du pont (VID 303A) ou le mode démo dans la barre latérale.")
+                    } actions: {
+                        Button("Lancer la démo") { pont.connecter(.demo) }
+                    }
+                    .frame(minHeight: 220)
+                    CarteCles()
+                        .frame(maxWidth: 560)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(16)
             }
         } else {
             ScrollView {

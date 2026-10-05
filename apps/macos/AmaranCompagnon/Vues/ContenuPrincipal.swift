@@ -157,8 +157,8 @@ struct PanneauConnexion: View {
                             pont.connecter(.serie(chemin: p.chemin, serie: p.serie))
                         } label: {
                             Label {
+                                Text(verbatim: Pont.libellePort(p, dernierPont: pont.dernierPont))
                                 Text(verbatim: p.chemin.replacingOccurrences(of: "/dev/cu.", with: ""))
-                                Text(verbatim: p.serie.map { "n° de série \($0)" } ?? p.chemin)
                             } icon: {
                                 Image(systemName: "cpu")
                             }
@@ -210,7 +210,7 @@ struct PanneauConnexion: View {
     private var libelleSource: String {
         switch pont.source {
         case .demo: "Démo"
-        case .serie(let chemin, _): chemin.replacingOccurrences(of: "/dev/cu.", with: "")
+        case .serie(let chemin, let serie): pont.libelleSource(chemin: chemin, serie: serie)
         case nil: "Choisir une source…"
         }
     }

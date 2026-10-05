@@ -63,9 +63,10 @@ public enum LigneCommande {
         id >= idMax ? 1 : id + 1
     }
 
-    /// Mots d'une commande (separes par des espaces), en minuscules.
+    /// Mots d'une commande (separes par des espaces), en minuscules. Les guillemets
+    /// sont retires comme le fait la console du pont : `"redemarre"` est `redemarre`.
     public static func mots(_ commande: String) -> [String] {
-        commande.lowercased().split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)
+        commande.lowercased().replacingOccurrences(of: "\"", with: "").split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)
     }
 }
 
@@ -127,12 +128,12 @@ public enum PolitiqueCommandes {
     }
 
     /// Masque les cles d'une ligne affichee : la commande `mesh cles <reseau>
-    /// <application>` (casse et espaces quelconques, comme la console les lit), et
+    /// <application>` (casse, espaces et guillemets quelconques, comme la console les lit), et
     /// toute suite de 32 chiffres hexa ou plus (une cle tapee ailleurs).
     public static func masquerCle(_ texte: String) -> String {
         guard texte.utf8.count >= 32 || texte.range(of: "cles", options: .caseInsensitive) != nil else { return texte }
         var s = texte
-        s.replace(/(?i)(mesh[ \t]+cles)([ \t]+[0-9a-f]+)+/) { m in m.output.1 + " " + masque + " " + masque }
+        s.replace(/(?i)("?mesh"?[ \t]+"?cles"?)([ \t]+"?[0-9a-f]+"?)+/) { m in m.output.1 + " " + masque + " " + masque }
         s.replace(/[0-9A-Fa-f]{32,}/) { _ in masque }
         return s
     }

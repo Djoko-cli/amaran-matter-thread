@@ -103,7 +103,7 @@ public struct MoteurSession: Sendable {
         public var texte: String {
             switch self {
             case .ancienFirmware:
-                "Firmware sans mode JSON : flasher celui du plan 3b. L'app reste en console seule."
+                "Firmware sans mode JSON : flasher un firmware du pont avec le mode JSON. L'app reste en console seule."
             case .texteDemarrage:
                 "Texte de démarrage reçu : le pont a peut-être redémarré."
             case .versionInconnue(let v):

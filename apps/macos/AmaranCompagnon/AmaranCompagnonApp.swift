@@ -4,7 +4,19 @@ import SwiftUI
 
 @main
 struct AmaranCompagnonApp: App {
-    @State private var pont = Pont()
+    @State private var pont = Self.creerPont()
+
+    /// Les tests tournent dans l'app (TEST_HOST) : sous ce lanceur, ni le vrai trousseau,
+    /// ni les vraies preferences (signet d'amaran Desktop, dernier pont) ne sont touches.
+    private static let hoteDeTests = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+
+    private static func creerPont() -> Pont {
+        guard hoteDeTests else { return Pont() }
+        let suite = "fr.djoko.amaran.hote.tests"
+        UserDefaults.standard.removePersistentDomain(forName: suite)
+        return Pont(trousseau: TrousseauMemoire(), trousseauDemo: TrousseauMemoire(ReseauDemo.reseau),
+                    preferences: UserDefaults(suiteName: suite)!)
+    }
 
     /// `--args -ecran commandes` : ecran affiche au lancement.
     private static var ecranDemande: Ecran {
@@ -21,6 +33,8 @@ struct AmaranCompagnonApp: App {
                 .task {
                     // "Amaran Compagnon.app" --args -demo : demarre directement en mode demo.
                     if CommandLine.arguments.contains("-demo"), pont.source == nil { pont.connecter(.demo) }
+                    // Dossier d'amaran Desktop deja autorise : la base est relue a chaque lancement.
+                    if !Self.hoteDeTests, pont.dossierAmaran != nil { pont.relireBase() }
                 }
         }
         .defaultSize(width: 1280, height: 820)

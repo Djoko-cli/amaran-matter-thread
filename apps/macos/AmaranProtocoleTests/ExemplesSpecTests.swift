@@ -118,4 +118,13 @@ struct ExemplesSpecTests {
         let sante = tout.compactMap { if case .etatSante(let s) = $0.message { return s } else { return nil } }
         #expect(sante.map(\.commande) == [nil, 7], "le bloc sante porte la commande en cours")
     }
+
+    /// Un ordre refuse faute de Bluetooth Mesh (essai 0) n'accuse pas la lampe.
+    @Test func abandonSansEssaiDitMeshPasPret() {
+        let refuse = EvenementOrdre(lampe: 1, issue: .abandon, delaiMs: 0, essai: 0, ids: [4], idsPerdus: 0)
+        #expect(Interpretation.ordre(refuse).contains("Bluetooth Mesh pas prêt"))
+        #expect(!Interpretation.ordre(refuse).contains("ne répond pas"))
+        let abandon = EvenementOrdre(lampe: 1, issue: .abandon, delaiMs: 3700, essai: 3, ids: [4], idsPerdus: 0)
+        #expect(Interpretation.ordre(abandon) == "abandonné après 3 essai(s), 3700 ms : la lampe ne répond pas")
+    }
 }
