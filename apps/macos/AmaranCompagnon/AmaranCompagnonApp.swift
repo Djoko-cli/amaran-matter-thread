@@ -1,12 +1,46 @@
-// Provisoire (plan 3b-1, Task 5) : la Task 9 met les ecrans.
+// Repris de Halo Compagnon (commit e114cd5) : fenetre, menus, reglages ; francais seulement.
+import AmaranProtocole
 import SwiftUI
 
 @main
 struct AmaranCompagnonApp: App {
+    @State private var pont = Pont()
+
+    /// `--args -ecran commandes` : ecran affiche au lancement.
+    private static var ecranDemande: Ecran {
+        let a = CommandLine.arguments
+        guard let i = a.firstIndex(of: "-ecran"), i + 1 < a.count, let e = Ecran(rawValue: a[i + 1]) else { return .tableau }
+        return e
+    }
+
     var body: some Scene {
-        WindowGroup("Amaran Compagnon") {
-            Text("Amaran Compagnon")
-                .frame(minWidth: 480, minHeight: 320)
+        WindowGroup("Amaran Compagnon", id: "principale") {
+            ContenuPrincipal(ecranInitial: Self.ecranDemande)
+                .environment(pont)
+                .frame(minWidth: 980, minHeight: 640)
+                .task {
+                    // "Amaran Compagnon.app" --args -demo : demarre directement en mode demo.
+                    if CommandLine.arguments.contains("-demo"), pont.source == nil { pont.connecter(.demo) }
+                }
+        }
+        .defaultSize(width: 1280, height: 820)
+        .commands {
+            CommandGroup(after: .newItem) {
+                Button("Mode démo") { pont.connecter(.demo) }
+                    .keyboardShortcut("d", modifiers: [.command, .shift])
+                Button("Rafraîchir l'état (json etat)") { pont.rafraichir() }
+                    .keyboardShortcut("r", modifiers: [.command])
+                    .disabled(!pont.peutCommander)
+                Divider()
+                Button("Libérer le port") { pont.libererPort() }
+                    .keyboardShortcut("l", modifiers: [.command, .shift])
+                    .disabled(pont.phase == .ferme || pont.estDemo)
+            }
+        }
+
+        Settings {
+            FenetreReglages()
+                .environment(pont)
         }
     }
 }
