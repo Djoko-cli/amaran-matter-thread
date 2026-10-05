@@ -3092,6 +3092,8 @@ Expected: `json : 281 verifications, 0 echecs`, puis `tests hote : tout est vert
 Run: `export PATH="/opt/homebrew/bin:$PATH" && source ~/esp/esp-idf/export.sh >/dev/null && (cd ecoute && idf.py reconfigure >/dev/null && idf.py build 2>&1 | /usr/bin/grep -E "binary size|Project build complete|warning:|error:" | /usr/bin/grep -vE "esp-idf/|esp-matter/|managed_components/|Bootloader") && source ~/esp/esp-matter/export.sh >/dev/null && (cd firmware && idf.py reconfigure >/dev/null && idf.py build 2>&1 | /usr/bin/grep -E "binary size|Project build complete|warning:|error:" | /usr/bin/grep -vE "esp-idf/|esp-matter/|managed_components/|Bootloader")`
 Expected : comme à la Task 1 : deux tailles, deux `Project build complete. To flash, run:`, aucune ligne `warning:` ni `error:`.
 
+> **Amendement (exécution, 05/10)** : la relecture a montré que `leaseExpired` et `Queue::dropLate` comparaient des écarts de temps non signés ; la tâche `json` prend l'heure avant son verrou, et un horodatage posé juste après par la console faisait expirer le bail ou perdre une ligne à tort. Correctif en un commit à part : écarts signés, et deux vérifications de plus (`json : 283 verifications`).
+
 - [ ] **Step 7 : commit.**
 
 ```bash
