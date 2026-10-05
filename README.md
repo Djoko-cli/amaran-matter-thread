@@ -21,8 +21,9 @@ Projets frères :
 | P1 | Matter sur la même carte, et banc de la radio partagée entre Thread et Bluetooth : une ou deux C6 | faite (30/09/2026) : une seule C6 suffit, avec l'écoute du Mesh à 50 %, l'arrondi au pour cent et la demande d'état doublée ; 96,9 % et 98,3 % des relectures répondues, 47 salves d'ordres de Maison sans échec |
 | P2 | Produit : voyant, bouton, console, fiche produit ; bancs, puis endurance 24 h | faite (02/10/2026) : T1 à T10 (T5 partiel, T7 non fait) ; 24 h sans redémarrage, 97,9 % et 98,3 % des relectures répondues, 41 salves d'ordres sans échec ; lampe noire (molette à 0 %) corrigée et vérifiée |
 | P3a | N lampes : liste, catalogue de modèles, numéros d'endpoint stables, exposition à la première réponse | faite (05/10/2026) : bancs 1 à 4 ; migration sans perte dans Maison ; 16 lampes tenues (tas au plus bas 103 Ko) ; une lampe masquée puis remise est oubliée par Maison, donc pas de masquage automatique |
+| P3b-1 | App compagnon par l'USB : mode JSON du pont ; clés d'amaran Desktop (trousseau, sauvegarde chiffrée, chargement du pont) ; tableau de bord, commandes et console, démo | en cours |
 
-Résultats des bancs : [docs/BANC.md](docs/BANC.md). Protocole relevé : [docs/PROTOCOLE.md](docs/PROTOCOLE.md).
+Résultats des bancs : [docs/BANC.md](docs/BANC.md). Protocole relevé : [docs/PROTOCOLE.md](docs/PROTOCOLE.md). Protocole machine du pont, pour l'app : [docs/PROTOCOLE-JSON.md](docs/PROTOCOLE-JSON.md).
 
 ## Ce que fait le pont
 
@@ -60,7 +61,7 @@ Il faut ESP-IDF v5.5.4 et esp-matter (commit `c5b9ea8`) dans `~/esp`, une ESP32-
 
    Pour mettre à jour un pont déjà appairé : `flash` sans `erase-flash` (sinon Maison perd tout), et supprimer d'abord `firmware/sdkconfig` pour que les réglages de `sdkconfig.defaults` s'appliquent. La première mise à jour vers les N lampes convertit la liste des lampes et efface l'ancien format : sauvegarder avant la flash entière (`esptool.py read_flash 0 0x400000 <fichier>`, gardé hors du dépôt : il contient les clés).
 
-2. Charger les clés du réseau des lampes, lues dans la base d'amaran Desktop :
+2. Charger les clés du réseau des lampes, lues dans la base d'amaran Desktop : avec l'app compagnon (carte « Clés », « Charger le pont »), ou en ligne de commande :
 
    ```bash
    python3 outils/cles_amaran.py --port /dev/cu.usbmodemXXXX
@@ -71,6 +72,16 @@ Il faut ESP-IDF v5.5.4 et esp-matter (commit `c5b9ea8`) dans `~/esp`, une ESP32-
 Une fois appairé, le pont entre dans le réseau des lampes. Chaque lampe apparaît dans Maison, sous son nom d'amaran Desktop, à sa première réponse : une lampe déclarée dans amaran Desktop mais absente d'ici n'y apparaît pas.
 
 Carte déjà servie : `erase-flash` fait tirer au pont une nouvelle adresse Mesh au hasard (`0x7F00` à `0x7F7F`). Dans environ 1 cas sur 128 par adresse déjà employée, elle retombe sur une adresse que les lampes connaissent, et elles ignorent alors le pont, sans message d'erreur. Si toutes les lampes restent muettes (`lampes` : « lue jamais ») sans autre alerte de la console, taper `mesh adresse suivante` : le pont prend l'adresse voisine, repart de zéro et redémarre.
+
+## L'app compagnon
+
+Amaran Compagnon (`apps/macos`) supervise et pilote le pont par l'USB : une carte par lampe, le Bluetooth Mesh, Matter, le voyant, et la console du pont. Elle gère aussi les clés du réseau des lampes, à la place de `outils/cles_amaran.py` :
+- elle lit la base d'amaran Desktop, sans jamais y écrire (Réglages, « Changer… » : désigner une fois le dossier `amaran Desktop` de `~/Library/Containers/com.sidus.amaran-desktop/Data/Library/Application Support`) ;
+- elle en garde une copie dans le trousseau de ce Mac, et l'exporte sur demande en sauvegarde chiffrée par une phrase de passe (iCloud Drive conseillé) ;
+- elle charge le pont par l'USB, vérifie ses empreintes et sa liste, puis le redémarre ;
+- elle compare les empreintes de la base, de la copie et du pont, sans jamais montrer une clé.
+
+Le mode démo (menu Source, ou ⇧⌘D) simule un pont à trois lampes, sans matériel. Compiler : voir [apps/macos/README.md](apps/macos/README.md).
 
 ## Voyant et bouton
 
@@ -98,7 +109,10 @@ Sur l'USB, en français (`python3 outils/console.py --port <port> "<commande>"`,
 - `mesh` : réseau, empreintes des clés, compteurs ; `mesh releve <s>`, `mesh balayage`, `mesh ecoute on|off`, `mesh autotest`, etc. ;
 - `mesh lampes <N>`, puis `mesh lampe <n> <adresse> <mac> <code> <nom>` : la liste des lampes, tout ou rien (c'est ce qu'envoie `outils/cles_amaran.py`) ;
 - `matter` : mise en service, Thread, abonnements, codes, identité ;
-- `led [test|stop]`, `cause`, `taches`, `decommission`, `redemarre`.
+- `led [test|stop]`, `cause`, `taches`, `decommission`, `redemarre` ;
+- `json …` : le mode machine de l'app compagnon ([docs/PROTOCOLE-JSON.md](docs/PROTOCOLE-JSON.md)). Le pont démarre toujours en console texte ; `json 1` passe en mode machine, `json 0` (ou 30 s sans rien de l'app) revient au texte.
+
+Une commande inconnue répond `Commande inconnue : "<nom>" (help)`.
 
 ## À savoir
 
@@ -114,13 +128,14 @@ Sur l'USB, en français (`python3 outils/console.py --port <port> "<commande>"`,
 - Un modèle que le pont ne connaît pas encore est piloté en marche et intensité seulement. `outils/cles_amaran.py` signale une lampe qui déclare la température de couleur ou la couleur : modèle à cataloguer.
 - Si une lampe joignable manque plus de 5 % de ses relectures sur 10 minutes, la console le dit (`!! lampe <n> : relectures manquees, <p> % repondues sur 10 min`) : allonger la période (`mesh releve`). Le premier verdict vient au plus tôt 10 minutes après le démarrage ; après un démarrage tardif du Mesh, ou une lampe absente depuis 10 minutes ou plus, il attend 5 minutes de relectures.
 - Bouton BOOT : juste après un appui annulé (tenu de 2 à 8 s, donc sans effet), relâcher net ; un effleurement redémarre le pont, sans conséquence (les clés et l'appairage restent).
+- Un nom de lampe accentué : la console texte (et donc `outils/cles_amaran.py`) en retire les caractères non ASCII. L'app compagnon, qui charge le pont en mode machine, les garde.
 
 ## Clés du réseau
 
 Qui détient les clés du réseau Bluetooth Mesh contrôle les lampes.
 - Elles ne vont **jamais** dans ce dépôt.
-- Un script les lit dans la base d'amaran Desktop et les charge dans l'ESP32
-  par l'USB.
+- L'app compagnon, ou un script, les lit dans la base d'amaran Desktop et les
+  charge dans l'ESP32 par l'USB, jamais par le réseau.
 
 ## amaran Desktop sur macOS 27
 
@@ -159,6 +174,8 @@ script, et le texte de la licence dans
 
 Le voyant et le bouton BOOT reprennent la logique du pont Halo
 ([benq-screenbar-halo-matter](https://github.com/Djoko-cli/benq-screenbar-halo-matter),
-du même auteur) : `components/socle`, avec ses tests.
+du même auteur) : `components/socle`, avec ses tests. Le mode JSON
+(`components/protocole`) et l'app compagnon (`apps/macos`) sont une copie
+adaptée de son protocole et de Halo Compagnon.
 
 Projet personnel, sans lien avec Aputure. Il n'ouvre ni ne modifie les lampes.

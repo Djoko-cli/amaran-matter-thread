@@ -58,10 +58,10 @@ Le 05/10/2026, au brainstorming du plan 3b :
 9. **Icône : « M2 »**, le A d'Aputure (blanc `#F2F3F4`, lame rouge `#CD3A3B`)
    sur le bleu-noir du logo (`#01101E`), entouré d'un maillage. Format Icon
    Composer, comme l'icône validée de Halo Compagnon (constellation). C'est la
-   marque déposée d'Aputure : `AppIcon.icon` n'est pas versionné et reste sur
-   le Mac de Djoko ; le dépôt public garde une icône libre de repli (« A2 » :
-   une constellation qui trace un A, sur fond rouge), que la compilation prend
-   quand M2 est absente.
+   marque déposée d'Aputure : M2 n'est pas versionnée et reste sur le Mac de
+   Djoko (`AppIconM2.icon`, ignorée par git, choisie par `Local.xcconfig`) ; le
+   dépôt public porte une icône libre (« A2 » : une constellation qui trace un
+   A, sur fond rouge, `AppIcon.icon`), que la compilation prend par défaut.
 10. **Français seulement** (règle du projet) : on ne reprend pas la traduction
     anglaise de Halo.
 
@@ -120,10 +120,11 @@ Le 05/10/2026, au brainstorming du plan 3b :
   runtime durci.
 
 **Firmware :**
-- `components/json` (3b-1) : écriture compacte et ordonnée, file des messages
-  périodiques, cadence, bail, préfixe `id=`, cache des réponses, codes. Ce
-  sont les modules purs de Halo, en C++ avec une interface C, testés sur le
-  Mac ;
+- `components/protocole` (3b-1) : écriture compacte et ordonnée, file des
+  messages périodiques, cadence, bail, préfixe `id=`, codes, et les messages du
+  pont amaran. Ce sont les modules purs de Halo, en C++, testés sur le Mac. Pas
+  `components/json` : c'est le nom du composant cJSON d'ESP-IDF, que le nôtre
+  masquerait (vu en préparant le plan 3b-1) ;
 - `firmware/main` : la tâche `json`, qui relie ces modules à la console, à la
   liste des lampes, au cœur `lampes`, au Mesh et à Matter ;
 - `components/h1` (3b-2) : enveloppe, sessions et anti-rejeu (purs, repris de
@@ -196,16 +197,25 @@ trousseau ou depuis une sauvegarde.
 
 **Le protocole v1 de Halo**, pour que le moteur de session de l'app se reprenne
 tel quel :
-- une ligne machine = `RS` (0x1E) + un objet JSON compact en ASCII + `LF`,
-  1 024 octets au plus ; ses premiers champs sont toujours
-  `v`, `t`, `n`, `ms` et, s'il y a lieu, `bloc` ;
+- une ligne machine = `RS` (0x1E) + un objet JSON compact + `LF`, 1 024 octets
+  au plus ; ses premiers champs sont toujours `v`, `t`, `n`, `ms` et, s'il y a
+  lieu, `bloc`. Les chaînes passent en UTF-8 (les noms des lampes portent des
+  accents), sans octet de contrôle ni `\uXXXX` ;
 - le pont démarre en console texte ; `json 1 [bail]` le passe en mode machine
   (sans écho ni invite) ; `json 0`, ou un bail expiré (30 s sans rien reçu), le
   ramène en texte ; `json ping` renouvelle le bail ;
 - l'app envoie des lignes de console `id=<n> <commande>` (127 octets au plus) ;
-  le pont répond par `reponse` (codes `ok`, `accepte`, `refuse`, `usage`,
-  `inconnue`, `trop_long`, `cadence`, `interdite`, `deja_traite`…) ; une
-  commande texte reçoit `reponse debut`, son texte, puis `reponse fin` ;
+  le pont répond par `reponse` (codes `ok`, `accepte`, `en_cours`, `erreur`,
+  `usage`, `inconnue`, `trop_long`, `cadence` ; `interdite` et `deja_traite`
+  viendront avec Thread) ; une commande texte reçoit `reponse debut`, son
+  texte, puis `reponse fin` : `ok` si elle a réussi, `erreur` sinon ;
+- la console texte du pont n'est plus la REPL d'ESP-IDF : linenoise fait
+  toujours l'écho de ce qu'il lit. Le pont a sa propre tâche de console :
+  linenoise en mode texte, une lecture sans écho ni invite en mode machine. Un
+  firmware d'avant le plan 3b répond `Unrecognized command` à `id=1 json 1` ;
+- la tâche `json` émet pendant qu'une commande tourne. Le bloc `etat` `sante`
+  et le battement `hb` portent l'`id` de la commande en cours (`commande`) :
+  une `reponse fin` perdue s'y voit. Le bail ne court pas pendant une commande ;
 - les journaux d'ESP-IDF peuvent s'intercaler ; le compteur `n` trahit les
   lignes perdues.
 
@@ -233,8 +243,12 @@ tel quel :
 
 **Ordres.** `lampe <n> on|off|niveau <0-1000>` répond aussitôt `accepte`,
 puis l'événement `ordre` donne son issue : c'est la « livraison » de Halo,
-branchée sur la sortie `signaler` du cœur `lampes`. `mesh lampe <n>
-masquer|afficher` répond en une fois.
+branchée sur la sortie `signaler` du cœur `lampes`. Le cœur signale désormais
+chaque ordre : `confirme`, `abandon`, ou `tenu` (la lampe était déjà dans cet
+état : rien n'est parti). L'`id` d'un ordre de l'app part avec l'ordre dans la
+file de la tâche des lampes : l'événement qui le finit le porte, sans course
+possible. `mesh lampe <n> masquer|afficher` répond en une fois, puis
+l'événement `lampe`.
 
 **Le firmware :**
 - une tâche `json` de basse priorité lit les instantanés (lampes, liste, Mesh,
@@ -244,10 +258,10 @@ masquer|afficher` répond en une fois.
 - le document `docs/PROTOCOLE-JSON.md` d'amaran décrit chaque message, avec un
   exemple vérifié par les tests.
 
-**Risque à lever d'abord.** La console d'ESP-IDF (linenoise) doit pouvoir
-couper l'écho et l'invite en mode machine, et l'USB doit pouvoir écrire une
-ligne entière sans bloquer. La première tâche du plan 3b-1 est un essai de ces
-deux points ; le repli est une lecture de ligne propre au mode machine.
+**Risque levé en préparant le plan.** La console d'ESP-IDF (linenoise) ne
+coupe pas son écho : le pont lit lui-même l'USB en mode machine (le repli
+prévu). `usb_serial_jtag_write_bytes`, sans attente, écrit une ligne entière ou
+rien. Le banc A du plan 3b-1 le confirme sur la carte, avant l'app.
 
 ## 7. Thread, le canal à distance (3b-2)
 
@@ -386,9 +400,9 @@ données n'utilisent que des MAC inventées.
 
 | risque | parade | levé par |
 |---|---|---|
-| linenoise ne coupe ni l'écho ni l'invite | lecture de ligne propre au mode machine | essai, tâche 1 du plan 3b-1 |
-| l'USB ne sait pas écrire une ligne entière sans bloquer | tampon et écriture tout ou rien, ligne perdue et comptée | essai, tâche 1 du plan 3b-1 |
-| le signet ne donne pas accès au conteneur d'amaran Desktop | copie de la base choisie par Djoko, ou app sans sandbox (à décider avec lui) | première tâche app du plan 3b-1 |
+| linenoise ne coupe ni l'écho ni l'invite | lecture de ligne propre au mode machine | levé en préparant le plan 3b-1 : linenoise fait toujours l'écho ; le pont a sa propre tâche de console ; à confirmer au banc A |
+| l'USB ne sait pas écrire une ligne entière sans bloquer | tampon et écriture tout ou rien, ligne perdue et comptée | levé en préparant le plan 3b-1 : `usb_serial_jtag_write_bytes` sans attente écrit tout ou rien (tampon porté à 4 Ko) ; à confirmer au banc A |
+| le signet ne donne pas accès au conteneur d'amaran Desktop | copie de la base choisie par Djoko, ou app sans sandbox (à décider avec lui) | banc B du plan 3b-1, en premier : l'essai demande l'app signée et un choix de Djoko ; macOS lui demande alors d'autoriser l'accès aux données d'une autre app |
 | une socket UDP sur OpenThread gêne CHIP | essai d'abord ; Halo l'a déjà fait | tâche 1 du plan 3b-2 |
 | la tâche `json` ou H1 manque de tas ou de pile | budget relevé au banc ; cadences abaissées | bancs 3b-1 et 3b-2 |
 | l'icône M2 reprend une marque déposée | non versionnée ; A2 en repli dans le dépôt | décision 9 |
