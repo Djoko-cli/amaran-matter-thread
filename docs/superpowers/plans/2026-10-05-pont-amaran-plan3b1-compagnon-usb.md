@@ -14687,3 +14687,14 @@ git commit -m "$(printf "Banc B du plan 3b-1 : l'app compagnon pilote le pont et
 ```
 
 Les pushes (spec, plan, code) se font avec l'accord de Djoko.
+
+## Après l'exécution (05/10/2026)
+
+> **Amendements de fin d'exécution.** La Task 10 a reçu une correction (commit `ef07593`) : la spec dit la sandbox réelle (sans `network.client` en 3b-1) et le runtime durci avec une équipe, la console en mode simple, la phrase de passe NFC, et l'événement `ordre` toujours après sa réponse `accepte`. Après le banc B, une relecture finale (Opus) a conduit à une vague de correctifs (`63d0643`, `82c5369`) :
+> - l'hôte des tests utilise un trousseau en mémoire et ses propres préférences : aucun test ne lit le vrai trousseau ni la base d'amaran Desktop ;
+> - l'app relit la base d'amaran Desktop au lancement ;
+> - un port ne s'appelle « Pont amaran » qu'une fois l'identité du pont confirmée par son `hello`, les autres cartes « Autre carte Espressif » ;
+> - la carte Clés est visible sans pont ;
+> - des guillemets ne contournent plus le masquage de `mesh cles` (pont et app) ni la confirmation des commandes dangereuses ;
+> - la console du pont ne garde plus d'historique.
+> Tests à la fin : `AmaranProtocoleTests` 89, `AmaranCompagnonTests` 12, tests natifs du pont tout verts.
