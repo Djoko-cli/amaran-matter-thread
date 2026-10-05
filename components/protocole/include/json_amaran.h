@@ -18,13 +18,23 @@ namespace jsonp {
 // --- hello (5.1)
 
 struct Session {
+  const char *transport = "usb";  // usb, udp
   uint32_t periodeMs = 1000;    // etat : blocs pont et sante
   uint32_t lampesMs = 10000;    // etat : toutes les lampes (une lampe part aussi a chaque changement)
   uint32_t compteursMs = 1000;
   uint32_t reseauMs = 5000;
   uint16_t bailS = 30;
   bool log = false;
+  bool trames = false;
 };
+// Profil a distance (10.5) : l'etat toutes les 2 s, toutes les lampes toutes les
+// 30 s, le reseau toutes les 30 s, ni compteurs ni trames.
+Session sessionDistante();
+
+// Liste blanche a distance (10.5), jugee sur la ligne decoupee comme la console
+// la decoupe (esp_console_split_argv) : guillemets et echappements ne la
+// contournent pas. nullptr : permise ; sinon la raison (code interdite).
+const char *refusDistant(int argc, const char *const *argv);
 
 struct HelloBase {
   const char *fw = "";          // esp_app_get_description()->version
@@ -126,6 +136,26 @@ struct ReseauMatter {
 void reseauMatter(Writer &w, uint32_t n, uint32_t ms, const ReseauMatter &r);
 void reseauThread(Writer &w, uint32_t n, uint32_t ms, const char *role, bool attache);
 
+// Adresse IPv6 en texte (RFC 5952 : minuscules, zeros de tete omis, plus longue
+// suite de groupes nuls remplacee par ::). out : 40 octets.
+void ip6Texte(const uint8_t a[16], char out[40]);
+
+struct AdresseIp {
+  uint8_t a[16] = {};
+  const char *type = "autre";   // omr, ml_eid, autre
+};
+struct ReseauIp {
+  const char *srp = nullptr;    // nom SRP (sans .local) ; nul : inconnu
+  AdresseIp adresses[4];
+  uint8_t n = 0;
+  bool cle = false;
+  const char *empreinte = nullptr;  // 8 hexa de la cle UDP ; nul sans cle
+  bool ouvert = false;          // socket UDP ouverte
+  uint8_t sessions = 0;         // sessions H1 etablies
+  uint32_t recus = 0, emis = 0, rejets = 0, perdus = 0;
+};
+void reseauIp(Writer &w, uint32_t n, uint32_t ms, const ReseauIp &r);
+
 // --- evenements (7)
 
 constexpr uint8_t kIdsMax = 4;  // id en attente par lampe
@@ -144,6 +174,18 @@ void alerteReleves(Writer &w, uint32_t n, uint32_t ms, int lampe, bool manque, u
 void alerteMesh(Writer &w, uint32_t n, uint32_t ms, const char *diag);
 // quoi : entree, masquee, remise, echec ; endpoint 0 : null.
 void lampe(Writer &w, uint32_t n, uint32_t ms, int lampe, const char *quoi, uint16_t endpoint);
+
+// Trafic Bluetooth Mesh decode (7.6), sur demande (json trames 1).
+struct Trame {
+  const char *sens = "tx";      // tx, rx
+  const char *quoi = "ordre";   // ordre, demande, etat
+  int lampe = -1;               // index ; -1 : le groupe des lampes (demande d'etat)
+  int8_t marche = -1;           // -1 : absent
+  int32_t intensite = -1;       // -1 : absent
+  uint8_t essai = 0;            // ordre : 1 a 3
+  uint32_t sautes = 0;          // trames non emises (plafond) depuis la precedente
+};
+void trame(Writer &w, uint32_t n, uint32_t ms, const Trame &t);
 
 // Codes du protocole.
 const char *phaseCode(lampe_phase_t p);  // repos, trames, attente

@@ -3,7 +3,9 @@
 // ecrivain, prefixe id=, assemblage, debit, cadence, file, bail. Puis les
 // messages du pont amaran : chaque exemple de docs/PROTOCOLE-JSON.md (ligne qui
 // commence par <RS>) doit sortir tel quel d'ici, chaque message forme ici doit y
-// figurer, et le pire cas de chacun tient dans le budget de 896 octets.
+// figurer, et le pire cas de chacun tient dans le budget de 896 octets. La liste
+// blanche a distance est jugee sur la ligne decoupee par la vraie fonction de la
+// console d'ESP-IDF (split_argv.c, que lancer.sh compile sans la modifier).
 // Lancer : sh tests/hote/lancer.sh. Avec --exemples : imprime les lignes formees.
 #include <stdio.h>
 #include <string.h>
@@ -278,6 +280,57 @@ static void testAssembler() {
   CHECK(last == "json", "Ctrl-U apres depassement : '%s'", last.c_str());
 }
 
+// Toutes les lignes gardees, separees par '|'.
+static std::string lignesGardees(const OutputLines &s) {
+  std::string m;
+  size_t pos = 0;
+  bool premiere = true;
+  for (const char *l = s.next(&pos); l; l = s.next(&pos)) {
+    m += (premiere ? "" : "|") + std::string(l);
+    premiere = false;
+  }
+  return m;
+}
+
+// Sortie d'une commande a distance (10.4) : ce que le crochet de la sortie standard
+// garde, ecrit par morceaux comme newlib le vide.
+static void testOutputLines() {
+  static OutputLines s;  // 4 Ko : hors de la pile
+  s.clear();
+  const char a[] = "lampe 1 : Lampe bureau\r\n  Maison    : EP2\n\nsans fin";
+  s.write(a, 10);
+  s.write(a + 10, sizeof(a) - 1 - 10);
+  CHECK(lignesGardees(s) == "lampe 1 : Lampe bureau|  Maison    : EP2|", "CR retire, ligne vide gardee : '%s'",
+        lignesGardees(s).c_str());
+  s.flush();
+  CHECK(lignesGardees(s) == "lampe 1 : Lampe bureau|  Maison    : EP2||sans fin" && !s.lost(),
+        "fin de commande : la ligne commencee part");
+  s.flush();
+  CHECK(lignesGardees(s) == "lampe 1 : Lampe bureau|  Maison    : EP2||sans fin", "rien de plus sans ligne commencee");
+  // Une ligne coupee a kLogTextMax octets, comme log.txt.
+  s.clear();
+  const std::string longue(200, 'x');
+  s.write(longue.c_str(), longue.size());
+  s.write("\n", 1);
+  CHECK(lignesGardees(s) == std::string(kLogTextMax, 'x'), "ligne coupee a %zu octets", kLogTextMax);
+  // 4 096 octets tout juste (chaque ligne avec son 0) : tout est garde ; un octet de
+  // plus, la ligne est perdue, et plus aucune ne l'est ensuite.
+  for (int extra = 0; extra < 2; extra++) {
+    s.clear();
+    const std::string l99(99, 'a');  // 100 octets gardes avec son 0
+    for (int i = 0; i < 40; i++) s.write((l99 + "\n").c_str(), 100);
+    const std::string reste(OutputLines::kMax - 4000 - 1 + (size_t)extra, 'b');
+    s.write((reste + "\n").c_str(), reste.size() + 1);
+    s.write("court\n", 6);
+    size_t pos = 0, n = 0;
+    while (s.next(&pos)) n++;
+    CHECK(n == (extra ? 40u : 41u) && s.lost() == (extra ? 2u : 1u), "capacite (extra %d) : %zu lignes, %u perdues",
+          extra, n, (unsigned)s.lost());
+  }
+  s.clear();
+  CHECK(lignesGardees(s).empty() && !s.lost(), "remise a zero");
+}
+
 // ---------------------------------------------------------------------------
 //  Debit, cadence, file, bail
 // ---------------------------------------------------------------------------
@@ -345,7 +398,7 @@ static void testQueue() {
   }
   CHECK(order, "ordre FIFO a travers le tour de l'anneau");
   // Un instantane complet a 16 lampes tient dans la file : hello (2), catalogue,
-  // mesh, 16 config, pont, 16 etat, sante, compteurs, reseau (2), reponse.
+  // mesh, 16 config, pont, 16 etat, sante, compteurs, reseau (3), reponse.
   q.clear();
   int n = 0;
   n += q.push(Item::HelloBase, 0, true) + q.push(Item::HelloId, 0, true) + q.push(Item::ConfigCatalogue, 0, true) +
@@ -356,6 +409,21 @@ static void testQueue() {
   n += q.push(Item::EtatSante, 0, true) + q.push(Item::CptMesh, 0, true) + q.push(Item::NetMatter, 0, true) +
        q.push(Item::NetThread, 0, true) + q.push(Item::Reply, 0, false, 0);
   CHECK(n == 42 && q.size() == 42, "instantane a 16 lampes : %d lignes en file", n);
+}
+
+// A distance (10.3) : la tete part avec 7 places libres dans la file de net_udp (une
+// periodique), 2 (une reponse) ; sinon elle attend, et rien ne sort de la file.
+static void testFrontReady() {
+  Queue q;
+  CHECK(!q.frontReady(12), "file vide : rien a sortir");
+  q.push(Item::EtatPont, 0, true);
+  q.push(Item::Reply, 0, false, 0);
+  CHECK(!q.frontReady(0) && !q.frontReady(2) && !q.frontReady(6) && q.frontReady(7) && q.frontReady(12),
+        "periodique : 7 places libres, il en reste 6 apres elle");
+  CHECK(q.size() == 2 && q.front()->item == Item::EtatPont, "attendre ne retire rien");
+  q.pop();
+  CHECK(!q.frontReady(1) && q.frontReady(2), "reponse : 2 places libres, celle du DEFI reste");
+  CHECK(kPlacesLigne == 2 && kPlacesPeriodique == kPlacesLigne + 5, "cinq places de plus pour une periodique");
 }
 
 // Retard (500 ms) : la garde de la tache json.
@@ -399,6 +467,145 @@ static void testLease() {
         "a travers le retour a zero de l'horloge");
   CHECK(!leaseExpired(9999, 0, 0, 10) && leaseExpired(600000, 0, 0, 600), "bornes 10 et 600 s");
   CHECK(!leaseExpired(5000, 5003, 0, 30), "dernier octet recu apres l'echantillon de now : pas expire");
+}
+
+// ---------------------------------------------------------------------------
+//  Distant (10.4, 10.5) : liste blanche, cache des reponses, masque de la cle UDP
+// ---------------------------------------------------------------------------
+
+// La vraie fonction de la console d'ESP-IDF (components/console/split_argv.c, compilee
+// par lancer.sh) : dans une ligne, une barre oblique inverse devant un octet autre
+// que \, " ou espace disparait avec lui ; des guillemets font un seul mot.
+extern "C" size_t esp_console_split_argv(char *line, char **argv, size_t argv_size);
+
+static char gCopie[kCmdMax + 1];
+static char *gArgv[8];
+
+// Decoupe comme json_pont_distant_ligne (copie de 127 octets, 8 places : 7 mots au
+// plus) ; rend argc.
+static int decouper(const char *ligne) {
+  snprintf(gCopie, sizeof(gCopie), "%s", ligne);
+  return (int)esp_console_split_argv(gCopie, gArgv, sizeof(gArgv) / sizeof(gArgv[0]));
+}
+
+// Les mots que la console executera, separes par '|'.
+static std::string mots(const char *ligne) {
+  const int argc = decouper(ligne);
+  std::string m;
+  for (int i = 0; i < argc; i++) m += (i ? "|" : "") + std::string(gArgv[i]);
+  return m;
+}
+
+// Le verdict de la liste blanche sur la ligne decoupee ; nullptr : permise.
+static const char *refus(const char *ligne) {
+  const int argc = decouper(ligne);
+  return refusDistant(argc, gArgv);
+}
+
+static void testDistant() {
+  static const char *const kPermises[] = {
+      "json 1", "json 1 bail 10", "json 1 bail 120", "json 0", "json etat", "json hello", "json ping",
+      "json periode 2000", "json periode 0", "json periode 60000", "json lampes 10000", "json lampes 0",
+      "json compteurs 0", "json compteurs 5000", "json reseau 10000", "json reseau 0", "json trames 1",
+      "json trames 0", "json log 1", "lampe 1", "lampe 2 on", "lampe 16 off", "lampe 1 niveau 500",
+      "lampe 3 releve", "mesh", "mesh lampe 2 masquer", "mesh lampe 2 afficher", "led test", "led stop",
+      "lampes", "matter", "taches", "cause"};
+  for (const char *c : kPermises) CHECK(!refus(c), "permise a distance : '%s' (%s)", c, refus(c));
+  static const char *const kInterdites[] = {
+      "json 1 bail 0", "json 1 bail 9", "json 1 bail 121", "json 1 bail", "json 1 xyz 30", "json periode 1999",
+      "json periode 60001", "json lampes 9999", "json compteurs 4999", "json reseau 9999", "json trames 2",
+      "json cle nouvelle 00", "json cle efface", "json", "json periode", "json periode 2000 3000",
+      "lampe", "lampe x on", "lampe 1 clignote", "lampe 1 niveau", "lampe 1 niveau x", "lampe 1 on 2",
+      "mesh cles 00 11", "mesh lampes 2", "mesh lampe 1 0x0002 02:00:00:00:00:01 40065 nom", "mesh oublie",
+      "mesh adresse suivante", "mesh iv 5", "mesh releve 2", "mesh balayage", "mesh lampe 2 masquer x",
+      "decommission", "redemarre", "led", "led test x", "taches x", "help", ""};
+  for (const char *c : kInterdites) CHECK(refus(c), "interdite a distance : '%s'", c);
+  CHECK(!strcmp(refus("json 1 bail 0"), "json 1 : bail de 10 a 120 s a distance"), "raison du bail");
+  CHECK(!strcmp(refus("json periode 100"), "json periode : 0 ou 2000..60000 ms a distance"), "raison de periode");
+  // Guillemets et barres obliques inverses : la liste blanche juge les mots que la
+  // console executera (esp_console_split_argv), jamais la ligne brute.
+  static const struct {
+    const char *ligne, *mots;
+    bool permise;
+  } kDecoupes[] = {
+      {"json \"1\" \"bail\" 0", "json|1|bail|0", false},
+      {"re\\xdemarre", "redemarre", false},
+      {"json c\\xle efface", "json|cle|efface", false},
+      {"l\\xampe 1 on", "lampe|1|on", true},
+      {"\"lampe\" 1 on", "lampe|1|on", true},
+      {"lampe 1 \"on\"", "lampe|1|on", true},
+      {"json 1 bail 1\\x0", "json|1|bail|10", true},
+      {"\"mesh lampe\" 1 masquer", "mesh lampe|1|masquer", false},
+      {"mesh\\ lampe 1 masquer", "mesh lampe|1|masquer", false},
+      {"lampe \"1 on\"", "lampe|1 on", false},
+      {"\"lampe 1 on", "lampe 1 on", false},
+      {"json \"\" 1", "json||1", false},
+      {"lampe 1 on a b c d e", "lampe|1|on|a|b|c|d", false},
+  };
+  for (const auto &d : kDecoupes) {
+    const std::string m = mots(d.ligne);
+    CHECK(m == d.mots, "'%s' decoupee : '%s', attendu '%s'", d.ligne, m.c_str(), d.mots);
+    CHECK((refus(d.ligne) == nullptr) == d.permise, "'%s' : %s attendue", d.ligne, d.permise ? "permise" : "interdite");
+  }
+
+  Session d = sessionDistante();
+  CHECK(!strcmp(d.transport, "udp") && d.periodeMs == 2000 && d.lampesMs == 30000 && d.compteursMs == 0 &&
+            d.reseauMs == 30000 && !d.log && !d.trames,
+        "profil a distance");
+
+  ReplyCache cache;
+  Reply r;
+  r.id = 7;
+  r.cmd = "lampe 1 on";
+  r.code = "accepte";
+  r.msg = "message";
+  r.key = "CLE";
+  cache.put(r);
+  const Reply *t = cache.find(7);
+  CHECK(t && !strcmp(t->cmd, "lampe 1 on") && !strcmp(t->code, "accepte") && !t->msg && !t->key,
+        "cache : la reponse, sans msg ni cle");
+  CHECK(!cache.find(8) && !cache.find(0), "cache : id absent");
+  Reply debut = r;
+  debut.id = 9;
+  debut.fin = false;
+  cache.put(debut);
+  CHECK(!cache.find(9), "cache : une reponse debut n'est pas gardee");
+  for (uint32_t i = 100; i < 100 + ReplyCache::kN; i++) {
+    r.id = i;
+    cache.put(r);
+  }
+  CHECK(!cache.find(7) && cache.find(100) && cache.find(100 + ReplyCache::kN - 1), "cache : 8 au plus, la plus ancienne sort");
+  r.id = 100;
+  r.code = "ok";
+  cache.put(r);
+  CHECK(!strcmp(cache.find(100)->code, "ok"), "cache : un id repete garde la reponse la plus recente");
+  cache.clear();
+  CHECK(!cache.find(100), "cache vide");
+
+  char a[] = "json cle nouvelle 000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F";
+  maskCmd(a);
+  CHECK(!strcmp(a, "json cle nouvelle"), "json cle nouvelle : l'alea ne revient jamais ('%s')", a);
+
+  uint8_t ip[16] = {0xfd, 0x12, 0x00, 0x34, 0x56, 0x78, 0, 0, 0xaa, 0xaa, 0xbb, 0xbb, 0x0c, 0xcc, 0xdd, 0xdd};
+  char tx[40];
+  ip6Texte(ip, tx);
+  CHECK(!strcmp(tx, "fd12:34:5678:0:aaaa:bbbb:ccc:dddd"), "ip6, un seul groupe nul : '%s'", tx);
+  uint8_t zero[16] = {};
+  ip6Texte(zero, tx);
+  CHECK(!strcmp(tx, "::"), "ip6 nulle : '%s'", tx);
+  uint8_t fin[16] = {};
+  fin[15] = 1;
+  ip6Texte(fin, tx);
+  CHECK(!strcmp(tx, "::1"), "ip6 ::1 : '%s'", tx);
+  uint8_t lien[16] = {0xfe, 0x80, 0, 0, 0, 0, 0, 0, 0x02, 0x00, 0x00, 0x00, 0x0a, 0x0b, 0x0c, 0x0d};
+  ip6Texte(lien, tx);
+  CHECK(!strcmp(tx, "fe80::200:0:a0b:c0d"), "ip6 de lien : '%s'", tx);
+  uint8_t un[16] = {0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1};
+  ip6Texte(un, tx);
+  CHECK(!strcmp(tx, "2001:db8:0:1:1:1:1:1"), "un seul groupe nul n'est pas abrege : '%s'", tx);
+  uint8_t deux[16] = {0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1};
+  ip6Texte(deux, tx);
+  CHECK(!strcmp(tx, "2001:db8::1:0:0:1"), "la premiere suite la plus longue : '%s'", tx);
 }
 
 // ---------------------------------------------------------------------------
@@ -757,6 +964,94 @@ static void testExemples() {
   sessionEnd(gW, 415, 751400, "bail");
   exemple(gW, "fin");
 
+  // 10. A distance (Thread) : hello d'une session distante, bloc ip, cle, refus,
+  // texte d'une lecture, trames.
+  hb.session = sessionDistante();
+  hb.session.bailS = 60;
+  hb.upS = 900;
+  helloBase(gW, 0, 900120, hb);
+  exemple(gW, "hello base distante");
+  ReseauIp ip;
+  ip.srp = "1A2B3C4D5E6F7081";
+  const uint8_t omr[16] = {0xfd, 0x00, 0xaa, 0xaa, 0xbb, 0xbb, 0, 0, 0x11, 0x11, 0x22, 0x22, 0x33, 0x33, 0x44, 0x44};
+  const uint8_t mleid[16] = {0xfd, 0x00, 0xcc, 0xcc, 0xdd, 0xdd, 0, 1, 0x55, 0x55, 0x66, 0x66, 0x77, 0x77, 0x88, 0x88};
+  memcpy(ip.adresses[0].a, omr, 16);
+  ip.adresses[0].type = "omr";
+  memcpy(ip.adresses[1].a, mleid, 16);
+  ip.adresses[1].type = "ml_eid";
+  ip.n = 2;
+  ip.cle = true;
+  ip.empreinte = "CA2A4FE7";
+  ip.ouvert = true;
+  ip.sessions = 1;
+  ip.recus = 412;
+  ip.emis = 980;
+  ip.rejets = 3;
+  reseauIp(gW, 14, 83642, ip);
+  exemple(gW, "reseau ip");
+  ReseauIp sansCle;
+  sansCle.srp = "1A2B3C4D5E6F7081";
+  reseauIp(gW, 14, 83642, sansCle);
+  exemple(gW, "reseau ip sans cle");
+  Reply rc;
+  rc.id = 5;
+  rc.cmd = "json cle nouvelle";
+  rc.durMs = 12;
+  rc.key = "404142434445464748494A4B4C4D4E4F505152535455565758595A5B5C5D5E5F";
+  rc.kid = "CA2A4FE7";
+  reply(gW, 60, 860000, rc);
+  exemple(gW, "reponse cle nouvelle");
+  Reply rd;
+  rd.id = 31;
+  rd.cmd = "redemarre";
+  rd.ok = false;
+  rd.code = "interdite";
+  rd.msg = refus("redemarre");
+  reply(gW, 101, 912000, rd);
+  exemple(gW, "reponse interdite");
+  rd.id = 29;
+  rd.cmd = "lampe 1 on";
+  rd.code = "deja_traite";
+  rd.msg = "id deja traite : reponse oubliee";
+  reply(gW, 102, 912010, rd);
+  exemple(gW, "reponse deja traite");
+  Reply rl;
+  rl.id = 32;
+  rl.cmd = "lampe 1";
+  rl.fin = false;
+  rl.code = "en_cours";
+  reply(gW, 103, 913000, rl);
+  exemple(gW, "reponse debut lampe a distance");
+  textLine(gW, 104, 913004, 32, "lampe 1 : Lampe bureau");
+  exemple(gW, "texte 1");
+  textLine(gW, 105, 913005, 32, "  Maison    : EP2");
+  exemple(gW, "texte 2");
+  rl.fin = true;
+  rl.code = "ok";
+  rl.durMs = 6;
+  reply(gW, 106, 913006, rl);
+  exemple(gW, "reponse fin lampe a distance");
+  Trame tr;
+  tr.lampe = 0;
+  tr.marche = 1;
+  tr.intensite = 500;
+  tr.essai = 1;
+  trame(gW, 210, 95012, tr);
+  exemple(gW, "trame ordre");
+  Trame td;
+  td.quoi = "demande";
+  trame(gW, 211, 96000, td);
+  exemple(gW, "trame demande");
+  Trame te;
+  te.sens = "rx";
+  te.quoi = "etat";
+  te.lampe = 0;
+  te.marche = 1;
+  te.intensite = 500;
+  te.sautes = 2;
+  trame(gW, 212, 96140, te);
+  exemple(gW, "trame etat");
+
   // Chaque exemple du document a ete forme ici.
   for (const std::string &d : gDoc) CHECK(gVues.count(d), "exemple du document jamais forme :\n  <RS>%s", d.c_str());
 }
@@ -874,10 +1169,55 @@ static void testPiresCas() {
   reply(gW, M, M, r);
   s = finish(gW, &ok);
   CHECK(ok && s.size() <= kBudget, "reponse : %zu octets", s.size());
+  // La meme, avec la cle UDP et son empreinte (json cle nouvelle) : cumul impossible
+  // en pratique, borne superieure.
+  std::string cle(64, 'F');
+  r.key = cle.c_str();
+  r.kid = "FFFFFFFF";
+  reply(gW, M, M, r);
+  s = finish(gW, &ok);
+  CHECK(ok && s.size() <= kBudget, "reponse avec cle : %zu octets", s.size());
   std::string txt(300, '"');
   logLine(gW, M, M, "lampes", "alerte", txt.c_str(), M);
   s = finish(gW, &ok);
   CHECK(ok && s.size() <= kBudget, "log : %zu octets", s.size());
+  // Texte d'une commande a distance : 127 octets gardes, tous a echapper.
+  textLine(gW, M, M, kIdMax, txt.c_str());
+  s = finish(gW, &ok);
+  CHECK(ok && s.size() <= kBudget, "texte : %zu octets", s.size());
+  // Bloc ip : 4 adresses de 39 caracteres (aucun groupe nul), le nom SRP le plus long
+  // garde (63 octets), tout a echapper, compteurs au maximum.
+  ReseauIp ip;
+  std::string srp(63, '"');
+  ip.srp = srp.c_str();
+  for (int i = 0; i < 4; i++) {
+    memset(ip.adresses[i].a, 0xAB, 16);
+    ip.adresses[i].type = "ml_eid";
+  }
+  char a39[40];
+  ip6Texte(ip.adresses[0].a, a39);
+  CHECK(strlen(a39) == 39, "adresse de 39 caracteres : '%s'", a39);
+  ip.n = 4;
+  ip.cle = true;
+  ip.empreinte = "FFFFFFFF";
+  ip.ouvert = true;
+  ip.sessions = 255;
+  ip.recus = ip.emis = ip.rejets = ip.perdus = M;
+  reseauIp(gW, M, M, ip);
+  s = finish(gW, &ok);
+  CHECK(ok && s.size() <= kBudget, "reseau ip : %zu octets", s.size());
+  // Trame : valeurs extremes (ordre : avec essai).
+  Trame tr;
+  tr.sens = "rx";
+  tr.quoi = "ordre";
+  tr.lampe = LISTE_CAPACITE - 1;
+  tr.marche = 1;
+  tr.intensite = 2147483647;
+  tr.essai = 255;
+  tr.sautes = M;
+  trame(gW, M, M, tr);
+  s = finish(gW, &ok);
+  CHECK(ok && s.size() <= kBudget, "trame : %zu octets", s.size());
 }
 
 int main(int argc, char **argv) {
@@ -888,10 +1228,13 @@ int main(int argc, char **argv) {
   testIdPrefix();
   testMask();
   testAssembler();
+  testOutputLines();
   testRate();
   testQueue();
+  testFrontReady();
   testQueueDrain();
   testLease();
+  testDistant();
   testExemples();
   testPiresCas();
   printf("json : %d verifications, %d echecs\n", gChecks, gFails);

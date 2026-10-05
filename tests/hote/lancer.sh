@@ -29,11 +29,19 @@ compiler_et_lancer test_liste components/liste/liste.c components/liste/catalogu
 "$SORTIE/test_socle"
 
 # Protocole JSON (components/protocole) : C++17, avec le catalogue (C) ; lit les exemples
-# de docs/PROTOCOLE-JSON.md.
+# de docs/PROTOCOLE-JSON.md. La liste blanche est jugee sur la ligne decoupee par la vraie
+# fonction de la console d'ESP-IDF (split_argv.c, compilee ici, jamais modifiee).
+SPLIT_ARGV="${IDF_PATH:-$HOME/esp/esp-idf}/components/console/split_argv.c"
+if [ ! -f "$SPLIT_ARGV" ]; then
+  echo "introuvable : $SPLIT_ARGV (ESP-IDF 5.5.4 dans ~/esp/esp-idf, ou IDF_PATH)" >&2
+  exit 1
+fi
 "$CC" $CFLAGS -c components/liste/catalogue.c -o "$SORTIE/catalogue.o"
+"$CC" -std=c11 -Wall -Wextra -Werror -c "$SPLIT_ARGV" -o "$SORTIE/split_argv.o"
 "${CXX:-clang++}" -std=c++17 -Wall -Wextra -Werror -Icomponents/protocole/include -Icomponents/liste/include \
   -Icomponents/lampes/include -Icomponents/telink/include components/protocole/json_ligne.cpp \
-  components/protocole/json_amaran.cpp tests/hote/test_json.cpp "$SORTIE/catalogue.o" -o "$SORTIE/test_json"
+  components/protocole/json_amaran.cpp tests/hote/test_json.cpp "$SORTIE/catalogue.o" "$SORTIE/split_argv.o" \
+  -o "$SORTIE/test_json"
 "$SORTIE/test_json"
 
 # Enveloppe H1 du transport reseau (components/h1) : C++17, crypto de CommonCrypto.

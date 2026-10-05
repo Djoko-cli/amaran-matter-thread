@@ -246,6 +246,42 @@ void reply(Writer &w, uint32_t n, uint32_t ms, const Reply &r) {
     w.u32("bail_s", r.leaseS);
     w.u32("up_s", r.upS);
   }
+  if (r.key) w.str("cle", r.key, 64);
+  if (r.kid) w.str("empreinte", r.kid, 8);
+}
+
+void textLine(Writer &w, uint32_t n, uint32_t ms, uint32_t id, const char *txt) {
+  w.begin("texte", n, ms);
+  w.u32("id", id);
+  w.str("txt", txt ? txt : "", kLogTextMax);
+}
+
+void ReplyCache::clear() {
+  for (Entry &e : e_) e.used = false;
+  next_ = 0;
+}
+
+void ReplyCache::put(const Reply &r) {
+  if (!r.fin || !r.id) return;
+  // Une seule entree par id : la plus recente.
+  for (Entry &e : e_)
+    if (e.used && e.r.id == r.id) e.used = false;
+  Entry &e = e_[next_];
+  next_ = (uint8_t)((next_ + 1) % kN);
+  e.used = true;
+  e.r = r;
+  copyCmd(e.cmd, r.cmd ? r.cmd : "");
+  e.r.cmd = e.cmd;
+  e.r.msg = nullptr;
+  e.r.key = nullptr;
+  e.r.kid = nullptr;
+}
+
+const Reply *ReplyCache::find(uint32_t id) const {
+  if (!id) return nullptr;
+  for (const Entry &e : e_)
+    if (e.used && e.r.id == id) return &e.r;
+  return nullptr;
 }
 
 // ===========================================================================
@@ -273,6 +309,9 @@ void maskCmd(char *shown) {
   size_t n0, n1;
   const char *w0 = word(shown, 0, &n0), *w1 = word(shown, 1, &n1);
   if (wordIs(w0, n0, "mesh") && wordIs(w1, n1, "cles")) strcpy(shown, "mesh cles");
+  size_t n2;
+  const char *w2 = word(shown, 2, &n2);
+  if (wordIs(w0, n0, "json") && wordIs(w1, n1, "cle") && wordIs(w2, n2, "nouvelle")) strcpy(shown, "json cle nouvelle");
 }
 
 bool parseIdPrefix(char *line, uint32_t *id, char **rest) {
@@ -328,6 +367,43 @@ LineAssembler::Ev LineAssembler::feed(uint8_t c) {
 char *LineAssembler::text() {
   buf_[len_] = 0;
   return buf_;
+}
+
+void OutputLines::clear() {
+  len_ = lineLen_ = 0;
+  lost_ = 0;
+}
+
+void OutputLines::endLine() {
+  if (!lost_ && len_ + lineLen_ + 1 <= kMax) {
+    memcpy(lines_ + len_, line_, lineLen_);
+    len_ += lineLen_;
+    lines_[len_++] = 0;
+  } else {
+    lost_++;  // plein : plus aucune ligne n'est gardee
+  }
+  lineLen_ = 0;
+}
+
+void OutputLines::write(const char *buf, size_t n) {
+  for (size_t i = 0; i < n; i++) {
+    if (buf[i] == '\n') {
+      endLine();
+    } else if (buf[i] != '\r' && lineLen_ < kLogTextMax) {
+      line_[lineLen_++] = buf[i];
+    }
+  }
+}
+
+void OutputLines::flush() {
+  if (lineLen_) endLine();
+}
+
+const char *OutputLines::next(size_t *pos) const {
+  if (*pos >= len_) return nullptr;
+  const char *l = lines_ + *pos;
+  *pos += strlen(l) + 1;
+  return l;
 }
 
 // ===========================================================================
@@ -399,6 +475,11 @@ uint8_t Queue::dropLate(uint32_t now, uint32_t lateMs) {
     dropped++;
   }
   return dropped;
+}
+
+bool Queue::frontReady(uint8_t libres) const {
+  if (!n_) return false;
+  return libres >= (q_[head_].item == Item::Reply ? kPlacesLigne : kPlacesPeriodique);
 }
 
 uint8_t Queue::dropSession() {

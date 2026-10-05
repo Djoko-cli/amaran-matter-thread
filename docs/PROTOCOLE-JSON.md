@@ -1,8 +1,8 @@
 # Protocole JSON du pont amaran (v1)
 
-Le protocole machine entre le pont (ESP32-C6, `firmware/`) et l'app Amaran Compagnon (`apps/macos/`), par l'USB. Il reprend la version 1 du protocole du pont Halo (`~/Documents/Dev/esp32/benq/docs/PROTOCOLE-JSON.md`) : même tramage, même session, mêmes réponses. Seuls les messages propres au pont changent (sections 5 et 7). Le transport par Thread viendra au plan 3b-2.
+Le protocole machine entre le pont (ESP32-C6, `firmware/`) et l'app Amaran Compagnon (`apps/macos/`), par l'USB et par Thread. Il reprend la version 1 du protocole du pont Halo (`~/Documents/Dev/esp32/benq/docs/PROTOCOLE-JSON.md`) : même tramage, même session, mêmes réponses, même enveloppe H1 par Thread. Seuls les messages propres au pont changent (sections 5 et 7). Le canal par Thread est décrit à la section 10.
 
-Chaque exemple de la section 9 est formé tel quel par `tests/hote/test_json.cpp`, et chaque message que ce test forme figure dans la section 9 : le document et le firmware ne peuvent pas diverger.
+Chaque exemple des sections 9 et 10 est formé tel quel par `tests/hote/test_json.cpp`, et chaque message que ce test forme y figure : le document et le firmware ne peuvent pas diverger.
 
 ## 0. Décisions en bref
 
@@ -14,7 +14,8 @@ Chaque exemple de la section 9 est formé tel quel par `tests/hote/test_json.cpp
 | Réponses | Toute ligne qui porte un `id` reçoit une `reponse`. Les ordres de lampe sont asynchrones : `reponse` aussitôt, puis l'événement `ordre`. Les autres commandes : `reponse` `debut`, leur texte, puis `reponse` `fin`. |
 | État | `etat` (blocs `pont` et `sante` chaque seconde ; une ligne par lampe à chaque changement, et toutes les 10 s), `compteurs` (chaque seconde), `reseau` (toutes les 5 s). Les événements sont des indices ; la vérité est dans l'état périodique. |
 | Compatibilité | `v` dans chaque ligne ; les ajouts ne changent pas `v` ; l'app ignore les champs, types et valeurs qu'elle ne connaît pas. |
-| Clés | Jamais dans une ligne machine : seulement leurs empreintes (8 premiers chiffres hexa, en majuscules, du SHA-256). `reponse.cmd` d'un `mesh cles` ne cite pas les clés, et le pont ne renvoie pas d'écho en mode machine. |
+| Clés | Jamais dans une ligne machine : seulement leurs empreintes (8 premiers chiffres hexa, en majuscules, du SHA-256). `reponse.cmd` d'un `mesh cles` ne cite pas les clés, et le pont ne renvoie pas d'écho en mode machine. Seule exception : la clé UDP, rendue une fois, par l'USB, à sa création (10.2). |
+| Thread | Les mêmes lignes, dans des datagrammes UDP signés (enveloppe H1 de Halo), port 5480 ; deux sessions à la fois au plus ; une liste blanche de commandes (10.5). |
 
 ## 1. Vocabulaire et principes
 
@@ -24,7 +25,7 @@ Chaque exemple de la section 9 est formé tel quel par `tests/hote/test_json.cpp
 - **consigne** : l'état voulu pour une lampe (Maison, la console ou l'app) ; **état lu** : le dernier état que la lampe a renvoyé.
 
 Principes :
-1. **Le pont n'attend jamais l'app.** Une ligne machine qui ne tient pas dans le tampon d'émission de l'USB est perdue et comptée (`json_perdus`) ; `json_perdus` compte aussi les événements perdus parce que leur file interne était pleine (ils n'ont pas de `n`).
+1. **Le pont n'attend jamais l'app.** Une ligne machine qui ne tient pas dans le tampon d'émission de l'USB est perdue et comptée (`json_perdus`) ; `json_perdus` compte aussi les événements perdus parce que leur file interne était pleine (ils n'ont pas de `n`). Chaque session compte ses propres lignes perdues : l'USB les siennes, chaque session distante les siennes (10.4).
 2. **L'état est périodique, les événements sont des indices.** Une ligne perdue ou abîmée ne fausse rien durablement : l'instantané suivant corrige. L'app ne reconstruit jamais un état en cumulant des événements.
 3. **Rien de nouveau ne part vers les lampes** à cause du protocole : l'app passe par les mêmes ordres que Maison et la console (`tache_lampes_ordre`).
 
@@ -116,6 +117,9 @@ Sans `hello` 2 s après `json 1`, l'app renvoie (3 fois). Un firmware sans mode 
 | `json compteurs <ms>` | période des `compteurs` | 0 ou 200 à 60 000 ; 1 000 par défaut |
 | `json reseau <ms>` | période des `reseau` | 0 ou 1 000 à 60 000 ; 5 000 par défaut |
 | `json log 0\|1` | annonces du pont en messages `log` au lieu de texte | 0 par défaut |
+| `json trames 0\|1` | trafic Bluetooth Mesh en messages `trame` (7.6) ; à distance, coupé seul au bout de 60 s | 0 par défaut |
+| `json cle nouvelle <64 hexa>` | crée la clé UDP (10.2) ; USB seulement | |
+| `json cle efface` | efface la clé UDP : les sessions distantes tombent, le port 5480 se ferme | |
 
 Un argument hors bornes : `reponse` `usage`, avec les bornes dans `msg`.
 
@@ -164,17 +168,17 @@ Chaque instantané est une suite de lignes d'un même type, une par `bloc`. L'ap
 
 | Champ | Sens |
 |---|---|
-| `rev` | révision mineure du protocole (0) |
+| `rev` | révision mineure du protocole (1 : Thread, `trame`, `texte`) |
 | `fw` | version du firmware (`0.1.0-<commit>`) |
 | `date`, `heure` | compilation |
 | `idf`, `puce` | version d'ESP-IDF, `esp32c6` |
 | `boot` | 8 hexa, tirés au démarrage |
 | `reset`, `reset_n` | cause du démarrage : `mise_sous_tension`, `broche`, `logiciel`, `panique`, `chien_int`, `chien_tache`, `chien`, `baisse_tension`, `usb`, `inconnue` ; et la valeur de `esp_reset_reason()` |
 | `up_s` | secondes depuis le démarrage |
-| `session` | réglages en vigueur : `periode_ms`, `lampes_ms`, `compteurs_ms`, `reseau_ms`, `bail_s`, `log` |
+| `session` | réglages en vigueur : `transport` (`usb` ou `udp`), `periode_ms`, `lampes_ms`, `compteurs_ms`, `reseau_ms`, `bail_s`, `log`, `trames` |
 | `limites` | `ligne_max` (1 024), `cmd_max` (127) |
 
-**Bloc `identite`** : `boot` ; `mac` (MAC de la puce) ; `id` (`fabricant`, `produit`, `serie` = `AMARAN-<MAC>`, `nom`) ; `caps`, les capacités : `matter`, `thread`, `mesh`, `catalogue`, `ordres` (ordres de lampe asynchrones), `led`, `log`. L'app se règle sur `caps`, pas sur la version du firmware.
+**Bloc `identite`** : `boot` ; `mac` (MAC de la puce) ; `id` (`fabricant`, `produit`, `serie` = `AMARAN-<MAC>`, `nom`) ; `caps`, les capacités : `matter`, `thread`, `mesh`, `catalogue`, `ordres` (ordres de lampe asynchrones), `led`, `log`, `trames`, `udp` (canal par Thread), `cle` (`json cle`), `texte` (texte des commandes à distance). L'app se règle sur `caps`, pas sur la version du firmware.
 
 ### 5.2 `config`
 
@@ -207,7 +211,7 @@ Réglages lents : émis avec `hello`, et de nouveau après toute commande `mesh`
 
 Une lampe lue en marche à l'intensité 0 est noire : Maison la montre éteinte. Sa place dans Maison se déduit de `maison` : un `endpoint` ; sinon `masquee` ; sinon jamais vue ; sinon (vue, non masquée, sans endpoint) hors de Maison après un échec.
 
-**Bloc `sante`** (toutes les `periode_ms`) : `boot`, `up_s` ; `commande` : l'`id` de la commande de la console en cours, ou `null` (6.2) ; `led` (`motif` du voyant, `test`, `depuis_ms` : âge de la phase du motif) ; `matter` (`en_service`, `thread` attaché, `identifie`, `ble` : annonce de mise en service en cours) ; `sys` (`heap`, `heap_min`, `heap_bloc`, `piles` : octets jamais utilisés de chaque tâche, `null` si elle n'existe pas, `json_perdus` : lignes perdues, et événements perdus file pleine, `json_trop_longs`, `rejets` : lignes refusées pour longueur ou cadence).
+**Bloc `sante`** (toutes les `periode_ms`) : `boot`, `up_s` ; `commande` : l'`id` de la commande de la console en cours, ou `null` (6.2) ; `led` (`motif` du voyant, `test`, `depuis_ms` : âge de la phase du motif) ; `matter` (`en_service`, `thread` attaché, `identifie`, `ble` : annonce de mise en service en cours) ; `sys` (`heap`, `heap_min`, `heap_bloc`, `piles` : octets jamais utilisés de chaque tâche, `null` si elle n'existe pas, `json_perdus` : lignes perdues de cette session, et événements perdus file pleine, `json_trop_longs`, `rejets` : lignes refusées pour longueur ou cadence).
 
 ### 5.4 `compteurs`
 
@@ -215,13 +219,15 @@ Une lampe lue en marche à l'intensité 0 est noire : Maison la montre éteinte.
 
 ### 5.5 `reseau`
 
-**Bloc `matter`** (toutes les `reseau_ms`) : `demarre`, `fabriques`, `ble`, `identifie` ; `abonnements` (`demandes`, `plafonnes`, `etablis`, `termines`, `plafond_s`) ; `code_manuel` et `qr` (charge `MT:…`), pour ajouter le pont à Maison, ou `null`. Les abonnements actifs valent à peu près `etablis − termines`.
+**Bloc `matter`** (toutes les `reseau_ms`) : `demarre`, `fabriques`, `ble`, `identifie` ; `abonnements` (`demandes`, `plafonnes`, `etablis`, `termines`, `plafond_s`) ; `code_manuel` et `qr` (charge `MT:…`), pour ajouter le pont à Maison, ou `null` ; toujours `null` vers une session distante (10.1). Les abonnements actifs valent à peu près `etablis − termines`.
 
-**Bloc `thread`** : `role` (`disabled`, `detached`, `child`, `router`, `leader`), tel que l'annonce le dernier événement d'OpenThread ; `attache`. Le pont ne prend jamais le verrou d'OpenThread depuis ses tâches : rien de plus en 3b-1.
+**Bloc `thread`** : `role` (`disabled`, `detached`, `child`, `router`, `leader`), tel que l'annonce le dernier événement d'OpenThread ; `attache`. Le pont ne prend jamais le verrou d'OpenThread depuis ses tâches : ce qu'il lui demande passe par la file de tâches d'OpenThread.
+
+**Bloc `ip`** : `srp`, le nom que le pont publie par SRP (16 hexa ; l'app le résout en `<srp>.local`), ou `null` ; `adresses`, ses adresses (`type` : `omr`, `ml_eid`, `autre` ; `adresse`) ; `udp` : `port` (5480), `cle` (une clé UDP existe), `empreinte` (8 hexa, ou `null`), `ouvert` (le port écoute), `sessions` (sessions H1 établies), `recus`, `emis`, `rejets` (datagrammes refusés en silence : 10.3), `perdus`.
 
 ### 5.6 `hb` et `fin`
 
-`hb` : battement quand les `etat` sont coupés ou lents (3.5) : `boot`, `up_s`, `json_perdus` (comme dans le bloc `sante` : lignes et événements perdus), et `commande` comme le bloc `sante`.
+`hb` : battement quand les `etat` sont coupés ou lents (3.5) : `boot`, `up_s`, `json_perdus` (comme dans le bloc `sante` : lignes de cette session et événements perdus), et `commande` comme le bloc `sante`.
 
 `fin` : dernier message d'une session machine. `cause` : `commande` (`json 0`) ou `bail`.
 
@@ -263,6 +269,7 @@ Ordres de lampe : un numéro hors de la liste, ou un argument hors bornes, reço
 | `suite` | `ordre` : un événement `ordre` suivra |
 | `lampe` | numéro de la lampe d'un ordre |
 | `bail_s`, `up_s` | `json 1`, `json ping` |
+| `cle`, `empreinte` | `json cle nouvelle` : la clé UDP (64 hexa), une seule fois, et son empreinte |
 
 | Code | ok | Sens |
 |---|---|---|
@@ -274,6 +281,8 @@ Ordres de lampe : un numéro hors de la liste, ou un argument hors bornes, reço
 | `inconnue` | non | commande inconnue |
 | `trop_long` | non | ligne de plus de 127 octets : rien n'est exécuté |
 | `cadence` | non | plus de 20 lignes par seconde en mode machine : rien n'est exécuté |
+| `interdite` | non | à distance, commande hors de la liste blanche (10.5) : rien n'est exécuté |
+| `deja_traite` | non | à distance, `id` plus ancien que les 8 dernières réponses gardées (10.4) |
 
 ### 6.4 Commandes utilisées par l'app
 
@@ -316,13 +325,17 @@ L'app confirme avant d'envoyer `redemarre`, `decommission`, `mesh oublie`, `mesh
 
 Seulement avec `json log 1` : les annonces de la tâche des lampes (`[lampes] …`, `!! …`, `[mesh] …`) et du bouton BOOT (`[bouton] …`) partent alors en `log` **au lieu** du texte. Champs : `src` (`lampes`, `mesh`, `bouton`), `niv` (`notice` ou `alerte`), `txt` (127 octets au plus). Au plus 20 par seconde ; au-delà, le suivant porte `sautes`. Les journaux d'ESP-IDF et le texte des commandes ne passent jamais par `log`.
 
+### 7.6 `trame` : trafic Bluetooth Mesh
+
+Seulement avec `json trames 1` : chaque message de lampe que le pont émet ou reçoit, décodé. `sens` (`tx`, `rx`) ; `quoi` : `ordre` (marche ou intensité vers une lampe), `demande` (demande d'état au groupe des lampes), `etat` (état renvoyé par une lampe) ; `lampe` (`null` pour le groupe) ; `marche`, `intensite` (`null` si absents) ; `essai` (ordre, 1 à 3) ; `sautes` : trames non émises depuis la précédente (au plus 50 par seconde par l'USB, 10 à distance). À distance, `json trames 1` se coupe seul au bout de 60 s.
+
 ## 8. Versionnage et débit
 
 - `v` change seulement pour une rupture. Tout le reste est additif et garde `v` ; `rev` augmente à chaque ajout.
 - L'app ignore les champs, types et blocs inconnus, et range une valeur d'énumération inconnue sous « inconnu ».
-- Au repos, deux lampes, réglages par défaut : environ 1,8 Ko/s (`etat` `pont` et `sante`, `compteurs` chaque seconde ; une ligne par lampe toutes les 10 s ; `reseau` toutes les 5 s). À 16 lampes : environ 2,3 Ko/s. Un instantané complet à 16 lampes fait 42 lignes, environ 11 Ko, émises en un peu plus de 0,4 s.
+- Au repos, deux lampes, réglages par défaut : environ 1,8 Ko/s (`etat` `pont` et `sante`, `compteurs` chaque seconde ; une ligne par lampe toutes les 10 s ; `reseau` toutes les 5 s). À 16 lampes : environ 2,3 Ko/s. Un instantané complet à 16 lampes fait 43 lignes, environ 11 Ko, émises en un peu plus de 0,4 s. À distance, le débit est plafonné (10.3).
 
-## 9. Exemples
+## 9. Exemples (USB)
 
 `<RS>` note l'octet `0x1E` ; le LF final est omis. Les MAC, le numéro de série et les empreintes sont inventés.
 
@@ -338,8 +351,8 @@ id=1 json 1
 Pont → app : le pont a deux lampes, toutes deux dans Maison ; « Lumière fenêtre » montre un nom accentué.
 
 ```
-<RS>{"v":1,"t":"hello","n":0,"ms":83512,"bloc":"base","rev":0,"fw":"0.1.0-d569f01","date":"Oct  5 2026","heure":"14:02:11","idf":"v5.5.4","puce":"esp32c6","boot":"3FA2C901","reset":"logiciel","reset_n":3,"up_s":83,"session":{"periode_ms":1000,"lampes_ms":10000,"compteurs_ms":1000,"reseau_ms":5000,"bail_s":30,"log":false},"limites":{"ligne_max":1024,"cmd_max":127}}
-<RS>{"v":1,"t":"hello","n":1,"ms":83522,"bloc":"identite","boot":"3FA2C901","mac":"F0F5BD0A0B0C","id":{"fabricant":"TEST_VENDOR","produit":"TEST_PRODUCT","serie":"AMARAN-F0F5BD0A0B0C","nom":"Pont amaran"},"caps":["matter","thread","mesh","catalogue","ordres","led","log"]}
+<RS>{"v":1,"t":"hello","n":0,"ms":83512,"bloc":"base","rev":1,"fw":"0.1.0-d569f01","date":"Oct  5 2026","heure":"14:02:11","idf":"v5.5.4","puce":"esp32c6","boot":"3FA2C901","reset":"logiciel","reset_n":3,"up_s":83,"session":{"transport":"usb","periode_ms":1000,"lampes_ms":10000,"compteurs_ms":1000,"reseau_ms":5000,"bail_s":30,"log":false,"trames":false},"limites":{"ligne_max":1024,"cmd_max":127}}
+<RS>{"v":1,"t":"hello","n":1,"ms":83522,"bloc":"identite","boot":"3FA2C901","mac":"F0F5BD0A0B0C","id":{"fabricant":"TEST_VENDOR","produit":"TEST_PRODUCT","serie":"AMARAN-F0F5BD0A0B0C","nom":"Pont amaran"},"caps":["matter","thread","mesh","catalogue","ordres","led","log","trames","udp","cle","texte"]}
 <RS>{"v":1,"t":"config","n":2,"ms":83532,"bloc":"catalogue","modeles":[{"code":40065,"nom":"amaran COB 60d","capacites":["intensite"],"type":"variable","cct_k":null}],"repli":{"nom":"modele non catalogue","capacites":["intensite"],"type":"variable","cct_k":null}}
 <RS>{"v":1,"t":"config","n":3,"ms":83542,"bloc":"mesh","cles":true,"empreintes":{"reseau":"1A2B3C4D","application":"5E6F7A8B"},"adresse":"7F38","iv_nvs":0,"balayage":{"fenetre_ms":20,"intervalle_ms":40},"lampes":2,"capacite":16,"releve_ms":2000,"groupe":"C000"}
 <RS>{"v":1,"t":"config","n":4,"ms":83552,"bloc":"lampe","lampe":1,"adresse":"0002","mac":"020000000001","nom":"Lampe bureau","code":40065,"modele":"amaran COB 60d","catalogue":true,"capacites":["intensite"],"type":"variable"}
@@ -479,4 +492,90 @@ Après `id=34 json log 1`, `id=35 json periode 0` et `id=36 json compteurs 0`, l
 <RS>{"v":1,"t":"fin","n":415,"ms":751400,"cause":"bail"}
 json : mode machine coupe (hote muet depuis 30 s)
 amaran>
+```
+
+## 10. À distance (Thread)
+
+### 10.1 Le canal
+
+Les mêmes lignes qu'à l'USB, dans des datagrammes UDP sur le réseau Thread, port 5480. L'app apprend par l'USB le nom SRP du pont (bloc `reseau` `ip`) et le résout en `<srp>.local` (mDNS, IPv6) : le nom suit les changements de préfixe. L'enveloppe est celle de Halo, octet pour octet :
+- poignée de main : l'app envoie `H1 SALUT <kid> <na> <mac>` ; le pont répond `H1 DEFI <sid> <nc> <mac>` (plus court que le SALUT : aucune amplification). `kid` : empreinte de la clé UDP ; `na`, `nc` : aléas de 16 octets ; les `mac` : HMAC-SHA256 de la clé UDP. La clé de session dérive de la clé UDP, de `na`, `nc` et `sid` ;
+- messages : `H1 <sid> <ctr> <mac> <ligne>`, une ligne par datagramme. `mac` : 16 octets du HMAC-SHA256 de la clé de session sur le sens (`A` : app → pont, `C` : pont → app), `sid`, `ctr` et la ligne ; `ctr` compte de 1 par sens ; une fenêtre de 32 refuse les rejeux ;
+- intégrité seulement, pas de confidentialité : rien de secret ne passe par Thread. Vers une session distante, `code_manuel` et `qr` valent `null` dans le bloc `reseau` `matter`, et la commande `matter` n'imprime pas les codes d'appairage.
+
+### 10.2 La clé UDP
+
+32 octets, créés par l'USB seulement : l'app tire un aléa de 32 octets et envoie `json cle nouvelle <64 hexa>` ; le pont dérive la clé de cet aléa et du sien, l'écrit en NVS, ouvre le port 5480 et la rend **une seule fois**, dans la `reponse` (`cle`, `empreinte`). `reponse.cmd` ne cite jamais l'aléa. L'app la range dans le trousseau du Mac. `json cle efface`, `decommission` ou le bouton BOOT tenu 8 s l'effacent ; une nouvelle clé fait tomber les sessions en cours. Sans clé, le port 5480 est fermé. Si l'accès par Thread n'a pas démarré (Matter non démarré), `json cle nouvelle` répond `erreur` et rien ne change ; `json cle efface`, `decommission` et BOOT effacent quand même la clé de la NVS. Si la NVS refuse l'effacement, la clé quitte la mémoire (sessions tombées, port fermé) mais reviendrait au redémarrage : `json cle efface` répond `erreur`, et son `msg` le dit.
+
+### 10.3 Limites du pont
+
+Deux sessions établies au plus, et une en cours de poignée de main (oubliée au bout de 30 s) ; une session est oubliée après 10 min sans rien. Deux DEFI par seconde au plus ; un SALUT dont l'aléa a déjà servi est ignoré. Débit moyen vers l'app : 3 000 octets par seconde au plus, en priorité basse (devant un manque de tampons, OpenThread évince nos messages avant ceux de Matter). Un datagramme reçu de plus de 256 octets n'est pas lu. Un datagramme refusé est ignoré en silence et compté (`reseau` `ip` `udp.rejets`).
+
+Le débit se règle sur la file d'émission du pont : 12 datagrammes, partagés par les sessions, dont une place toujours gardée pour un DEFI.
+- Une ligne de la file d'une session (instantané, lignes périodiques, réponse différée de `json 1`, `json etat`, `json hello`) attend sa place : 7 places libres pour une ligne périodique, 2 pour une réponse ; il en reste ainsi 6 pour une rafale de réponses et d'événements (deux sessions, deux ordres au même instant). Les deux sessions avancent à tour de rôle. Une ligne périodique encore en file 10 s après sa demande est perdue et comptée ; une réponse ne l'est jamais.
+- Un événement rare (`ordre`, `alerte`, `lampe`, `led`) part s'il reste 2 places ; une `trame` ou un `log`, fréquents, s'il en reste 7, pour ne pas prendre la place d'une réponse. Sinon il est perdu pour cette session : `n` saute, `json_perdus` le compte.
+- Une réponse immédiate (famille `json`, ordre de lampe, refus) part s'il reste 2 places, sinon elle est perdue et comptée ; une `fin` reste dans le cache (10.4) : l'app la retrouve en renvoyant le même `id`.
+- Une commande à texte : sa `reponse` `debut`, chacune de ses lignes `texte` et sa `reponse` `fin` attendent leur place, 1 s au plus chacune, puis sont perdues et comptées.
+
+Ainsi, l'instantané de `json 1` arrive entier : 14 lignes et environ 4,6 Ko, en-têtes H1 compris, en 0,8 s avec 2 lampes ; 42 lignes et environ 13 Ko en 3,6 s avec 16 lampes (simulation, tampons d'OpenThread libres). Deux `json 1` simultanés à 16 lampes (environ 26 Ko à 3 Ko/s) arrivent aussi entiers, en un peu plus de 8 s.
+
+### 10.4 Une session distante
+
+- Toute ligne porte un `id` ; une ligne sans `id` est ignorée.
+- `n` est propre à chaque session (l'USB, et chaque session distante) : un trou dans `n` dit une perte sur ce canal. `json_perdus` aussi (blocs `sante` et `hb`) : chaque session y lit ses propres pertes, plus les événements perdus file pleine.
+- Le pont garde les 8 dernières réponses `fin` de chaque session : une ligne dont l'`id` est déjà connu reçoit la même réponse sans être exécutée de nouveau (l'app renvoie une commande restée sans réponse, avec le même `id`) ; un `id` encore en cours (sa réponse `fin` n'est pas encore partie : `json 1`, `json etat`, une commande à texte) est ignoré, sa réponse viendra ; un `id` plus ancien que ces 8 reçoit `deja_traite`.
+- Les commandes qui impriment du texte (les lectures de 10.5, `mesh lampe <n> masquer|afficher`) : `reponse` `debut`, puis une ligne `texte` par ligne que la console imprimerait (`id`, `txt` : 127 octets au plus), puis `reponse` `fin`. Le texte part une fois la commande finie : au-delà de 4 096 octets, la suite n'est pas gardée, et une dernière ligne `texte` dit `(sortie tronquee)`.
+- Les événements (`ordre`, `alerte`, `lampe`, `led`, `log`, `trame`) partent vers chaque session qui les demande ; un `ordre` ne porte que les `id` de la session qui l'a envoyé : une session qui a pris la place d'une autre ne reçoit ni ses `id`, ni ses réponses, ni ses lignes.
+
+### 10.5 Liste blanche et profil
+
+Permises à distance, jugées sur la ligne découpée comme la console la découpe (guillemets et échappements ne la contournent pas) ; toute autre commande reçoit `interdite` :
+- `json 1` (bail de 10 à 120 s ; jamais 0), `json 0`, `json etat`, `json hello`, `json ping`, `json trames 0|1`, `json log 0|1` ; `json periode` 0 ou 2 000 à 60 000 ms, `json lampes` 0 ou 10 000 à 60 000, `json compteurs` 0 ou 5 000 à 60 000, `json reseau` 0 ou 10 000 à 60 000 ;
+- `lampe <n>`, `lampe <n> on|off|releve`, `lampe <n> niveau <v>` ;
+- `mesh lampe <n> masquer|afficher` ;
+- `led test|stop` ;
+- les lectures `lampes`, `mesh`, `matter`, `taches`, `cause`.
+
+Interdites, entre autres : `mesh cles`, `mesh lampes`, `mesh lampe <n> <adresse> …`, `mesh oublie`, `mesh adresse`, `mesh iv`, `mesh releve`, `json cle …`, `decommission`, `redemarre`.
+
+Profil d'une session distante, après `json 1` : `etat` `pont` et `sante` toutes les 2 s, toutes les lignes `etat` `lampe` toutes les 30 s (et une lampe à chaque changement), `reseau` toutes les 30 s, ni `compteurs` ni `trame`.
+
+### 10.6 Exemples
+
+`hello` d'une session distante, puis le bloc `ip` (par l'USB comme à distance), avec et sans clé UDP :
+
+```
+<RS>{"v":1,"t":"hello","n":0,"ms":900120,"bloc":"base","rev":1,"fw":"0.1.0-d569f01","date":"Oct  5 2026","heure":"14:02:11","idf":"v5.5.4","puce":"esp32c6","boot":"3FA2C901","reset":"logiciel","reset_n":3,"up_s":900,"session":{"transport":"udp","periode_ms":2000,"lampes_ms":30000,"compteurs_ms":0,"reseau_ms":30000,"bail_s":60,"log":false,"trames":false},"limites":{"ligne_max":1024,"cmd_max":127}}
+<RS>{"v":1,"t":"reseau","n":14,"ms":83642,"bloc":"ip","srp":"1A2B3C4D5E6F7081","adresses":[{"type":"omr","adresse":"fd00:aaaa:bbbb:0:1111:2222:3333:4444"},{"type":"ml_eid","adresse":"fd00:cccc:dddd:1:5555:6666:7777:8888"}],"udp":{"port":5480,"cle":true,"empreinte":"CA2A4FE7","ouvert":true,"sessions":1,"recus":412,"emis":980,"rejets":3,"perdus":0}}
+<RS>{"v":1,"t":"reseau","n":14,"ms":83642,"bloc":"ip","srp":"1A2B3C4D5E6F7081","adresses":[],"udp":{"port":5480,"cle":false,"empreinte":null,"ouvert":false,"sessions":0,"recus":0,"emis":0,"rejets":0,"perdus":0}}
+```
+
+Création de la clé UDP, par l'USB (`id=5 json cle nouvelle <64 hexa>`) :
+
+```
+<RS>{"v":1,"t":"reponse","n":60,"ms":860000,"id":5,"etape":"fin","cmd":"json cle nouvelle","ok":true,"code":"ok","duree_ms":12,"cle":"404142434445464748494A4B4C4D4E4F505152535455565758595A5B5C5D5E5F","empreinte":"CA2A4FE7"}
+```
+
+Refus à distance, et un `id` oublié :
+
+```
+<RS>{"v":1,"t":"reponse","n":101,"ms":912000,"id":31,"etape":"fin","cmd":"redemarre","ok":false,"code":"interdite","msg":"interdite a distance : USB seulement","duree_ms":0}
+<RS>{"v":1,"t":"reponse","n":102,"ms":912010,"id":29,"etape":"fin","cmd":"lampe 1 on","ok":false,"code":"deja_traite","msg":"id deja traite : reponse oubliee","duree_ms":0}
+```
+
+Une lecture à distance (`id=32 lampe 1`) :
+
+```
+<RS>{"v":1,"t":"reponse","n":103,"ms":913000,"id":32,"etape":"debut","cmd":"lampe 1","ok":true,"code":"en_cours"}
+<RS>{"v":1,"t":"texte","n":104,"ms":913004,"id":32,"txt":"lampe 1 : Lampe bureau"}
+<RS>{"v":1,"t":"texte","n":105,"ms":913005,"id":32,"txt":"  Maison    : EP2"}
+<RS>{"v":1,"t":"reponse","n":106,"ms":913006,"id":32,"etape":"fin","cmd":"lampe 1","ok":true,"code":"ok","duree_ms":6}
+```
+
+Trames, avec `json trames 1` : un ordre, une demande d'état au groupe, un état reçu (deux trames non émises avant lui) :
+
+```
+<RS>{"v":1,"t":"trame","n":210,"ms":95012,"sens":"tx","quoi":"ordre","lampe":1,"marche":true,"intensite":500,"essai":1,"sautes":0}
+<RS>{"v":1,"t":"trame","n":211,"ms":96000,"sens":"tx","quoi":"demande","lampe":null,"marche":null,"intensite":null,"sautes":0}
+<RS>{"v":1,"t":"trame","n":212,"ms":96140,"sens":"rx","quoi":"etat","lampe":1,"marche":true,"intensite":500,"sautes":2}
 ```

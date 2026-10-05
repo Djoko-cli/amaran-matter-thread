@@ -24,7 +24,7 @@
 namespace jsonp {
 
 constexpr uint8_t kVersion = 1;         // v : version majeure
-constexpr uint8_t kRev = 0;             // hello.rev : revision mineure (ajouts)
+constexpr uint8_t kRev = 1;             // hello.rev : revision mineure (ajouts)
 constexpr size_t kLineMax = 1024;       // RS et LF compris
 constexpr size_t kBudget = 896;         // pire cas vise par message (marge de 128 pour les ajouts)
 constexpr size_t kCmdMax = 127;         // ligne de l'hote, prefixe id= compris
@@ -93,6 +93,9 @@ void heartbeat(Writer &w, uint32_t n, uint32_t ms, uint32_t boot, uint32_t upS, 
 void sessionEnd(Writer &w, uint32_t n, uint32_t ms, const char *cause);  // t "fin" : commande, bail
 void led(Writer &w, uint32_t n, uint32_t ms, const char *motif, const char *before, bool test, uint32_t depuisMs);
 void logLine(Writer &w, uint32_t n, uint32_t ms, const char *src, const char *niv, const char *txt, uint32_t skipped);
+// Ligne de texte d'une commande executee a distance (10.4) : le texte que la console
+// imprimerait, ligne par ligne, tronque a kLogTextMax.
+void textLine(Writer &w, uint32_t n, uint32_t ms, uint32_t id, const char *txt);
 
 // Message reponse (section 6.3).
 struct Reply {
@@ -108,8 +111,28 @@ struct Reply {
   uint8_t lampe = 0;            // ordre d'une lampe (suite ordre) : son numero, 1..16 ; 0 : absent
   bool hasLease = false;        // bail_s, up_s (json 1, json ping)
   uint32_t leaseS = 0, upS = 0;
+  const char *key = nullptr;    // json cle nouvelle : la cle UDP, 64 hexa, une seule fois
+  const char *kid = nullptr;    // et son empreinte, 8 hexa
 };
 void reply(Writer &w, uint32_t n, uint32_t ms, const Reply &r);
+
+// Dernieres reponses fin d'une session distante, par id (10.4) : un id repete
+// recoit la meme reponse sans etre execute de nouveau. Ni msg, ni cle gardes.
+class ReplyCache {
+ public:
+  static constexpr uint8_t kN = 8;
+  void clear();
+  void put(const Reply &r);              // etape fin avec id ; remplace la plus ancienne
+  const Reply *find(uint32_t id) const;  // r.cmd pointe dans le cache
+ private:
+  struct Entry {
+    bool used = false;
+    Reply r;
+    char cmd[kCmdTextMax + 1] = {};
+  };
+  Entry e_[kN];
+  uint8_t next_ = 0;
+};
 
 // ---------------------------------------------------------------------------
 //  Lignes de l'hote
@@ -122,7 +145,7 @@ bool parseIdPrefix(char *line, uint32_t *id, char **rest);
 // Copie la commande pour reponse.cmd : kCmdTextMax octets au plus.
 void copyCmd(char out[kCmdTextMax + 1], const char *cmd);
 // reponse.cmd ne renvoie jamais une cle : 'mesh cles <reseau> <application>'
-// devient 'mesh cles'.
+// devient 'mesh cles', 'json cle nouvelle <alea>' devient 'json cle nouvelle'.
 void maskCmd(char *shown);
 
 // Assemblage des octets recus en lignes (tache de la console, mode machine).
@@ -146,6 +169,30 @@ class LineAssembler {
   char buf_[kCmdMax + 1] = {};
   uint8_t len_ = 0;
   bool tooLong_ = false;
+};
+
+// Sortie d'une commande a texte venue de Thread (10.4), gardee ligne par ligne
+// pendant qu'elle tourne, pour partir ensuite en messages texte : write() est le
+// crochet de sa sortie standard, sans verrou ni attente. CR ignore ; une ligne
+// coupee a kLogTextMax octets ; au-dela de kMax octets gardes (chaque ligne avec
+// son 0 final), plus aucune ligne ne l'est, et lost() les compte.
+class OutputLines {
+ public:
+  static constexpr size_t kMax = 4096;
+  void clear();
+  void write(const char *buf, size_t n);
+  void flush();  // fin de la commande : la ligne commencee, s'il y en a une
+  // Lignes gardees, dans l'ordre : *pos part de 0 ; nullptr apres la derniere.
+  const char *next(size_t *pos) const;
+  uint32_t lost() const { return lost_; }
+
+ private:
+  void endLine();
+  char lines_[kMax] = {};
+  size_t len_ = 0;
+  char line_[kLogTextMax] = {};
+  size_t lineLen_ = 0;
+  uint32_t lost_ = 0;
 };
 
 // ---------------------------------------------------------------------------
@@ -190,6 +237,17 @@ class Cadence {
 
 constexpr uint32_t kLateMs = 500;  // ligne periodique perdue apres ce retard
 
+// A distance (10.3), le debit se regle sur la file d'emission de net_udp : 12
+// datagrammes, dont une place toujours gardee pour un DEFI. Reglage de Halo
+// (json_mode.cpp : room, frontReady, eventRoom), une place de plus pour le DEFI :
+// - une reponse, un evenement rare (ordre, alerte, lampe, led), une ligne texte demandent
+//   2 places libres (net_udp n'en prend aucune avec moins) ;
+// - une ligne periodique, une trame ou un log (frequents) en demandent 7 : apres eux, il
+//   en reste 6 pour une rafale de reponses et d'evenements rares (deux sessions, deux
+//   ordres au meme instant : deux reponses et quatre evenements).
+constexpr uint8_t kPlacesLigne = 2;
+constexpr uint8_t kPlacesPeriodique = 7;
+
 // Une ligne a former a son tour. arg : la lampe (0..15) pour ConfigLampe et
 // EtatLampe, la place de la reponse differee pour Reply.
 enum class Item : uint8_t {
@@ -219,6 +277,10 @@ class Queue {
   // nombre (n consomme, json_perdus). Une reponse n'est jamais perdue pour
   // retard : elle arrete le balayage, les lignes derriere elle attendent.
   uint8_t dropLate(uint32_t now, uint32_t lateMs = kLateMs);
+  // A distance : la tete peut partir avec `libres` places libres dans la file
+  // d'emission de net_udp (kPlacesLigne pour une reponse, kPlacesPeriodique pour
+  // le reste) ; sinon elle attend le tic suivant. false aussi pour une file vide.
+  bool frontReady(uint8_t libres) const;
   // Retire les elements de session ; ceux qui restent gardent leur ordre.
   uint8_t dropSession();
   void clear() { head_ = n_ = 0; }

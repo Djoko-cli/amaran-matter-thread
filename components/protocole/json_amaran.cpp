@@ -1,6 +1,9 @@
 // Messages du pont amaran (voir json_amaran.h).
 #include "json_amaran.h"
 
+#include <stdio.h>
+#include <string.h>
+
 #include <initializer_list>
 
 #include "catalogue.h"
@@ -76,12 +79,14 @@ void helloBase(Writer &w, uint32_t n, uint32_t ms, const HelloBase &h) {
   w.u32("reset_n", h.resetN);
   w.u32("up_s", h.upS);
   w.obj("session");
+  w.str("transport", h.session.transport);
   w.u32("periode_ms", h.session.periodeMs);
   w.u32("lampes_ms", h.session.lampesMs);
   w.u32("compteurs_ms", h.session.compteursMs);
   w.u32("reseau_ms", h.session.reseauMs);
   w.u32("bail_s", h.session.bailS);
   w.boolean("log", h.session.log);
+  w.boolean("trames", h.session.trames);
   w.end();
   w.obj("limites");
   w.u32("ligne_max", (uint32_t)kLineMax);
@@ -101,7 +106,8 @@ void helloId(Writer &w, uint32_t n, uint32_t ms, const HelloId &h) {
   w.str("nom", h.nom, 32);
   w.end();
   w.arr("caps");
-  for (const char *c : {"matter", "thread", "mesh", "catalogue", "ordres", "led", "log"}) w.str(nullptr, c);
+  for (const char *c : {"matter", "thread", "mesh", "catalogue", "ordres", "led", "log", "trames", "udp", "cle", "texte"})
+    w.str(nullptr, c);
   w.end();
 }
 
@@ -307,6 +313,154 @@ void reseauThread(Writer &w, uint32_t n, uint32_t ms, const char *role, bool att
   w.str("bloc", "thread");
   w.str("role", role, 16);
   w.boolean("attache", attache);
+}
+
+void ip6Texte(const uint8_t a[16], char out[40]) {
+  uint16_t g[8];
+  for (int i = 0; i < 8; i++) g[i] = (uint16_t)(a[2 * i] << 8 | a[2 * i + 1]);
+  // Plus longue suite d'au moins deux groupes nuls (la premiere a egalite).
+  int debut = -1, lon = 0;
+  for (int i = 0; i < 8;) {
+    if (g[i]) {
+      i++;
+      continue;
+    }
+    int j = i;
+    while (j < 8 && !g[j]) j++;
+    if (j - i > lon && j - i >= 2) {
+      debut = i;
+      lon = j - i;
+    }
+    i = j;
+  }
+  char *p = out;
+  for (int i = 0; i < 8; i++) {
+    if (i == debut) {
+      *p++ = ':';
+      if (i == 0) *p++ = ':';
+      i += lon - 1;
+      continue;
+    }
+    p += snprintf(p, 6, "%x", g[i]);
+    if (i < 7) *p++ = ':';
+  }
+  *p = 0;
+}
+
+void reseauIp(Writer &w, uint32_t n, uint32_t ms, const ReseauIp &r) {
+  w.begin("reseau", n, ms);
+  w.str("bloc", "ip");
+  if (r.srp) w.str("srp", r.srp, 63);
+  else w.null("srp");
+  w.arr("adresses");
+  for (uint8_t i = 0; i < r.n && i < 4; i++) {
+    char t[40];
+    ip6Texte(r.adresses[i].a, t);
+    w.obj(nullptr);
+    w.str("type", r.adresses[i].type);
+    w.str("adresse", t);
+    w.end();
+  }
+  w.end();
+  w.obj("udp");
+  w.u32("port", 5480);
+  w.boolean("cle", r.cle);
+  if (r.empreinte) w.str("empreinte", r.empreinte, 8);
+  else w.null("empreinte");
+  w.boolean("ouvert", r.ouvert);
+  w.u32("sessions", r.sessions);
+  w.u32("recus", r.recus);
+  w.u32("emis", r.emis);
+  w.u32("rejets", r.rejets);
+  w.u32("perdus", r.perdus);
+  w.end();
+}
+
+Session sessionDistante() {
+  Session s;
+  s.transport = "udp";
+  s.periodeMs = 2000;
+  s.lampesMs = 30000;
+  s.compteursMs = 0;
+  s.reseauMs = 30000;
+  return s;
+}
+
+// Entier decimal (chiffres seulement, au plus 9) : false sinon.
+static bool nombre(const char *s, uint32_t *v) {
+  uint32_t x = 0;
+  int n = 0;
+  for (; s[n]; n++) {
+    if (s[n] < '0' || s[n] > '9' || n >= 9) return false;
+    x = x * 10 + (uint32_t)(s[n] - '0');
+  }
+  if (!n) return false;
+  *v = x;
+  return true;
+}
+
+const char *refusDistant(int argc, const char *const *argv) {
+  static const char kInterdite[] = "interdite a distance : USB seulement";
+  auto est = [&](int i, const char *k) { return i < argc && !strcmp(argv[i], k); };
+  uint32_t v = 0;
+  if (argc < 1) return kInterdite;
+  if (est(0, "json")) {
+    if (argc == 2 && (est(1, "0") || est(1, "etat") || est(1, "hello") || est(1, "ping"))) return nullptr;
+    if (est(1, "1")) {
+      // Jamais de bail 0 a distance : le pont emettrait sur Thread pour un
+      // hote parti, jusqu'a l'oubli de la session.
+      if (argc == 2) return nullptr;
+      if (argc == 4 && est(2, "bail") && nombre(argv[3], &v) && v >= 10 && v <= 120) return nullptr;
+      return "json 1 : bail de 10 a 120 s a distance";
+    }
+    if (argc == 3 && (est(1, "trames") || est(1, "log")) && (est(2, "0") || est(2, "1"))) return nullptr;
+    static const struct {
+      const char *k;
+      uint32_t min;
+      const char *msg;
+    } kBornes[] = {
+        {"periode", 2000, "json periode : 0 ou 2000..60000 ms a distance"},
+        {"lampes", 10000, "json lampes : 0 ou 10000..60000 ms a distance"},
+        {"compteurs", 5000, "json compteurs : 0 ou 5000..60000 ms a distance"},
+        {"reseau", 10000, "json reseau : 0 ou 10000..60000 ms a distance"},
+    };
+    for (const auto &b : kBornes) {
+      if (!est(1, b.k)) continue;
+      if (argc == 3 && nombre(argv[2], &v) && (v == 0 || (v >= b.min && v <= 60000))) return nullptr;
+      return b.msg;
+    }
+    return kInterdite;  // 'json' seul, 'json cle ...'
+  }
+  if (est(0, "lampe")) {
+    if (argc >= 2 && !nombre(argv[1], &v)) return kInterdite;
+    if (argc == 2) return nullptr;  // detail
+    if (argc == 3 && (est(2, "on") || est(2, "off") || est(2, "releve"))) return nullptr;
+    if (argc == 4 && est(2, "niveau") && nombre(argv[3], &v)) return nullptr;
+    return kInterdite;
+  }
+  if (est(0, "mesh")) {
+    if (argc == 1) return nullptr;  // lecture
+    if (argc == 4 && est(1, "lampe") && nombre(argv[2], &v) && (est(3, "masquer") || est(3, "afficher")))
+      return nullptr;
+    return kInterdite;
+  }
+  if (argc == 2 && est(0, "led") && (est(1, "test") || est(1, "stop"))) return nullptr;
+  if (argc == 1 && (est(0, "lampes") || est(0, "matter") || est(0, "taches") || est(0, "cause"))) return nullptr;
+  return kInterdite;
+}
+
+void trame(Writer &w, uint32_t n, uint32_t ms, const Trame &t) {
+  w.begin("trame", n, ms);
+  w.str("sens", t.sens);
+  w.str("quoi", t.quoi);
+  if (t.lampe >= 0) w.u32("lampe", (uint32_t)t.lampe + 1);
+  else w.null("lampe");
+  if (t.marche >= 0) w.boolean("marche", t.marche != 0);
+  else w.null("marche");
+  if (t.intensite >= 0) w.u32("intensite", (uint32_t)t.intensite);
+  else w.null("intensite");
+  if (!strcmp(t.quoi, "ordre")) w.u32("essai", t.essai);
+  w.u32("sautes", t.sautes);
 }
 
 // --- evenements
