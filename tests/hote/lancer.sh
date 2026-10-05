@@ -28,4 +28,12 @@ compiler_et_lancer test_liste components/liste/liste.c components/liste/catalogu
   components/socle/boot_button.cpp tests/hote/test_socle.cpp -o "$SORTIE/test_socle"
 "$SORTIE/test_socle"
 
+# Protocole JSON (components/protocole) : C++17, avec le catalogue (C) ; lit les exemples
+# de docs/PROTOCOLE-JSON.md.
+"$CC" $CFLAGS -c components/liste/catalogue.c -o "$SORTIE/catalogue.o"
+"${CXX:-clang++}" -std=c++17 -Wall -Wextra -Werror -Icomponents/protocole/include -Icomponents/liste/include \
+  -Icomponents/lampes/include -Icomponents/telink/include components/protocole/json_ligne.cpp \
+  components/protocole/json_amaran.cpp tests/hote/test_json.cpp "$SORTIE/catalogue.o" -o "$SORTIE/test_json"
+"$SORTIE/test_json"
+
 echo "tests hote : tout est vert"
