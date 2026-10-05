@@ -10,7 +10,7 @@ struct TableauDeBord: View {
 
     var body: some View {
         if pont.etat.helloBase == nil && pont.etat.lampes.isEmpty {
-            // Les clés se copient, s'exportent et s'importent sans pont : leur carte reste là.
+            // Les cles se copient, s'exportent et s'importent sans pont : leur carte reste la.
             ScrollView {
                 VStack(spacing: 16) {
                     ContentUnavailableView {

@@ -114,6 +114,14 @@ struct ClesTests {
                 == .confirmation("Remplace les clés du réseau des lampes dans le pont (effet au redémarrage). « Charger le pont » vérifie en plus les empreintes."))
     }
 
+    /// Un guillemet fermant coupe le mot, comme dans esp_console_split_argv.
+    @Test func guillemetsColles() {
+        #expect(LigneCommande.mots("\"mesh\"cles a b") == ["mesh", "cles", "a", "b"])
+        if case .interdite(_) = PolitiqueCommandes.verdictConsole("\"json\"\"0\"") {} else {
+            Issue.record("json 0 entre guillemets colles : doit rester interdit")
+        }
+    }
+
     /// Le pont retire les guillemets (`esp_console_split_argv`) : les masquer ou les
     /// confirmer de meme, sinon `"mesh" "cles" ...` passerait sans masque ni confirmation.
     @Test func guillemetsNeContournentNiMasqueNiConfirmation() {

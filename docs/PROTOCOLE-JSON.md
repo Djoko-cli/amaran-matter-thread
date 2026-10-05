@@ -51,7 +51,7 @@ Règles :
 ### 2.3 Émission côté pont
 
 - Une ligne est formée dans un tampon de 1 024 octets, puis confiée **d'un seul appel** au pilote de l'USB (`usb_serial_jtag_write_bytes`, sans attente) : elle entre entière dans son tampon d'émission de 4 096 octets, ou pas du tout. Faute de place, elle est perdue et comptée (`json_perdus`) ; le pont réessaie une fois une milliseconde plus tard, pour le cas où une autre tâche tenait le pilote.
-- Les lignes périodiques et les instantanés passent par une file (48 places) : la tâche `json` en émet une toutes les 10 ms. Une ligne périodique en retard de plus de 500 ms est perdue et comptée ; une `reponse` n'est jamais abandonnée pour retard : si la file est pleine, elle est perdue et comptée dans `json_perdus`.
+- Les lignes périodiques et les instantanés passent par une file (48 places) : la tâche `json` en émet une toutes les 10 ms. Une ligne périodique en retard de plus de 500 ms est perdue et comptée ; une `reponse` n'est jamais abandonnée pour retard : si la file est pleine, elle part tout de suite ; elle n'est perdue, et comptée dans `json_perdus`, que si le pilote de l'USB n'a pas de place.
 - Les événements partent dès que la tâche `json` les reçoit.
 - `n` augmente à chaque ligne produite, écrite ou perdue : un trou dans `n` signale une perte.
 

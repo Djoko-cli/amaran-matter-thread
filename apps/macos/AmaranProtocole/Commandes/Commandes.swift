@@ -63,10 +63,11 @@ public enum LigneCommande {
         id >= idMax ? 1 : id + 1
     }
 
-    /// Mots d'une commande (separes par des espaces), en minuscules. Les guillemets
-    /// sont retires comme le fait la console du pont : `"redemarre"` est `redemarre`.
+    /// Mots d'une commande, en minuscules. Un guillemet coupe le mot, comme dans la
+    /// console du pont (esp_console_split_argv) : `"redemarre"` est `redemarre`, et
+    /// `"mesh"cles` est `mesh cles`.
     public static func mots(_ commande: String) -> [String] {
-        commande.lowercased().replacingOccurrences(of: "\"", with: "").split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)
+        commande.lowercased().replacingOccurrences(of: "\"", with: " ").split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)
     }
 }
 
