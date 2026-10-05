@@ -5209,6 +5209,8 @@ Expected : `amaran_pont.bin binary size 0x1ab330 bytes. Smallest app partition i
 Run: `sh tests/hote/lancer.sh`
 Expected: `tests hote : tout est vert`.
 
+> **Amendement (exécution, 05/10)** : la relecture a montré deux défauts, corrigés en un commit à part. (1) linenoise en mode intelligent (sonde réussie, par exemple sous `idf.py monitor`) envoie `ESC[6n` et lit la ligne suivante de l'app comme réponse du curseur : la console reste toujours en mode simple. (2) Un événement ou un ordre perdu faute de place l'était sans trace : les événements perdus comptent dans `json_perdus`, la file d'événements passe à 32, et un ordre que la file des lampes refuse reçoit `erreur` (« file des lampes pleine ») au lieu d'`accepte` ; `docs/PROTOCOLE-JSON.md` le dit.
+
 - [ ] **Step 10 : commit.**
 
 ```bash
