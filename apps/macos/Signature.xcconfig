@@ -4,6 +4,7 @@
 // l'autre, signer avec son equipe : creer Local.xcconfig (ignore par git) avec
 //   DEVELOPMENT_TEAM = <equipe, 10 caracteres>
 //   CODE_SIGN_IDENTITY = Apple Development
+//   ENABLE_HARDENED_RUNTIME = YES
 // L'equipe : security find-certificate -c "Apple Development" -p | openssl x509 -noout -subject (champ OU).
 // Icone : AppIcon (A2, versionnee) ; Local.xcconfig peut la remplacer par une icone
 // locale, non versionnee (ASSETCATALOG_COMPILER_APPICON_NAME = AppIconM2).
@@ -11,4 +12,8 @@ CODE_SIGN_IDENTITY = -
 CODE_SIGN_STYLE = Manual
 DEVELOPMENT_TEAM =
 ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon
+// Runtime durci : seulement avec une equipe. Signee ad hoc, l'app ne pourrait pas
+// charger AmaranProtocole.framework (validation des bibliotheques : pas d'equipe
+// commune). Local.xcconfig l'active avec l'equipe : ENABLE_HARDENED_RUNTIME = YES.
+ENABLE_HARDENED_RUNTIME = NO
 #include? "Local.xcconfig"
