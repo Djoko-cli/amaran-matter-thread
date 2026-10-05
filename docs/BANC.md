@@ -272,3 +272,21 @@ Firmware `437441f` flashé sans effacer sur la C6 du pont (Maison garde tout), d
 - **Marges** (blocs `sante` et `taches`) : pile libre au plus bas `json` 2 096 o, `console` 3 756 o, `socle` 2 540 o, `amaran_tx` 2 028 o, `ot_task` 2 212 o, les autres au-dessus ; tas au plus bas 145 Ko (deux lampes) ; `json_perdus` 0, aucun rejet.
 
 Non vu à ce banc : un bloc `sante` émis pendant une commande (`commande` non nul) : les commandes essayées ont toutes duré moins d'une période. Le test natif de `components/protocole` et la corrélation de l'app (Task 6) le couvrent.
+
+## Plan 3b-1 : banc B, l'app compagnon (05/10/2026)
+
+App signée avec l'équipe de Djoko (`Local.xcconfig`, runtime durci), icône M2 locale ; pont du banc A, deux lampes ; Djoko aux commandes de l'app.
+
+- **Signet du dossier d'amaran Desktop** (risque de la spec, section 12) : Réglages, « Changer… » ; le panneau s'ouvre sur le dossier d'amaran Desktop ; « Ouvrir » : aucune alerte de macOS, la base est lue. Le risque est levé.
+- **Copie dans le trousseau** : « Copier depuis amaran Desktop » ; les lignes « amaran Desktop », « Ce Mac » et « Le pont » de la carte Clés montrent les mêmes empreintes et deux lampes, sans écart. Après ⌘Q et relance : la copie est toujours là, le dossier toujours autorisé (« Relire » relit la base sans panneau) ; la ligne « amaran Desktop » reste « non lue » jusqu'à « Relire » (à corriger : relire la base au lancement).
+- **Connexion** : choix du pont au menu (connexion aussitôt), puis, après la relance, « Connecter » rejoint ce même pont.
+- **Ordres**, lampe 1 : marche, 30 %, arrêt, puis « marche » deux fois : la lampe obéit, Maison suit, le suivi dit « confirmée », puis « déjà tenue ».
+- **Retirer de Maison / remettre** : sauté (même commande que le banc 2 du plan 3a, où Maison oubliait la lampe) ; seul le dialogue a été ouvert puis annulé.
+- **Chargement du pont depuis l'app** (« Depuis amaran Desktop ») : les étapes, le redémarrage, la reconnexion seule, « Pont chargé », aucun écart ; lampes et Maison intactes.
+- **USB débranché 5 s puis rebranché** : l'app attend, puis se reconnecte seule ; le redémarrage du pont est noté.
+- **Sauvegarde** : export (phrase tapée deux fois), import avec une phrase fausse (refus net, sans indice), puis la bonne (mêmes empreintes), « Remplacer la copie de ce Mac » ; Réglages montre la date de la sauvegarde.
+- **Marges** (carte Système, puis `taches` après « Libérer le port ») : tas 151 Ko libres, 144 Ko au plus bas ; pile libre au plus bas `json` 2 968 o, `console` 4 404 o, `amaran_tx` 2 024 o ; aucune ligne perdue ni abîmée.
+- **« Libérer le port »** : la console texte répond ensuite, avec l'écho ; mêmes clés, les deux lampes joignables (112 et 113 relectures sur 115).
+- **Mode démo** : trois lampes, la jamais vue entre dans Maison.
+
+Remarques de Djoko : les trames en direct et les graphiques manquent (prévus au plan 3b-2) ; le port série doit porter un nom lisible plutôt que `usbmodem…` (à corriger).
