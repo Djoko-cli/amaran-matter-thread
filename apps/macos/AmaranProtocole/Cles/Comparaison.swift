@@ -25,12 +25,14 @@ public struct ApercuReseau: Codable, Sendable, Equatable {
     public static func dePont(mesh: ConfigMesh?, lampes: [Int: ConfigLampe]) -> ApercuReseau? {
         guard let mesh, mesh.cles == true, let r = mesh.empreintes?.reseau, let a = mesh.empreintes?.application
         else { return nil }
-        let n = mesh.lampes ?? lampes.count
-        let liste = (1...max(n, 1)).prefix(n).compactMap { i -> LampeReseau? in
-            guard let c = lampes[i], let ad = c.adresse.flatMap({ UInt16($0, radix: 16) }), let mac = c.mac else { return nil }
-            let deux = stride(from: 0, to: mac.count, by: 2).map { k -> String in
-                let d = mac.index(mac.startIndex, offsetBy: k)
-                return String(mac[d..<mac.index(d, offsetBy: 2, limitedBy: mac.endIndex)!])
+        // Donnees venues du pont par l'USB : bornees, jamais de quoi faire tomber l'app.
+        let n = min(max(mesh.lampes ?? lampes.count, 0), ReseauMesh.capacite)
+        let liste = (0..<n).compactMap { k -> LampeReseau? in
+            guard let c = lampes[k + 1], let ad = c.adresse.flatMap({ UInt16($0, radix: 16) }), let mac = c.mac,
+                  mac.count == 12, Data(hex: mac) != nil else { return nil }
+            let deux = stride(from: 0, to: 12, by: 2).map { i -> String in
+                let d = mac.index(mac.startIndex, offsetBy: i)
+                return String(mac[d..<mac.index(d, offsetBy: 2)])
             }
             return LampeReseau(adresse: ad, mac: deux.joined(separator: ":").uppercased(), nom: c.nom ?? "",
                                code: UInt32(clamping: c.code ?? 0))

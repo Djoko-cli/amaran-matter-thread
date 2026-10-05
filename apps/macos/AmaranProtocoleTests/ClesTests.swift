@@ -217,6 +217,14 @@ struct SauvegardeTests {
         #expect(throws: ErreurSauvegarde.phrasesDifferentes) { try Sauvegarde.verifierPhrase(Self.phrase, confirmation: Self.phrase + "!") }
         #expect(throws: Never.self) { try Sauvegarde.verifierPhrase("douze lettre", confirmation: "douze lettre") }
     }
+
+    /// La phrase est normalisee (NFC) avant PBKDF2 : compose ou decompose, le meme « e » accentue ouvre la sauvegarde.
+    @Test func phraseNormalisee() throws {
+        let compose = "phrase de passe \u{E9}t\u{E9}"
+        let decompose = "phrase de passe e\u{301}te\u{301}"
+        let f = try Sauvegarde.chiffrer(Factice.reseau(), phrase: compose, tours: 1000)
+        #expect(try Sauvegarde.dechiffrer(f, phrase: decompose) == Factice.reseau())
+    }
 }
 
 @Suite("Controles du chargement")
@@ -267,6 +275,21 @@ struct ComparaisonTests {
         #expect(pont.memeReseau(que: Self.copie))
         #expect(pont.lampes[0].mac == "02:00:00:00:00:01")
         #expect(ApercuReseau.dePont(mesh: nil, lampes: [:]) == nil)
+    }
+
+    /// Donnees du pont mal formees (nombre de lampes negatif ou enorme, MAC de mauvaise longueur) :
+    /// jamais de plantage, la lampe est ignoree.
+    @Test func pontMalForme() throws {
+        let d = JSONDecoder()
+        d.keyDecodingStrategy = .convertFromSnakeCase
+        func mesh(_ n: Int) throws -> ConfigMesh {
+            try d.decode(ConfigMesh.self, from: Data(#"{"cles":true,"empreintes":{"reseau":"1A2B3C4D","application":"5E6F7A8B"},"lampes":\#(n)}"#.utf8))
+        }
+        #expect(ApercuReseau.dePont(mesh: try mesh(-3), lampes: [:])?.lampes.isEmpty == true)
+        #expect(ApercuReseau.dePont(mesh: try mesh(2_000_000_000), lampes: [:])?.lampes.isEmpty == true)
+        let deuxPoints = try d.decode(ConfigLampe.self, from: Data(#"{"lampe":1,"adresse":"0002","mac":"02:00:00:00:00:01","nom":"A","code":40065}"#.utf8))
+        let impaire = try d.decode(ConfigLampe.self, from: Data(#"{"lampe":2,"adresse":"0004","mac":"02000000000","nom":"B","code":40065}"#.utf8))
+        #expect(ApercuReseau.dePont(mesh: try mesh(2), lampes: [1: deuxPoints, 2: impaire])?.lampes.isEmpty == true)
     }
 
     @Test func ecarts() {

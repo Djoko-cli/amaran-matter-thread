@@ -84,7 +84,9 @@ public enum Sauvegarde {
     static func deriver(phrase: String, sel: Data, tours: UInt32) throws -> SymmetricKey {
         var cle = [UInt8](repeating: 0, count: 32)
         defer { cle.withUnsafeMutableBytes { _ = memset($0.baseAddress!, 0, $0.count) } }
-        let mot = Array(phrase.utf8)
+        // NFC : un « e » accentue compose ou decompose donne la meme cle.
+        var mot = Array(phrase.precomposedStringWithCanonicalMapping.utf8)
+        defer { mot.withUnsafeMutableBytes { _ = memset($0.baseAddress!, 0, $0.count) } }
         guard !mot.isEmpty, !sel.isEmpty else { throw ErreurSauvegarde.ouvertureImpossible }
         let r = sel.withUnsafeBytes { s in
             mot.withUnsafeBufferPointer { m in
