@@ -36,4 +36,9 @@ compiler_et_lancer test_liste components/liste/liste.c components/liste/catalogu
   components/protocole/json_amaran.cpp tests/hote/test_json.cpp "$SORTIE/catalogue.o" -o "$SORTIE/test_json"
 "$SORTIE/test_json"
 
+# Enveloppe H1 du transport reseau (components/h1) : C++17, crypto de CommonCrypto.
+"${CXX:-clang++}" -std=c++17 -Wall -Wextra -Werror -Icomponents/h1/include components/h1/h1_proto.cpp \
+  tests/hote/test_h1.cpp -o "$SORTIE/test_h1"
+"$SORTIE/test_h1"
+
 echo "tests hote : tout est vert"
