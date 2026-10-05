@@ -263,8 +263,18 @@ static void tache_console(void *arg) {
       json_pont_lire();
       continue;
     }
+    // Sans hote USB (chargeur, ou port du Mac en veille), la lecture de la console rend -1
+    // aussitot (ESP-IDF 5.5.4, IDF-14303) : linenoise rendrait NULL en boucle, et cette tache,
+    // plus prioritaire que main, affamerait le demarrage (Matter jamais lance, voyant bleu).
+    if (!usb_serial_jtag_is_connected()) {
+      vTaskDelay(pdMS_TO_TICKS(100));
+      continue;
+    }
     char *ligne = linenoise(INVITE);
-    if (!ligne) continue;  // ligne vide
+    if (!ligne) {  // ligne vide, ou lecture en echec : jamais de boucle sans attente
+      vTaskDelay(pdMS_TO_TICKS(10));
+      continue;
+    }
     // Pas d'historique : le mode simple n'a pas de navigation, et `mesh cles <k1> <k2>` n'a pas a rester en memoire.
     json_pont_executer(ligne, strlen(ligne) > JSON_PONT_CMD_MAX);
     linenoiseFree(ligne);
