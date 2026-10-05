@@ -93,6 +93,18 @@ Le 05/10/2026, au brainstorming du plan 3b :
   (vérifié en lecture seule le 05/10).
 - **Mémoire du pont** (banc 4 du plan 3a) : tas au plus bas 103 Ko à
   16 lampes ; firmware de 1,7 Mo, 57 % de la partition libres.
+- **Une socket UDP sur OpenThread cohabite avec Matter** (essai radio du
+  05/10, prototype 3b-2) : ouverte et utilisée sans jamais prendre le verrou
+  d'OpenThread (tout passe par la file de tâches d'OpenThread), 20 échos sur
+  20 à 42 ms ; une salve de 1 Ko trois fois par seconde pendant 60 s, avec
+  56 ordres de Maison : 178 échos sur 180, aucun ordre abandonné, tampons
+  d'OpenThread jamais sous 34. Le nom SRP du pont se résout sur le Mac
+  (`<16 hexa>.local`).
+- **Sans hôte USB** (chargeur, port du Mac en veille), ESP-IDF 5.5.4 rend
+  toute lecture de la console en échec immédiat : la tâche de console de 3b-1
+  rebouclait et affamait le démarrage (voyant bleu, Matter jamais lancé).
+  Corrigé le 05/10 (`692bff9`) ; chaque banc vérifie depuis le pont sur
+  secteur.
 
 ## 4. Architecture et découpage
 
@@ -130,8 +142,10 @@ Le 05/10/2026, au brainstorming du plan 3b :
 - `firmware/main` : la tâche `json`, qui relie ces modules à la console, à la
   liste des lampes, au cœur `lampes`, au Mesh et à Matter ;
 - `components/h1` (3b-2) : enveloppe, sessions et anti-rejeu (purs, repris de
-  Halo) ; la socket OpenThread et la clé UDP en NVS vivent dans
-  `firmware/main`.
+  Halo) ; la socket OpenThread, l'anneau d'émission et la clé UDP en NVS
+  vivent dans `firmware/main/net_udp` ; `json_pont` tient une session par
+  origine (l'USB et deux sessions H1), et une tâche `distant` exécute les
+  commandes à texte venues de Thread (vu en préparant le plan 3b-2).
 
 Le firmware `ecoute` n'est pas touché.
 
@@ -228,7 +242,7 @@ tel quel :
 **Ce que le pont annonce :**
 - `hello` : version du firmware, ESP-IDF, cause du démarrage, durée de marche,
   numéro de série `AMARAN-<MAC>`, capacités (`matter`, `thread`, `mesh`,
-  `catalogue` ; `udp` et `cle` en 3b-2) ;
+  `catalogue` ; `udp`, `cle`, `trames` et `texte` en 3b-2) ;
 - `config` :
   - le catalogue des modèles (code, nom, capacités), dont le firmware est la
     seule source ;
@@ -287,7 +301,30 @@ rien. Le banc A du plan 3b-1 le confirme sur la carte, avant l'app.
   3 000 octets par seconde en moyenne ; un datagramme refusé est ignoré en
   silence et compté.
 
-**Liste blanche à distance** (tout le reste reçoit `interdite`) :
+**Précisé en préparant le plan 3b-2** (prototype, essai radio, relectures) :
+- jamais le verrou d'OpenThread depuis nos tâches : la socket passe par la
+  file de tâches d'OpenThread (`esp_openthread_task_queue_post`) ; un anneau
+  de 12 datagrammes, plafonné en débit, laisse 24 tampons d'OpenThread à
+  Matter ; le débit vers chaque session distante est réglé comme chez Halo
+  (une ligne périodique ne part que s'il reste de la place), si bien que
+  l'instantané de 16 lampes arrive entier ;
+- chaque session distante a sa génération : une ligne d'une session passée
+  ne touche jamais la suivante ;
+- toute ligne distante porte un `id` ; le pont garde les 8 dernières
+  réponses de chaque session (même `id` : même réponse, sans rien exécuter),
+  ignore le renvoi d'une commande encore en cours, et répond `deja_traite`
+  à un `id` plus ancien (réponse oubliée) ;
+- la clé UDP = HMAC-SHA256(aléa de l'app, aléa du pont), gardée en NVS ; la
+  console texte n'en montre que l'empreinte ; le port 5480 ne s'ouvre
+  qu'avec une clé ; le code d'appairage Matter vaut `null` à distance ;
+- les commandes à texte permises à distance passent par une tâche `distant`
+  du pont : leur sortie devient des messages `texte`, envoyés après la
+  commande (capturée sans verrou : la première version figeait le pont sur
+  `mesh lampe <n> masquer`).
+
+**Liste blanche à distance** (tout le reste reçoit `interdite`), jugée sur
+les mots que la console exécuterait (`esp_console_split_argv`), jamais sur la
+ligne brute (chez Halo, `json 1 "bail" 0` passait) :
 - `json 1` (bail de 10 à 120 s), `json 0`, `json etat`, `json hello`,
   `json ping`, et les cadences dans des bornes plus lentes ;
 - `lampe <n> on|off|niveau|releve` ;
@@ -299,7 +336,8 @@ rien. Le banc A du plan 3b-1 le confirme sur la carte, avant l'app.
 
 **Profil à distance :** l'état toutes les 2 s (une lampe à chaque changement,
 et toutes les 30 s), le réseau toutes les 30 s, ni compteurs ni trames par
-défaut.
+défaut ; l'app peut demander les compteurs (toutes les 5 s au plus vite) ;
+les trames se coupent seules au bout de 60 s ; bail de 10 à 120 s, jamais 0.
 
 **Le firmware :** `components/h1` (pur, repris de Halo) ; dans
 `firmware/main`, la socket OpenThread (`otUdp` sur l'interface Thread), la
@@ -308,8 +346,9 @@ file de réception et l'émission plafonnée.
 **Sur le Mac :** l'outil `halo-routes` de Halo sert tel quel, puisque c'est le
 même réseau Thread.
 
-**Risque :** CHIP possède OpenThread. Halo y a déjà ouvert une socket UDP sur
-la même pile ESP-IDF ; le plan 3b-2 commence quand même par cet essai.
+**Risque levé :** CHIP possède OpenThread. Halo y avait ouvert une socket UDP
+sur la même pile ESP-IDF ; l'essai radio du 05/10 l'a confirmé pour le pont
+amaran (section 3).
 
 ## 8. L'app : écrans, réglages et mode démo
 
@@ -341,8 +380,13 @@ les quatre écrans, et le panneau de connexion. Les sources :
   `decommission`, `mesh oublie`, `mesh adresse`, `mesh iv`).
 
 **3. Graphiques (3b-2)** : par lampe, la part des relectures répondues et les
-délais des ordres ; pour le Mesh, les annonces, les NetMIC faux et les refus
-d'émission ; le tas libre. Un redémarrage du pont ouvre un nouveau segment.
+délais des ordres ; pour le Mesh, les annonces (et celles de notre réseau),
+la part des NetMIC faux parmi les annonces de notre réseau (un IV Index faux
+la fait monter vers 100 % ; des clés périmées font tomber à zéro les
+annonces de notre réseau) et les refus d'émission ; le tas libre. Un
+redémarrage du pont ouvre un nouveau segment. À distance, les compteurs du
+Mesh ne viennent que sur demande : la carte du Mesh et l'écran le disent et
+proposent de les activer.
 
 **4. Trames (3b-2)** : le trafic Mesh décodé (ordres et demandes d'état émis,
 états reçus, par lampe), avec des filtres et la possibilité de figer. Le pont
@@ -374,8 +418,10 @@ données n'utilisent que des MAC inventées.
 - Base illisible, ou pré-contrôle refusé : message clair, rien n'est envoyé.
 - Phrase de passe fausse ou fichier de sauvegarde altéré : refus net, sans
   indice.
-- Thread (3b-2) : route IPv6 absente (l'app pointe vers `halo-routes`), pont
-  sans clé (port fermé), sessions pleines ; messages repris de Halo.
+- Thread (3b-2) : route IPv6 absente (la console et le panneau de connexion
+  pointent vers `halo-routes`, sans bandeau, comme Halo), pont sans clé (port
+  fermé), clé absente de ce Mac ou trousseau inaccessible (bandeau), sessions
+  pleines (bandeau, nouvel essai toutes les 30 s) ; messages repris de Halo.
 
 ## 10. Tests sur le Mac
 
@@ -399,8 +445,10 @@ données n'utilisent que des MAC inventées.
   configuration à perdre, ou on la refait) ; débrancher et rebrancher l'USB ;
   exporter puis importer une sauvegarde ; relever les marges de pile et de tas
   avec la tâche `json`.
-- **3b-2** : ouvrir une session par Thread ; refuser une commande interdite ;
-  piloter à distance ; une heure d'endurance à distance.
+- **3b-2** : banc A par l'USB (clé UDP créée et effacée sans s'afficher,
+  trames, marges, démarrage sur secteur) ; banc B avec l'app : ouvrir une
+  session par Thread ; refuser une commande interdite ; piloter à distance ;
+  une heure d'endurance à distance, le pont sur secteur.
 
 ## 12. Risques et questions ouvertes
 
@@ -409,7 +457,9 @@ données n'utilisent que des MAC inventées.
 | linenoise ne coupe ni l'écho ni l'invite | lecture de ligne propre au mode machine | levé en préparant le plan 3b-1 : linenoise fait toujours l'écho ; le pont a sa propre tâche de console ; confirmé au banc A (05/10/2026) |
 | l'USB ne sait pas écrire une ligne entière sans bloquer | tampon et écriture tout ou rien, ligne perdue et comptée | levé en préparant le plan 3b-1 : `usb_serial_jtag_write_bytes` sans attente écrit tout ou rien (tampon porté à 4 Ko) ; à confirmer au banc A |
 | le signet ne donne pas accès au conteneur d'amaran Desktop | copie de la base choisie par Djoko, ou app sans sandbox (à décider avec lui) | banc B du plan 3b-1, en premier : l'essai demande l'app signée et un choix de Djoko ; macOS lui demande alors d'autoriser l'accès aux données d'une autre app |
-| une socket UDP sur OpenThread gêne CHIP | essai d'abord ; Halo l'a déjà fait | tâche 1 du plan 3b-2 |
+| une socket UDP sur OpenThread gêne CHIP | essai d'abord ; Halo l'a déjà fait | levé à l'essai radio du 05/10 (prototype 3b-2, section 3) |
+| les lignes distantes débordent l'anneau d'émission (perte de l'instantané au-delà de 2 lampes) | débit réglé vers chaque session, comme Halo | trouvé à la relecture du prototype 3b-2, corrigé avant le plan |
+| la console du pont sans hôte USB | lecture de la console en échec immédiat : attendre au lieu de reboucler | trouvé au banc du prototype 3b-2 (pont bleu sur un chargeur), corrigé sur `main` (`692bff9`) |
 | la tâche `json` ou H1 manque de tas ou de pile | budget relevé au banc ; cadences abaissées | bancs 3b-1 et 3b-2 |
 | l'icône M2 reprend une marque déposée | non versionnée ; A2 en repli dans le dépôt | décision 9 |
 

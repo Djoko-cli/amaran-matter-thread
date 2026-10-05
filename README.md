@@ -75,11 +75,15 @@ Carte déjà servie : `erase-flash` fait tirer au pont une nouvelle adresse Mesh
 
 ## L'app compagnon
 
-Amaran Compagnon (`apps/macos`) supervise et pilote le pont par l'USB : une carte par lampe, le Bluetooth Mesh, Matter, le voyant, et la console du pont. Elle gère aussi les clés du réseau des lampes, à la place de `outils/cles_amaran.py` :
+Amaran Compagnon (`apps/macos`) supervise et pilote le pont par l'USB, ou à distance par le réseau Thread de la maison : une carte par lampe, le Bluetooth Mesh, Matter, le voyant, la console du pont, des graphiques et les trames du Bluetooth Mesh décodées. Elle gère aussi les clés du réseau des lampes, à la place de `outils/cles_amaran.py` :
 - elle lit la base d'amaran Desktop, sans jamais y écrire (Réglages, « Changer… » : désigner une fois le dossier `amaran Desktop` de `~/Library/Containers/com.sidus.amaran-desktop/Data/Library/Application Support`) ;
 - elle en garde une copie dans le trousseau de ce Mac, et l'exporte sur demande en sauvegarde chiffrée par une phrase de passe (iCloud Drive conseillé) ;
 - elle charge le pont par l'USB, vérifie ses empreintes et sa liste, puis le redémarre ;
 - elle compare les empreintes de la base, de la copie et du pont, sans jamais montrer une clé.
+
+**À distance, par Thread.** Le pont écoute en UDP (port 5480) sur le réseau Thread, une fois qu'une clé UDP existe. Cette clé se crée par l'USB seulement (Réglages › Accès réseau Thread › « Activer l'accès réseau… ») : le pont la garde, l'app la range dans le trousseau de ce Mac. Ensuite, le pont apparaît dans le menu Source, sous « Réseau ». Chaque message est signé avec cette clé, mais rien n'est chiffré : aucun secret ne passe par Thread. À distance, les lectures, les ordres aux lampes, `mesh lampe <n> masquer|afficher` et `led` sont permis ; tout ce qui touche aux clés, à la liste des lampes, au réseau Mesh, à Matter ou au redémarrage reste réservé à l'USB. `json cle efface`, `decommission` et BOOT tenu 8 s effacent la clé UDP.
+
+macOS perd parfois la route IPv6 vers le réseau Thread : l'assistant `halo-routes` du pont Halo ([tools/macos/halo-routes](https://github.com/Djoko-cli/benq-screenbar-halo-matter/tree/main/tools/macos/halo-routes)) la rétablit, et sert tel quel ici (même réseau Thread).
 
 Le mode démo (menu de la barre latérale, ou Fichier › Mode démo, ⇧⌘D) simule un pont à trois lampes, sans matériel. Compiler : voir [apps/macos/README.md](apps/macos/README.md).
 
@@ -97,7 +101,7 @@ Le mode démo (menu de la barre latérale, ou Fichier › Mode démo, ⇧⌘D) s
 | rouge, noir, violet, noir, vite | BOOT tenu 8 s : relâcher pour désappairer |
 | éclat blanc | BOOT court : redémarrage |
 
-Bouton BOOT : appui court, redémarrage ; de 2 à 8 s, rien ; 8 s ou plus, désappairage de Maison. Les clés restent.
+Bouton BOOT : appui court, redémarrage ; de 2 à 8 s, rien ; 8 s ou plus, désappairage de Maison. Les clés du réseau des lampes restent ; la clé UDP de l'accès par Thread est effacée.
 
 ## Console
 
@@ -109,8 +113,9 @@ Sur l'USB, en français (`python3 outils/console.py --port <port> "<commande>"`,
 - `mesh` : réseau, empreintes des clés, compteurs ; `mesh releve <s>`, `mesh balayage`, `mesh ecoute on|off`, `mesh autotest`, etc. ;
 - `mesh lampes <N>`, puis `mesh lampe <n> <adresse> <mac> <code> <nom>` : la liste des lampes, tout ou rien (c'est ce qu'envoie `outils/cles_amaran.py`) ;
 - `matter` : mise en service, Thread, abonnements, codes, identité ;
-- `led [test|stop]`, `cause`, `taches`, `decommission`, `redemarre` ;
-- `json …` : le mode machine de l'app compagnon ([docs/PROTOCOLE-JSON.md](docs/PROTOCOLE-JSON.md)). Le pont démarre toujours en console texte ; `json 1` passe en mode machine, `json 0` (ou 30 s sans rien de l'app) revient au texte.
+- `led [test|stop]`, `cause`, `taches`, `redemarre` ;
+- `decommission` : retire le pont de Maison (toutes les fabriques Matter) et efface la clé UDP, puis redémarre ;
+- `json …` : le mode machine de l'app compagnon ([docs/PROTOCOLE-JSON.md](docs/PROTOCOLE-JSON.md)). Le pont démarre toujours en console texte ; `json 1` passe en mode machine, `json 0` (ou 30 s sans rien de l'app) revient au texte. `json cle nouvelle <64 hexa>` crée la clé UDP de l'accès par Thread (la réponse ne la montre qu'en mode machine, une seule fois ; la console texte n'en montre que l'empreinte), `json cle efface` l'efface ; `json trames 1|0` envoie ou coupe les trames du Bluetooth Mesh décodées.
 
 Une commande inconnue répond `Commande inconnue : "<nom>" (help)`.
 
@@ -175,7 +180,8 @@ script, et le texte de la licence dans
 Le voyant et le bouton BOOT reprennent la logique du pont Halo
 ([benq-screenbar-halo-matter](https://github.com/Djoko-cli/benq-screenbar-halo-matter),
 du même auteur) : `components/socle`, avec ses tests. Le mode JSON
-(`components/protocole`) et l'app compagnon (`apps/macos`) sont une copie
-adaptée de son protocole et de Halo Compagnon.
+(`components/protocole`), l'enveloppe H1 de l'accès par Thread
+(`components/h1`, avec ses tests) et l'app compagnon (`apps/macos`) sont une
+copie adaptée de son protocole et de Halo Compagnon.
 
 Projet personnel, sans lien avec Aputure. Il n'ouvre ni ne modifie les lampes.
