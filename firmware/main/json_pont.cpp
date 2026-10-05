@@ -849,6 +849,9 @@ static bool commande_cle(int o, uint32_t id, const char *vue, int argc, char **a
   esp_err_t err = ESP_OK;
   if (o != USB) {
     erreur = "USB seulement";
+  } else if (nouvelle && id && !s_puits[USB].machine) {
+    // json cle nouvelle avec id : en mode machine seulement. Rien ne change.
+    erreur = "json cle nouvelle avec id : en mode machine seulement (json 1)";
   } else if (nouvelle && hexa(argv[3], alea, sizeof(alea))) {
     err = net_udp_cle_nouvelle(alea, cle, emp);
     memset(alea, 0, sizeof(alea));
