@@ -88,25 +88,26 @@ public enum BaseAmaranDesktop {
         guard case .texte(let reseau)? = reseaux[0].first, case .texte(let application)? = reseaux[0].last,
               let cleReseau = Data(hex: reseau), let cleApplication = Data(hex: application) else { throw .cle }
         guard cleReseau.count == 16, cleApplication.count == 16 else { throw .cle }
-        // `code` et `composition_data` : absentes d'une base plus ancienne, sans gravite.
+        // `code`, `composition_data` et les versions : absentes d'une base plus ancienne, sans gravite.
         let colonnes = Set(try lignes(db, "pragma table_info(fixtures)").compactMap { l -> String? in
             if l.count > 1, case .texte(let nom) = l[1] { return nom }
             return nil
         })
-        let extra = ["code", "composition_data"].map { colonnes.contains($0) ? $0 : "null" }.joined(separator: ", ")
+        let extra = ["code", "composition_data", "control_software_version", "ble_software_version"].map { colonnes.contains($0) ? $0 : "null" }.joined(separator: ", ")
         let fixtures = try lignes(db, "select node_address, mac_address, name, \(extra) from fixtures "
                                       + "where node_address is not null order by node_address")
         guard !fixtures.isEmpty else { throw .aucuneLampe }
         var lampes: [LampeReseau] = []
         for f in fixtures {
-            guard f.count == 5, case .entier(let adresse) = f[0] else { throw .lampe(adresse: "?") }
+            guard f.count == 7, case .entier(let adresse) = f[0] else { throw .lampe(adresse: "?") }
             let a = String(adresse)
             guard (1...0x7FFF).contains(adresse) else { throw .lampe(adresse: a) }
             guard case .texte(let mac) = f[1], ReseauMesh.macValide(mac) else { throw .lampe(adresse: a) }
             guard case .texte(let nom) = f[2], !nom.isEmpty,
                   !nom.unicodeScalars.contains(where: { $0.value < 0x20 }) else { throw .lampe(adresse: a) }
             lampes.append(LampeReseau(adresse: UInt16(adresse), mac: mac.uppercased(), nom: nom,
-                                      code: Self.code(f[3]), declarees: Self.capacitesDeclarees(f[4])))
+                                      code: Self.code(f[3]), declarees: Self.capacitesDeclarees(f[4]),
+                                      logiciel: Self.version(f[5]), ble: Self.version(f[6])))
         }
         return ReseauMesh(cleReseau: cleReseau, cleApplication: cleApplication, lampes: lampes,
                           source: .amaranDesktop, date: maintenant)
@@ -118,6 +119,13 @@ public enum BaseAmaranDesktop {
         let s = t.trimmingCharacters(in: .whitespaces)
         guard !s.isEmpty, s.allSatisfy(\.isASCII), s.allSatisfy(\.isNumber) else { return 0 }
         return UInt32(s) ?? 0
+    }
+
+    /// Version (colonnes `control_software_version`, `ble_software_version`, texte) : nil si
+    /// elle manque ou n'a pas la forme `1.4` (1 a 3 chiffres, un point, 1 a 3 chiffres).
+    static func version(_ v: Valeur) -> String? {
+        guard case .texte(let t) = v else { return nil }
+        return ReseauMesh.version(t)
     }
 
     // Modeles SIG serveurs qui disent une capacite dans la composition d'une lampe.

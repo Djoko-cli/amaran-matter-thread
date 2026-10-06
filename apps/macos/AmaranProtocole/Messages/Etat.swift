@@ -73,6 +73,9 @@ public struct ConfigLampe: Codable, Sendable, Equatable {
     public var catalogue: Bool?
     public var capacites: [Capacite]?
     public var type: TypeAppareil?
+    /// Versions de la lampe, si le pont les connait (`null` ou absentes sinon).
+    public var logiciel: String?
+    public var ble: String?
 }
 
 // MARK: - etat (5.3)

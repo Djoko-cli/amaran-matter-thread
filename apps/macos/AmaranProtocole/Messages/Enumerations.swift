@@ -157,4 +157,6 @@ public enum CapPont: String, Sendable, CaseIterable {
     case cle
     /// Texte des commandes a distance, en messages `texte` (10.4).
     case texte
+    /// Jeton de version de `mesh lampe` et `logiciel`, `ble` du bloc `config` `lampe` (fiche des lampes).
+    case logiciel
 }

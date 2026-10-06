@@ -41,6 +41,12 @@ enum Factice {
         "create table mesh (net_key text, app_key text)",
         "create table fixtures (node_address integer, mac_address text, name text, code text, composition_data text)",
     ]
+    /// Base de la mise a jour de la fiche des lampes : les versions du logiciel de commande et du module Bluetooth.
+    static let tablesVersions = [
+        "create table mesh (net_key text, app_key text)",
+        "create table fixtures (node_address integer, mac_address text, name text, code text, composition_data text, "
+            + "control_software_version text, ble_software_version text)",
+    ]
     static let cles = "insert into mesh values ('000102030405060708090A0B0C0D0E0F', '101112131415161718191a1b1c1d1e1f')"
 }
 
@@ -86,6 +92,57 @@ struct ClesTests {
         ])
         // Guillemets et barres echappes : un seul argument pour esp_console_split_argv.
         #expect(ReseauMesh.argument(#"La "bonne" \ lampe"#) == #""La \"bonne\" \\ lampe""#)
+    }
+
+    /// Le jeton de version, avant le nom : `v<logiciel>/<ble>`, `v<logiciel>` si le module Bluetooth
+    /// est inconnu, rien si le logiciel est inconnu (meme si le module est connu).
+    @Test func commandesAvecLesVersions() throws {
+        let r = Factice.reseau([
+            LampeReseau(adresse: 0x0002, mac: "02:00:00:00:00:01", nom: "Lampe bureau", code: 40065, logiciel: "1.4", ble: "1.69"),
+            LampeReseau(adresse: 0x0004, mac: "02:00:00:00:00:02", nom: "Lumière fenêtre", code: 40065, logiciel: "1.4"),
+            LampeReseau(adresse: 0x0006, mac: "02:00:00:00:00:03", nom: "Lampe du fond", code: 40065, ble: "1.69"),
+            LampeReseau(adresse: 0x0008, mac: "02:00:00:00:00:04", nom: "Sans version", code: 40065),
+        ])
+        try r.verifier()
+        #expect(r.commandes().dropFirst(2) == [
+            "mesh lampe 1 0x0002 02:00:00:00:00:01 40065 v1.4/1.69 \"Lampe bureau\"",
+            "mesh lampe 2 0x0004 02:00:00:00:00:02 40065 v1.4 \"Lumière fenêtre\"",
+            "mesh lampe 3 0x0006 02:00:00:00:00:03 40065 \"Lampe du fond\"",
+            "mesh lampe 4 0x0008 02:00:00:00:00:04 40065 \"Sans version\"",
+        ])
+    }
+
+    /// Une version mal formee ne part jamais au pont ; une ligne qui deviendrait trop longue avec le
+    /// jeton est refusee avant tout envoi (sinon le pont garderait les nouvelles cles et l'ancienne liste).
+    @Test func preControlesDesVersions() throws {
+        func faute(_ l: LampeReseau) -> ErreurReseau? {
+            do { try Factice.reseau([l]).verifier() } catch { return error }
+            return nil
+        }
+        let ok = LampeReseau(adresse: 0x7EFF, mac: "02:00:00:00:00:01", nom: "A", code: .max)
+        func avec(logiciel: String? = nil, ble: String? = nil, nom: String = "A") -> LampeReseau {
+            var l = ok
+            l.logiciel = logiciel
+            l.ble = ble
+            l.nom = nom
+            return l
+        }
+        #expect(faute(avec(logiciel: "123.456", ble: "0.0")) == nil)
+        #expect(faute(avec(logiciel: "1.2.3")) == .version(lampe: 1, "1.2.3"))
+        #expect(faute(avec(logiciel: "1.4", ble: "v1.69")) == .version(lampe: 1, "v1.69"))
+        #expect(faute(avec(logiciel: "1234.5")) == .version(lampe: 1, "1234.5"))
+        #expect(faute(avec(ble: "")) == .version(lampe: 1, ""))
+        #expect(ErreurReseau.version(lampe: 1, "1.2.3").description == "Lampe 1 : version « 1.2.3 » illisible (forme 1.4 attendue).")
+        // Le plus long code et le pire nom (31 guillemets) tiennent pile sans jeton (cf. lignesDansLaLimite) ;
+        // avec le jeton, la ligne depasse 127 octets : refusee avant tout envoi.
+        let pire = String(repeating: "\"", count: 31)
+        #expect(faute(avec(nom: pire)) == nil)
+        guard case .ligneTropLongue(let lampe, let octets)? = faute(avec(logiciel: "1.4", ble: "1.69", nom: pire)) else {
+            Issue.record("ligne trop longue attendue")
+            return
+        }
+        #expect(lampe == 1 && octets == 136, "\(octets) octets")
+        #expect(faute(avec(logiciel: "1.4", ble: "1.69", nom: "Lampe bureau")) == nil)
     }
 
     /// Le pire nom (31 guillemets, echappes en 62 octets) tient encore dans une ligne
@@ -179,6 +236,44 @@ struct BaseAmaranDesktopTests {
         ])
         let r = try BaseAmaranDesktop.lire(octets: base)
         #expect(r.lampes.first?.code == 0)
+        #expect(r.lampes.first?.logiciel == nil && r.lampes.first?.ble == nil, "versions inconnues, sans gravite")
+    }
+
+    /// Les versions (colonnes `control_software_version`, `ble_software_version`) : lues telles
+    /// quelles si elles ont la forme 1 a 3 chiffres, un point, 1 a 3 chiffres ; sinon inconnues.
+    @Test func versions() throws {
+        func ligne(_ n: Int, _ logiciel: String, _ ble: String) -> String {
+            "insert into fixtures values (\(n), '02:00:00:00:00:\(String(format: "%02d", n))', 'L\(n)', '40065', null, \(logiciel), \(ble))"
+        }
+        let base = try Factice.base(Factice.tablesVersions + [Factice.cles,
+            ligne(1, "'1.4'", "'1.69'"),
+            ligne(2, "'123.456'", "'0.0'"),
+            ligne(3, "'1.4'", "null"),
+            ligne(4, "null", "'1.69'"),
+            ligne(5, "'1.2.3'", "'v1.69'"),
+            ligne(6, "'1234.5'", "'1.'"),
+            ligne(7, "''", "' 1.69'"),
+            ligne(8, "'1.4\n'", "'１.６９'"),
+            ligne(9, "14", "1.69"),  // nombres : l'affinite TEXT de la colonne les rend en texte ('14', '1.69')
+            ligne(10, "X'312E34'", "'1.69 '"),
+        ])
+        let r = try BaseAmaranDesktop.lire(octets: base)
+        #expect(r.lampes.map(\.logiciel) == ["1.4", "123.456", "1.4", nil, nil, nil, nil, nil, nil, nil])
+        #expect(r.lampes.map(\.ble) == ["1.69", "0.0", nil, "1.69", nil, nil, nil, nil, "1.69", nil])
+        #expect(r.lampes[0].jetonVersion == "v1.4/1.69")
+        #expect(r.lampes[3].jetonVersion == nil, "module Bluetooth seul : rien n'est envoye")
+    }
+
+    /// Une base avec une seule des deux colonnes : celle-la est lue, l'autre est inconnue.
+    @Test func uneSeuleColonneDeVersion() throws {
+        let base = try Factice.base([
+            "create table mesh (net_key text, app_key text)",
+            "create table fixtures (node_address integer, mac_address text, name text, code text, composition_data text, control_software_version text)",
+            Factice.cles,
+            "insert into fixtures values (2, '02:00:00:00:00:01', 'Lampe bureau', '40065', null, '1.4')",
+        ])
+        let l = try #require(try BaseAmaranDesktop.lire(octets: base).lampes.first)
+        #expect(l.logiciel == "1.4" && l.ble == nil)
     }
 
     @Test func refus() throws {
@@ -221,6 +316,23 @@ struct SauvegardeTests {
         #expect(r == Factice.reseau())
     }
 
+    /// Les versions passent dans la sauvegarde ; une sauvegarde sans ces champs (faite avant la fiche
+    /// des lampes) se relit avec des versions inconnues.
+    @Test func versionsEtAncienneSauvegarde() throws {
+        var r = Factice.reseau()
+        r.lampes[0].logiciel = "1.4"
+        r.lampes[0].ble = "1.69"
+        let f = try Sauvegarde.chiffrer(r, phrase: Self.phrase, tours: 1000)
+        let lu = try Sauvegarde.dechiffrer(f, phrase: Self.phrase)
+        #expect(lu == r)
+        #expect(lu.lampes.map(\.logiciel) == ["1.4", nil] && lu.lampes.map(\.ble) == ["1.69", nil])
+        // Sans version, rien n'est ecrit : le fichier est celui d'avant, et il se relit.
+        let ancien = try Sauvegarde.dechiffrer(try Sauvegarde.chiffrer(Factice.reseau(), phrase: Self.phrase, tours: 1000),
+                                               phrase: Self.phrase)
+        #expect(ancien == Factice.reseau())
+        #expect(ancien.lampes.allSatisfy { $0.logiciel == nil && $0.ble == nil })
+    }
+
     @Test func toursParDefaut() throws {
         let f = try Sauvegarde.chiffrer(Factice.reseau(), phrase: Self.phrase)
         #expect(f[9..<13] == Data([0x00, 0x09, 0x27, 0xC0]), "600 000 tours dans l'en-tete")
@@ -259,6 +371,33 @@ struct SauvegardeTests {
     }
 }
 
+@Suite("Copie du trousseau : versions des lampes")
+struct VersionsCopieTests {
+    /// Le JSON d'une copie ou d'une sauvegarde faite avant la fiche des lampes : sans `logiciel` ni `ble`.
+    @Test func copieSansLesChampsSeRelit() throws {
+        var r = Factice.reseau()
+        r.lampes[1].logiciel = "1.4"
+        r.lampes[1].ble = "1.69"
+        let plein = try JSONEncoder().encode(r)
+        var o = try #require(try JSONSerialization.jsonObject(with: plein) as? [String: Any])
+        var lampes = try #require(o["lampes"] as? [[String: Any]])
+        #expect(lampes[1]["logiciel"] as? String == "1.4" && lampes[1]["ble"] as? String == "1.69")
+        #expect(lampes[0]["logiciel"] == nil && lampes[0]["ble"] == nil, "inconnue : rien n'est ecrit")
+        #expect(try JSONDecoder().decode(ReseauMesh.self, from: plein) == r)
+        for i in lampes.indices {
+            lampes[i].removeValue(forKey: "logiciel")
+            lampes[i].removeValue(forKey: "ble")
+        }
+        o["lampes"] = lampes
+        let ancien = try JSONDecoder().decode(ReseauMesh.self, from: JSONSerialization.data(withJSONObject: o))
+        #expect(ancien.lampes.allSatisfy { $0.logiciel == nil && $0.ble == nil })
+        #expect(ancien.lampes.map(\.nom) == r.lampes.map(\.nom))
+        // Valeurs `null` : inconnues aussi.
+        let nulles = Data(#"{"adresse":2,"mac":"02:00:00:00:00:01","nom":"A","code":1,"declarees":[],"logiciel":null,"ble":null}"#.utf8)
+        #expect(try JSONDecoder().decode(LampeReseau.self, from: nulles).logiciel == nil)
+    }
+}
+
 @Suite("Controles du chargement")
 struct ChargementTests {
     @Test func reponsesDuPont() {
@@ -290,6 +429,46 @@ struct ChargementTests {
         autre.cleReseau = Data(count: 16)
         #expect(VerificationChargement.ecart(autre.apercu, mesh: mesh, lampes: lampes)?.hasPrefix("empreintes BE45CB26") == true)
         #expect(VerificationChargement.ecart(r.apercu, mesh: nil, lampes: lampes) == "pas de clés")
+    }
+}
+
+extension ChargementTests {
+    /// La verification apres le redemarrage compare aussi les versions : celles que le pont montre
+    /// (`logiciel`, `ble` du bloc `config` `lampe`) contre celles du jeton envoye.
+    @Test func apresLeRedemarrageLesVersions() throws {
+        var r = Factice.reseau()
+        r.lampes[0].logiciel = "1.4"
+        r.lampes[0].ble = "1.69"
+        r.lampes[1].logiciel = "1.4"
+        let d = JSONDecoder()
+        d.keyDecodingStrategy = .convertFromSnakeCase
+        let mesh = try d.decode(ConfigMesh.self, from: Data(#"{"cles":true,"empreintes":{"reseau":"BE45CB26","application":"\#(r.empreinteApplication)"},"lampes":2}"#.utf8))
+        func lampe(_ n: Int, _ a: String, _ mac: String, _ nom: String, _ versions: String) throws -> ConfigLampe {
+            try d.decode(ConfigLampe.self, from: Data(#"{"lampe":\#(n),"adresse":"\#(a)","mac":"\#(mac)","nom":"\#(nom)","code":40065\#(versions)}"#.utf8))
+        }
+        func pont(_ v1: String, _ v2: String) throws -> [Int: ConfigLampe] {
+            [1: try lampe(1, "0002", "020000000001", "Lampe bureau", v1), 2: try lampe(2, "0004", "020000000002", "Lumière fenêtre", v2)]
+        }
+        #expect(VerificationChargement.ecart(r.apercu, mesh: mesh,
+                                             lampes: try pont(#","logiciel":"1.4","ble":"1.69""#, #","logiciel":"1.4","ble":null"#)) == nil)
+        // Le pont n'a pas garde les versions : ecart nomme.
+        let sans = VerificationChargement.ecart(r.apercu, mesh: mesh, lampes: try pont("", #","logiciel":"1.4""#))
+        #expect(sans == "lampe 1 : versions différentes (pont : inconnues, chargées : 1.4 (BLE 1.69))")
+        // Autre version, ou module Bluetooth en moins.
+        #expect(VerificationChargement.ecart(r.apercu, mesh: mesh,
+                                             lampes: try pont(#","logiciel":"1.5","ble":"1.69""#, #","logiciel":"1.4""#))
+                == "lampe 1 : versions différentes (pont : 1.5 (BLE 1.69), chargées : 1.4 (BLE 1.69))")
+        #expect(VerificationChargement.ecart(r.apercu, mesh: mesh,
+                                             lampes: try pont(#","logiciel":"1.4","ble":"1.69""#, #","logiciel":"1.4","ble":"1.69""#))
+                == "lampe 2 : versions différentes (pont : 1.4 (BLE 1.69), chargées : 1.4)")
+        // Version mal formee venue du pont : inconnue, jamais de plantage.
+        #expect(VerificationChargement.ecart(r.apercu, mesh: mesh,
+                                             lampes: try pont(#","logiciel":"abc","ble":"1.69""#, #","logiciel":"1.4""#))
+                == "lampe 1 : versions différentes (pont : inconnues, chargées : 1.4 (BLE 1.69))")
+        // Un module Bluetooth connu sans logiciel n'est pas envoye, donc pas attendu.
+        var seulBle = Factice.reseau()
+        seulBle.lampes[0].ble = "1.69"
+        #expect(VerificationChargement.ecart(seulBle.apercu, mesh: mesh, lampes: try pont("", "")) == nil)
     }
 }
 
@@ -341,6 +520,92 @@ struct ComparaisonTests {
         var declarees = c
         declarees.lampes[0].declarees = ["cct"]
         #expect(declarees.memeReseau(que: c))
+    }
+
+    /// Les versions font partie de la lampe : inconnue d'un cote et connue de l'autre, ou changee,
+    /// est un ecart nomme, avec le geste qui le resout.
+    @Test func ecartsDeVersions() {
+        var c = Self.copie
+        c.lampes[0].logiciel = "1.4"
+        c.lampes[0].ble = "1.69"
+        #expect(ComparaisonCles.ecarts(base: c, copie: c, pont: c, pontConnu: true).isEmpty)
+        // Le pont n'a pas les versions de la copie.
+        let sans = Self.copie
+        #expect(ComparaisonCles.ecarts(base: c, copie: c, pont: sans, pontConnu: true) == [.pontVersionsDifferentes])
+        #expect(!sans.memeReseau(que: c) && sans.memesLampes(que: c) && !sans.memesVersions(que: c))
+        // Autre version.
+        var autre = c
+        autre.lampes[0].logiciel = "1.5"
+        #expect(ComparaisonCles.ecarts(base: c, copie: c, pont: autre, pontConnu: true) == [.pontVersionsDifferentes])
+        // Le module Bluetooth change aussi.
+        var ble = c
+        ble.lampes[0].ble = "1.70"
+        #expect(ComparaisonCles.ecarts(base: c, copie: c, pont: ble, pontConnu: true) == [.pontVersionsDifferentes])
+        // La copie n'a aucune version (faite avant le plan 3b-3) : autre explication, memes gestes.
+        #expect(ComparaisonCles.ecarts(base: c, copie: sans, pont: sans, pontConnu: true) == [.copieSansVersions])
+        // La base a d'autres versions que la copie (mise a jour par Sidus).
+        #expect(ComparaisonCles.ecarts(base: autre, copie: c, pont: c, pontConnu: true) == [.versionsChangees])
+        // Des lampes changees passent avant des versions changees.
+        var moinsUne = autre
+        moinsUne.lampes.removeLast()
+        #expect(ComparaisonCles.ecarts(base: moinsUne, copie: c, pont: c, pontConnu: true) == [.lampesChangees])
+        // Un module Bluetooth seul n'est pas envoye au pont : pas un ecart.
+        var seulBle = Self.copie
+        seulBle.lampes[1].ble = "1.69"
+        #expect(ComparaisonCles.ecarts(base: seulBle, copie: Self.copie, pont: Self.copie, pontConnu: true).isEmpty)
+        // Les textes nomment le geste.
+        #expect(EcartCles.pontVersionsDifferentes.texte.contains("« Charger le pont »"))
+        #expect(EcartCles.versionsChangees.texte.contains("« Copier depuis amaran Desktop », puis « Charger le pont »"))
+        #expect(EcartCles.copieSansVersions.texte.contains("pas encore les versions"))
+        #expect(EcartCles.copieSansVersions.texte.contains("« Copier depuis amaran Desktop », puis « Charger le pont »"))
+    }
+
+    /// Un pont sans la capacite `logiciel` ne prend pas les versions : les recharger n'y changerait rien
+    /// (boucle). L'ecart est nomme (firmware a mettre a jour), pas resolu par « Charger le pont ».
+    @Test func pontQuiNePrendPasLesVersions() {
+        var c = Self.copie
+        c.lampes[0].logiciel = "1.4"
+        let sans = Self.copie
+        #expect(ComparaisonCles.ecarts(base: c, copie: c, pont: sans, pontConnu: true, pontPrendLesVersions: false)
+                == [.pontSansVersions])
+        #expect(EcartCles.pontSansVersions.texte == "Ce pont ne prend pas la version des lampes : mettre à jour son firmware.")
+        // Copie sans version : rien a dire de ce pont.
+        #expect(ComparaisonCles.ecarts(base: sans, copie: sans, pont: sans, pontConnu: true, pontPrendLesVersions: false).isEmpty)
+        // Les autres ecarts restent dits.
+        var autre = sans
+        autre.lampes.removeLast()
+        #expect(ComparaisonCles.ecarts(base: c, copie: c, pont: autre, pontConnu: true, pontPrendLesVersions: false) == [.pontDifferent])
+    }
+
+    /// Le bloc `config` `lampe` : `logiciel` et `ble`, chaines ou `null` ; une forme illisible devient inconnue.
+    @Test func blocLampeAvecVersions() throws {
+        let d = JSONDecoder()
+        d.keyDecodingStrategy = .convertFromSnakeCase
+        func lampe(_ champs: String) throws -> ConfigLampe {
+            try d.decode(ConfigLampe.self, from: Data(#"{"lampe":1,"adresse":"0002","mac":"020000000001","nom":"A","code":40065\#(champs)}"#.utf8))
+        }
+        let pleine = try lampe(#","logiciel":"1.4","ble":"1.69""#)
+        #expect(pleine.logiciel == "1.4" && pleine.ble == "1.69")
+        #expect(Interpretation.logiciel(pleine, pontPrendLesVersions: true) == "1.4 (BLE 1.69)")
+        let nulles = try lampe(#","logiciel":null,"ble":null"#)
+        #expect(nulles.logiciel == nil && nulles.ble == nil)
+        #expect(Interpretation.logiciel(nulles, pontPrendLesVersions: true) == "inconnu (recharger le pont)")
+        let absentes = try lampe("")
+        #expect(absentes.logiciel == nil && Interpretation.logiciel(absentes, pontPrendLesVersions: true) == "inconnu (recharger le pont)")
+        #expect(Interpretation.logiciel(try lampe(#","logiciel":"1.4","ble":null"#), pontPrendLesVersions: true) == "1.4")
+        #expect(Interpretation.logiciel(try lampe(#","logiciel":"1.4""#), pontPrendLesVersions: true) == "1.4")
+        #expect(Interpretation.logiciel(try lampe(#","logiciel":null,"ble":"1.69""#), pontPrendLesVersions: true) == "inconnu (recharger le pont)")
+        #expect(Interpretation.logiciel(try lampe(#","logiciel":"quatorze","ble":"1.69""#), pontPrendLesVersions: true) == "inconnu (recharger le pont)")
+        #expect(Interpretation.logiciel(try lampe(#","logiciel":"1.4","ble":"x""#), pontPrendLesVersions: true) == "1.4")
+        // Sans la capacite `logiciel` du pont, recharger ne sert a rien : le conseil change ; une version connue ne change pas.
+        #expect(Interpretation.logiciel(absentes, pontPrendLesVersions: false) == "inconnu (firmware du pont à mettre à jour)")
+        #expect(Interpretation.logiciel(pleine, pontPrendLesVersions: false) == "1.4 (BLE 1.69)")
+        // Dans l'apercu du pont : les versions bien formees, sinon inconnues.
+        let mesh = try d.decode(ConfigMesh.self, from: Data(#"{"cles":true,"empreintes":{"reseau":"1A2B3C4D","application":"5E6F7A8B"},"lampes":2}"#.utf8))
+        let l2 = try d.decode(ConfigLampe.self, from: Data(#"{"lampe":2,"adresse":"0004","mac":"020000000002","nom":"B","code":40065,"logiciel":"1.4.0","ble":"1.69"}"#.utf8))
+        let apercu = try #require(ApercuReseau.dePont(mesh: mesh, lampes: [1: pleine, 2: l2]))
+        #expect(apercu.lampes.map(\.logiciel) == ["1.4", nil] && apercu.lampes.map(\.ble) == ["1.69", "1.69"])
+        #expect(apercu.lampes.map(\.jetonVersion) == ["v1.4/1.69", nil])
     }
 
     /// Comme outils/cles_amaran.py : une capacite declaree dans la base, que le pont

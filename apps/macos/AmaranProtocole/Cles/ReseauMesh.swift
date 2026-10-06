@@ -24,13 +24,35 @@ public struct LampeReseau: Codable, Sendable, Equatable, Hashable {
     /// Capacites au-dela de l'intensite que sa composition declare (`cct`,
     /// `couleur`) : un modele a cataloguer si le pont ne les lui connait pas.
     public var declarees: [String]
+    /// Version du logiciel de commande (`1.4`) ; nil : inconnue. Absente d'une copie
+    /// ou d'une sauvegarde plus ancienne, qui se relit avec nil.
+    public var logiciel: String?
+    /// Version du module Bluetooth (`1.69`) ; nil : inconnue.
+    public var ble: String?
 
-    public init(adresse: UInt16, mac: String, nom: String, code: UInt32, declarees: [String] = []) {
+    public init(adresse: UInt16, mac: String, nom: String, code: UInt32, declarees: [String] = [],
+                logiciel: String? = nil, ble: String? = nil) {
         self.adresse = adresse
         self.mac = mac
         self.nom = nom
         self.code = code
         self.declarees = declarees
+        self.logiciel = logiciel
+        self.ble = ble
+    }
+
+    /// Ce que le pont recoit comme jeton avant le nom : `v1.4/1.69`, `v1.4` ; rien si
+    /// le logiciel est inconnu (meme si le module Bluetooth est connu), ou si une
+    /// version est mal formee.
+    public var jetonVersion: String? {
+        guard let l = logiciel, ReseauMesh.versionValide(l) else { return nil }
+        if let b = ble, ReseauMesh.versionValide(b) { return "v\(l)/\(b)" }
+        return "v\(l)"
+    }
+
+    /// `1.4 (BLE 1.69)`, `1.4` si le module Bluetooth est inconnu, « inconnues » sans logiciel.
+    public var versionsTexte: String {
+        ReseauMesh.versionsTexte(logiciel: logiciel, ble: ble) ?? "inconnues"
     }
 }
 
@@ -44,6 +66,8 @@ public enum ErreurReseau: Error, Sendable, Equatable, CustomStringConvertible {
     case mac(lampe: Int)
     case macEnDouble(String)
     case nom(lampe: Int, String)
+    case version(lampe: Int, String)
+    case ligneTropLongue(lampe: Int, octets: Int)
 
     public var description: String {
         switch self {
@@ -56,6 +80,10 @@ public enum ErreurReseau: Error, Sendable, Equatable, CustomStringConvertible {
         case .mac(let l): "Lampe \(l) : MAC illisible."
         case .macEnDouble(let m): "MAC \(m) en double."
         case .nom(let l, let raison): "Lampe \(l) : \(raison)."
+        case .version(let l, let v): "Lampe \(l) : version « \(v) » illisible (forme 1.4 attendue)."
+        case .ligneTropLongue(let l, let n):
+            "Lampe \(l) : la ligne de chargement fait \(n) octets, \(LigneCommande.octetsMax) au plus "
+                + "(guillemets ou barres obliques inverses du nom comptés doubles) : raccourcir le nom."
         }
     }
 }
@@ -109,7 +137,34 @@ public struct ReseauMesh: Codable, Sendable, Equatable {
             guard Self.macValide(l.mac) else { throw .mac(lampe: n) }
             guard macs.insert(l.mac.uppercased()).inserted else { throw .macEnDouble(l.mac.uppercased()) }
             if let raison = Self.fauteNom(l.nom) { throw .nom(lampe: n, raison) }
+            for v in [l.logiciel, l.ble].compactMap({ $0 }) where !Self.versionValide(v) { throw .version(lampe: n, v) }
+            // Le jeton de version allonge la ligne : jugee avec le plus long id possible, avant
+            // d'envoyer quoi que ce soit (sinon le pont garderait de nouvelles cles et l'ancienne liste).
+            if case .failure(.tropLongue(let octets, _)) = LigneCommande.valider(commandeLampe(i), id: LigneCommande.idMax) {
+                throw .ligneTropLongue(lampe: n, octets: octets)
+            }
         }
+    }
+
+    /// Une version : 1 a 3 chiffres, un point, 1 a 3 chiffres (comme le pont et
+    /// outils/cles_amaran.py).
+    static func versionValide(_ v: String) -> Bool {
+        v.wholeMatch(of: /[0-9]{1,3}\.[0-9]{1,3}/) != nil
+    }
+
+    /// `1.4 (BLE 1.69)` ; `1.4` si le module Bluetooth est inconnu ; nil si le logiciel
+    /// est inconnu ou mal forme (la version du module seule ne se montre pas : le pont ne
+    /// la recoit pas sans celle du logiciel).
+    public static func versionsTexte(logiciel: String?, ble: String?) -> String? {
+        guard let l = version(logiciel) else { return nil }
+        guard let b = version(ble) else { return l }
+        return "\(l) (BLE \(b))"
+    }
+
+    /// La version telle que la base ou le pont la donne : nil si elle n'a pas la forme attendue.
+    static func version(_ v: String?) -> String? {
+        guard let v, versionValide(v) else { return nil }
+        return v
     }
 
     static func macValide(_ mac: String) -> Bool {
@@ -134,16 +189,22 @@ public struct ReseauMesh: Codable, Sendable, Equatable {
     }
 
     /// Les commandes du chargement (docs/PROTOCOLE-JSON.md 6.4) : `mesh cles`, `mesh
-    /// lampes <N>`, puis une ligne par lampe, le code avant le nom. La premiere porte
-    /// les cles : a soumettre en secret (Correlateur), jamais a afficher.
+    /// lampes <N>`, puis une ligne par lampe, le code puis le jeton de version (si le
+    /// logiciel est connu) avant le nom. La premiere porte les cles : a soumettre en
+    /// secret (Correlateur), jamais a afficher.
     public func commandes() -> [String] {
         func hex(_ d: Data) -> String { d.map { String(format: "%02X", $0) }.joined() }
         var c = ["mesh cles \(hex(cleReseau)) \(hex(cleApplication))", "mesh lampes \(lampes.count)"]
-        for (i, l) in lampes.enumerated() {
-            c.append("mesh lampe \(i + 1) 0x\(String(format: "%04X", l.adresse)) \(l.mac.uppercased()) \(l.code) "
-                     + Self.argument(l.nom))
-        }
+        for i in lampes.indices { c.append(commandeLampe(i)) }
         return c
+    }
+
+    /// `mesh lampe <n> <adresse> <mac> <code> [v<logiciel>[/<ble>]] "<nom>"` de la lampe d'indice `i`.
+    func commandeLampe(_ i: Int) -> String {
+        let l = lampes[i]
+        let jeton = l.jetonVersion.map { $0 + " " } ?? ""
+        return "mesh lampe \(i + 1) 0x\(String(format: "%04X", l.adresse)) \(l.mac.uppercased()) \(l.code) "
+            + jeton + Self.argument(l.nom)
     }
 
     /// Meme reseau et memes lampes (cles, puis adresse, MAC, nom et code de chaque lampe).

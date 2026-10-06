@@ -62,6 +62,10 @@ public enum VerificationChargement {
         where ApercuReseau.identites([p]) != ApercuReseau.identites([a]) {
             return "lampe \(i + 1) différente"
         }
+        for (i, (p, a)) in zip(pont.lampes, attendu.lampes).enumerated()
+        where ApercuReseau.versions([p]) != ApercuReseau.versions([a]) {
+            return "lampe \(i + 1) : versions différentes (pont : \(p.versionsTexte), chargées : \(a.versionsTexte))"
+        }
         return nil
     }
 }

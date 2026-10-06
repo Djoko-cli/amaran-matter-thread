@@ -35,14 +35,27 @@ public struct ApercuReseau: Codable, Sendable, Equatable {
                 return String(mac[d..<mac.index(d, offsetBy: 2)])
             }
             return LampeReseau(adresse: ad, mac: deux.joined(separator: ":").uppercased(), nom: c.nom ?? "",
-                               code: UInt32(clamping: c.code ?? 0))
+                               code: UInt32(clamping: c.code ?? 0),
+                               logiciel: ReseauMesh.version(c.logiciel), ble: ReseauMesh.version(c.ble))
         }
         return ApercuReseau(empreinteReseau: r, empreinteApplication: a, lampes: liste)
     }
 
-    /// Memes cles et memes lampes (adresse, MAC, nom, code ; pas les capacites declarees).
+    /// Memes cles et memes lampes (adresse, MAC, nom, code, versions ; pas les capacites declarees).
     public func memeReseau(que autre: ApercuReseau) -> Bool {
-        memesCles(que: autre) && Self.identites(lampes) == Self.identites(autre.lampes)
+        memesCles(que: autre) && memesLampes(que: autre) && memesVersions(que: autre)
+    }
+
+    /// Memes lampes, sans leurs versions (adresse, MAC, nom, code).
+    public func memesLampes(que autre: ApercuReseau) -> Bool {
+        Self.identites(lampes) == Self.identites(autre.lampes)
+    }
+
+    /// Memes versions, lampe par lampe. Une version inconnue d'un cote et connue de
+    /// l'autre est un ecart ; la version du module Bluetooth seule ne compte pas sans
+    /// celle du logiciel (le pont ne recoit rien dans ce cas).
+    public func memesVersions(que autre: ApercuReseau) -> Bool {
+        Self.versions(lampes) == Self.versions(autre.lampes)
     }
 
     public func memesCles(que autre: ApercuReseau) -> Bool {
@@ -51,6 +64,11 @@ public struct ApercuReseau: Codable, Sendable, Equatable {
 
     static func identites(_ l: [LampeReseau]) -> [String] {
         l.map { "\($0.adresse) \($0.mac.uppercased()) \($0.nom) \($0.code)" }
+    }
+
+    /// Ce que le pont garde des versions de chaque lampe : le jeton qu'il recoit.
+    static func versions(_ l: [LampeReseau]) -> [String] {
+        l.map { $0.jetonVersion ?? "inconnues" }
     }
 }
 
@@ -74,6 +92,18 @@ public enum EcartCles: Sendable, Equatable {
     case reseauRecree
     /// amaran Desktop a d'autres lampes : mettre le trousseau a jour.
     case lampesChangees
+    /// amaran Desktop a d'autres versions de lampes (mise a jour par Sidus) : mettre le
+    /// trousseau a jour, puis recharger le pont.
+    case versionsChangees
+    /// La copie n'a aucune version (faite avant que l'app ne les lise) alors qu'amaran
+    /// Desktop en a : memes gestes, autre explication.
+    case copieSansVersions
+    /// Le pont n'a pas les versions des lampes de la copie (inconnues ou differentes) :
+    /// le recharger.
+    case pontVersionsDifferentes
+    /// Le pont ne prend pas la version des lampes (firmware ancien) alors que la copie en
+    /// a : le recharger n'y changerait rien, il faut mettre son firmware a jour.
+    case pontSansVersions
 
     public var texte: String {
         switch self {
@@ -84,6 +114,16 @@ public enum EcartCles: Sendable, Equatable {
             "amaran Desktop a d'autres clés : réseau recréé ? « Copier depuis amaran Desktop », puis « Charger le pont »."
         case .lampesChangees:
             "amaran Desktop a d'autres lampes : « Copier depuis amaran Desktop », puis « Charger le pont »."
+        case .versionsChangees:
+            "amaran Desktop a d'autres versions de lampes (mise à jour ?) : « Copier depuis amaran Desktop », "
+                + "puis « Charger le pont »."
+        case .copieSansVersions:
+            "La copie de ce Mac n'a pas encore les versions des lampes : « Copier depuis amaran Desktop », "
+                + "puis « Charger le pont »."
+        case .pontSansVersions:
+            "Ce pont ne prend pas la version des lampes : mettre à jour son firmware."
+        case .pontVersionsDifferentes:
+            "Les versions des lampes du pont diffèrent de la copie (inconnues ou changées) : « Charger le pont »."
         }
     }
 }
@@ -91,20 +131,31 @@ public enum EcartCles: Sendable, Equatable {
 public enum ComparaisonCles {
     /// Les ecarts, du plus urgent au moins urgent. `pont` nil : pont sans cles ;
     /// `pontConnu` faux : aucun pont en mode machine (rien a dire de lui).
+    /// `pontPrendLesVersions` faux : le pont n'annonce pas la capacite `logiciel` ; ses
+    /// versions ne sont pas comparees (« Charger le pont » ne les lui donnerait pas).
     public static func ecarts(base: ApercuReseau?, copie: ApercuReseau?, pont: ApercuReseau?,
-                              pontConnu: Bool) -> [EcartCles] {
+                              pontConnu: Bool, pontPrendLesVersions: Bool = true) -> [EcartCles] {
         var e: [EcartCles] = []
         if let base, let copie {
             if !base.memesCles(que: copie) {
                 e.append(.reseauRecree)
-            } else if !base.memeReseau(que: copie) {
+            } else if !base.memesLampes(que: copie) {
                 e.append(.lampesChangees)
+            } else if !base.memesVersions(que: copie) {
+                let copieSans = !copie.lampes.contains(where: { $0.jetonVersion != nil })
+                e.append(copieSans ? .copieSansVersions : .versionsChangees)
             }
         }
         guard let copie else { return [.pasDeCopie] + e }
         if pontConnu {
             if let pont {
-                if !pont.memeReseau(que: copie) { e.append(.pontDifferent) }
+                if !pont.memesCles(que: copie) || !pont.memesLampes(que: copie) {
+                    e.append(.pontDifferent)
+                } else if !pontPrendLesVersions {
+                    if copie.lampes.contains(where: { $0.jetonVersion != nil }) { e.append(.pontSansVersions) }
+                } else if !pont.memesVersions(que: copie) {
+                    e.append(.pontVersionsDifferentes)
+                }
             } else {
                 e.append(.pontSansCles)
             }

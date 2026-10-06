@@ -34,6 +34,15 @@ public enum Interpretation {
         }
     }
 
+    /// Ligne « Logiciel » d'une lampe : « 1.4 (BLE 1.69) », « 1.4 » si le module Bluetooth
+    /// est inconnu, sinon « inconnu » avec le geste qui peut y remedier : mettre a jour le
+    /// firmware d'un pont qui ne prend pas les versions (sans la capacite `logiciel`),
+    /// recharger le pont s'il les prend.
+    public static func logiciel(_ c: ConfigLampe, pontPrendLesVersions: Bool) -> String {
+        ReseauMesh.versionsTexte(logiciel: c.logiciel, ble: c.ble)
+            ?? (pontPrendLesVersions ? "inconnu (recharger le pont)" : "inconnu (firmware du pont à mettre à jour)")
+    }
+
     /// `ordre` : « confirmé en 410 ms (essai 1) ».
     public static func ordre(_ o: EvenementOrdre) -> String {
         switch o.issue {

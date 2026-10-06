@@ -104,6 +104,8 @@ enum CouvertureCles {
         // Trame d'ordre eteint par Thread, avec trames non emises ; adresse d'un autre type.
         #"{"v":1,"t":"trame","n":13,"ms":13,"sens":"tx","quoi":"ordre","lampe":16,"marche":false,"intensite":null,"essai":3,"sautes":9}"#,
         #"{"v":1,"t":"reseau","n":14,"ms":14,"bloc":"ip","srp":null,"adresses":[{"type":"autre","adresse":"fd12:34:5678:0:aaaa:bbbb:ccc:dddd"}],"udp":{"port":5480,"cle":true,"empreinte":"1A2B3C4D","ouvert":false,"sessions":2,"recus":1,"emis":2,"rejets":0,"perdus":5}}"#,
+        // Lampe avec ses versions (fiche des lampes).
+        #"{"v":1,"t":"config","n":16,"ms":16,"bloc":"lampe","lampe":1,"adresse":"0002","mac":"020000000001","nom":"Lampe bureau","code":40065,"modele":"amaran COB 60d","catalogue":true,"capacites":["intensite"],"type":"variable","logiciel":"1.4","ble":"1.69"}"#,
         // Session distante en trames et journal.
         #"{"v":1,"t":"hello","n":15,"ms":15,"bloc":"base","rev":1,"session":{"transport":"udp","periode_ms":0,"lampes_ms":0,"compteurs_ms":5000,"reseau_ms":0,"bail_s":120,"log":true,"trames":true}}"#,
         // Reponse complete : msg, suite aucune, lampe, bail.
