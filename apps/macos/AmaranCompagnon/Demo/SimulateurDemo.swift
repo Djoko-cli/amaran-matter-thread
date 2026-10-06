@@ -17,6 +17,9 @@ struct MemoireDemo: Sendable {
         var endpoint: Int?
         var vue: Bool
         var masquee = false
+        /// Versions (jeton de `mesh lampe`) ; nil : inconnues.
+        var logiciel: String?
+        var ble: String?
     }
 
     var empreintes: (reseau: String, application: String)?
@@ -31,12 +34,15 @@ struct MemoireDemo: Sendable {
     var brouillon: [Int: Lampe] = [:]
     var attendues = 0
     var listeChargee: [Lampe]?
+    /// Faux : un pont d'avant la fiche des lampes (pas de capacite `logiciel`, pas de versions).
+    var annonceLogiciel = true
 
     static var initiale: MemoireDemo {
         let r = ReseauDemo.reseau
         func l(_ i: Int, ep: Int?, vue: Bool, masquee: Bool = false) -> Lampe {
             let x = r.lampes[i]
-            return Lampe(adresse: x.adresse, mac: x.mac, nom: x.nom, code: x.code, endpoint: ep, vue: vue, masquee: masquee)
+            return Lampe(adresse: x.adresse, mac: x.mac, nom: x.nom, code: x.code, endpoint: ep, vue: vue, masquee: masquee,
+                         logiciel: x.logiciel, ble: x.ble)
         }
         return MemoireDemo(empreintes: (r.empreinteReseau, r.empreinteApplication),
                            lampes: [l(0, ep: 2, vue: true), l(1, ep: 3, vue: true, masquee: true), l(2, ep: nil, vue: false)])
@@ -211,8 +217,8 @@ actor SimulateurDemo {
             ("boot", .s(boot)), ("mac", .s("02000000DE00")),
             ("id", .o([("fabricant", .s("TEST_VENDOR")), ("produit", .s("TEST_PRODUCT")),
                        ("serie", .s("AMARAN-02000000DE00")), ("nom", .s("Pont amaran"))])),
-            ("caps", .a(["matter", "thread", "mesh", "catalogue", "ordres", "led", "log", "trames", "udp", "cle", "texte"]
-                .map { .s($0) })),
+            ("caps", .a((["matter", "thread", "mesh", "catalogue", "ordres", "led", "log", "trames", "udp", "cle", "texte"]
+                + (memoire.annonceLogiciel ? ["logiciel"] : [])).map { .s($0) })),
         ])
         ligne("config", bloc: "catalogue", [
             ("modeles", .a([.o([("code", .i(40065)), ("nom", .s("amaran COB 60d")), ("capacites", .a([.s("intensite")])),
@@ -243,7 +249,7 @@ actor SimulateurDemo {
             ("mac", .s(l.mac.replacingOccurrences(of: ":", with: ""))), ("nom", .s(l.nom)), ("code", .i(Int(l.code))),
             ("modele", .s(l.code == 40065 ? "amaran COB 60d" : "modele non catalogue")), ("catalogue", .b(l.code == 40065)),
             ("capacites", .a([.s("intensite")])), ("type", .s("variable")),
-        ])
+        ] + (memoire.annonceLogiciel ? [("logiciel", .s(l.logiciel)), ("ble", .s(l.ble))] : []))
     }
 
     private func etatPont() {
@@ -688,9 +694,10 @@ actor SimulateurDemo {
         case ("lampes", 3):
             memoire.attendues = Int(m[2]) ?? 0
             memoire.brouillon = [:]
-            texte("ok liste de \(memoire.attendues) lampe(s) : envoyer mesh lampe 1 a \(memoire.attendues)")
+            texte("ok liste de \(memoire.attendues) lampe(s) : envoyer mesh lampe 1 a \(memoire.attendues)"
+                  + (memoire.annonceLogiciel ? " [v<x.y>[/<x.y>]]" : ""))
         case ("lampe", let c) where c >= 7:
-            ok = chargerLampe(l, m)
+            ok = chargerLampe(l)
         default:
             texte("erreur : sous-commande inconnue (help)")
             ok = false
@@ -698,25 +705,42 @@ actor SimulateurDemo {
         reponse(id, l, ok: ok, code: ok ? "ok" : "erreur")
     }
 
-    /// `mesh lampe <n> <adresse> <mac> <code> "<nom>"` (nom entre guillemets, echappe).
-    private func chargerLampe(_ l: String, _ m: [String]) -> Bool {
-        guard memoire.attendues > 0, let k = Int(m[2]), (1...memoire.attendues).contains(k),
-              let adresse = UInt16(m[3].replacingOccurrences(of: "0x", with: ""), radix: 16), let code = UInt32(m[5]),
-              let q = l.firstIndex(of: "\"")
+    /// `mesh lampe <n> <adresse> <mac> <code> [v<x.y>[/<x.y>]] <nom>`, decoupee comme la console du
+    /// pont (`LigneCommande.argv`). Le mot `argv[6]` est un jeton de version seulement si le pont prend
+    /// les versions, s'il reste au moins un mot apres lui, et s'il a exactement la forme
+    /// `v<x.y>[/<x.y>]` (donc sans espace : un nom entre guillemets reste un nom) ; sinon tout a partir
+    /// de `argv[6]` est le nom, sans erreur. Sans la capacite `logiciel`, aucun jeton n'est reconnu.
+    private func chargerLampe(_ l: String) -> Bool {
+        let a = LigneCommande.argv(l, maxArguments: 32)
+        let jeton = "[v<x.y>[/<x.y>]] "
+        guard memoire.attendues > 0, a.count >= 7, let k = Int(a[2]), (1...memoire.attendues).contains(k),
+              let adresse = UInt16(a[3].replacingOccurrences(of: "0x", with: ""), radix: 16), let code = UInt32(a[5])
         else {
-            texte("erreur : mesh lampe <1-\(memoire.attendues)> <adresse> <mac> <code> <nom>")
+            texte("erreur : mesh lampe <1-\(memoire.attendues)> <adresse> <mac> <code> "
+                  + (memoire.annonceLogiciel ? jeton : "") + "<nom>")
             return false
         }
-        var nom = String(l[l.index(after: q)...])
-        if nom.hasSuffix("\"") { nom.removeLast() }
-        nom = nom.replacingOccurrences(of: "\\\"", with: "\"").replacingOccurrences(of: "\\\\", with: "\\")
-        memoire.brouillon[k] = MemoireDemo.Lampe(adresse: adresse, mac: m[4], nom: nom, code: code, endpoint: nil, vue: false)
+        var logiciel: String?, ble: String?
+        var premier = 6
+        if memoire.annonceLogiciel, a.count >= 8,
+           let v = a[6].wholeMatch(of: /v([0-9]{1,3}\.[0-9]{1,3})(?:\/([0-9]{1,3}\.[0-9]{1,3}))?/) {
+            logiciel = String(v.output.1)
+            ble = v.output.2.map(String.init)
+            premier = 7
+        }
+        let nom = a[premier...].joined(separator: " ")
+        memoire.brouillon[k] = MemoireDemo.Lampe(adresse: adresse, mac: a[4], nom: nom, code: code, endpoint: nil, vue: false,
+                                                   logiciel: logiciel, ble: ble)
         var fin = ""
         if memoire.brouillon.count == memoire.attendues {
             memoire.listeChargee = (1...memoire.attendues).compactMap { memoire.brouillon[$0] }
             fin = " ; liste de \(memoire.attendues) lampe(s) enregistree (redemarrer pour l'appliquer)"
         }
-        texte("ok lampe \(k) 0x\(String(format: "%04x", adresse)) modele \(code) amaran COB 60d [intensite] : \(nom)\(fin)")
+        // Un pont d'avant (sans la capacite `logiciel`) ne parle pas des versions.
+        let versions = memoire.annonceLogiciel
+            ? "logiciel \(ReseauMesh.versionsTexte(logiciel: logiciel, ble: ble) ?? "inconnu") " : ""
+        texte("ok lampe \(k) 0x\(String(format: "%04x", adresse)) modele \(code) amaran COB 60d [intensite] "
+              + "\(versions): \(nom)\(fin)")
         return true
     }
 }

@@ -34,6 +34,7 @@ private struct PanneauCommandes: View {
                 }
                 if let lampe {
                     Carte(titre: lampe.nom, icone: "lightbulb") {
+                        LigneInfo("Logiciel", lampe.config.map { Interpretation.logiciel($0, pontPrendLesVersions: pont.etat.a(.logiciel)) })
                         LigneInfo("État lu", Interpretation.etat(lampe.etat?.lue))
                         LigneInfo("Maison", Interpretation.maison(lampe.etat?.maison))
                         HStack {

@@ -94,6 +94,142 @@ struct DemoBoutEnBoutTests {
         #expect(p.ecartsCles.isEmpty)
     }
 
+    /// Les lampes de la demo ont des versions inventees ; le pont simule les rend dans le bloc `config`
+    /// `lampe`, annonce la capacite `logiciel`, et la carte de lampe en montre la ligne.
+    @Test func versionsDesLampesDeLaDemo() async throws {
+        let p = pontDemo()
+        defer { p.deconnecter() }
+        #expect(await connecte(p))
+        #expect(p.etat.a(.logiciel))
+        #expect(p.lampes.map { $0.config?.logiciel } == ["1.4", "1.4", "1.4"])
+        #expect(p.lampes.map { $0.config?.ble } == ["1.69", "1.69", nil])
+        #expect(p.lampes.compactMap { $0.config.map { Interpretation.logiciel($0, pontPrendLesVersions: true) } } == ["1.4 (BLE 1.69)", "1.4 (BLE 1.69)", "1.4"])
+        #expect(p.ecartsCles.isEmpty, "le pont simule a deja les versions de la copie")
+    }
+
+    /// « Charger le pont » envoie le jeton de version quand le pont a la capacite `logiciel`, et la
+    /// verification apres le redemarrage compare les versions rendues.
+    @Test func chargementAvecLesVersions() async throws {
+        let p = pontDemo()
+        defer { p.deconnecter() }
+        #expect(await connecte(p))
+        p.chargerPont(depuis: .trousseau)
+        #expect(await attendre(.seconds(30)) {
+            if case .reussi = p.chargement { return true }
+            return false
+        }, "chargement : \(p.chargement)")
+        let lignes = p.suivis.map(\.commande).filter { $0.hasPrefix("mesh lampe ") && !$0.hasPrefix("mesh lampe 1 afficher") }
+        #expect(lignes == [
+            "mesh lampe 1 0x0002 02:00:00:00:0D:01 40065 v1.4/1.69 \"Lampe bureau\"",
+            "mesh lampe 2 0x0004 02:00:00:00:0D:02 40065 v1.4/1.69 \"Lumière fenêtre\"",
+            "mesh lampe 3 0x0006 02:00:00:00:0D:03 40065 v1.4 \"Lampe du fond\"",
+        ])
+        #expect(!p.console.elements.contains { $0.texte.contains("firmware") })
+        #expect(p.lampes.map { $0.config?.logiciel } == ["1.4", "1.4", "1.4"])
+        #expect(p.ecartsCles.isEmpty)
+    }
+
+    /// Une copie sans versions (faite avant la fiche des lampes) : le pont simule, qui les connait,
+    /// differe de la copie, et la verification apres chargement ne les attend pas.
+    @Test func copieSansVersionsContreUnPontQuiLesA() async throws {
+        var ancienne = ReseauDemo.reseau
+        for i in ancienne.lampes.indices { ancienne.lampes[i].logiciel = nil; ancienne.lampes[i].ble = nil }
+        let p = pontDemo(copie: ancienne)
+        defer { p.deconnecter() }
+        #expect(await connecte(p))
+        #expect(p.ecartsCles == [.pontVersionsDifferentes])
+        p.chargerPont(depuis: .trousseau)
+        #expect(await attendre(.seconds(30)) {
+            if case .reussi = p.chargement { return true }
+            return false
+        }, "chargement : \(p.chargement)")
+        #expect(p.suivis.map(\.commande).contains("mesh lampe 1 0x0002 02:00:00:00:0D:01 40065 \"Lampe bureau\""))
+        // Sans jeton, le pont simule a perdu les versions : la copie n'en a pas non plus.
+        #expect(await attendre { p.lampes.map { $0.config?.logiciel } == [nil, nil, nil] })
+        #expect(p.ecartsCles.isEmpty)
+    }
+
+    /// Un pont qui n'annonce pas `logiciel` (firmware d'avant) lirait le jeton comme le debut du nom :
+    /// l'app charge sans versions, le dit, et ne boucle pas sur l'ecart des versions.
+    @Test func pontSansLaCapaciteLogiciel() async throws {
+        let p = Pont(trousseau: TrousseauMemoire(), trousseauDemo: TrousseauMemoire(ReseauDemo.reseau),
+                     trousseauPonts: TrousseauPontsMemoire(), trousseauPontsDemo: TrousseauPontsMemoire(),
+                     preferences: UserDefaults(suiteName: "amaran.tests.\(UUID().uuidString)")!)
+        p.vitesseDemo = 20
+        p.demoAnnonceLogiciel = false
+        p.connecter(.demo)
+        defer { p.deconnecter() }
+        #expect(await connecte(p))
+        #expect(!p.etat.a(.logiciel))
+        #expect(p.lampes.map { $0.config?.logiciel } == [nil, nil, nil])
+        #expect(p.ecartsCles == [.pontSansVersions], "a mettre a jour, pas a recharger")
+        p.chargerPont(depuis: .trousseau)
+        #expect(p.console.elements.contains { $0.texte.contains("Ce pont ne prend pas la version des lampes : mettre à jour son firmware.") })
+        #expect(await attendre(.seconds(30)) {
+            if case .reussi = p.chargement { return true }
+            return false
+        }, "chargement : \(p.chargement)")
+        let lignes = p.suivis.map(\.commande).filter { $0.hasPrefix("mesh lampe ") }
+        #expect(lignes.count == 3 && !lignes.contains { $0.contains(" v1.") }, "\(lignes)")
+        #expect(p.ecartsCles == [.pontSansVersions])
+        // Le nom rendu est intact, et la ligne « Logiciel » dit le geste qui convient.
+        #expect(p.lampes.map { $0.config?.nom } == ["Lampe bureau", "Lumière fenêtre", "Lampe du fond"])
+        #expect(p.lampes.compactMap { $0.config.map { Interpretation.logiciel($0, pontPrendLesVersions: p.etat.a(.logiciel)) } }
+                == Array(repeating: "inconnu (firmware du pont à mettre à jour)", count: 3))
+        // Un jeton envoye a la main n'est pas reconnu : tout est le nom, et la reponse ne parle pas de version.
+        p.envoyer("mesh lampes 1")
+        #expect(await attendre { p.suivis.last?.commande == "mesh lampes 1" && p.suivis.last?.etat.estFinal == true })
+        #expect(p.suivis.last?.texte == ["ok liste de 1 lampe(s) : envoyer mesh lampe 1 a 1"])
+        p.envoyer("mesh lampe 1 0x0002 02:00:00:00:0D:01 40065 v1.4/1.69 \"A\"")
+        #expect(await attendre { p.suivis.last?.commande.contains("v1.4/1.69") == true && p.suivis.last?.etat.estFinal == true })
+        #expect(p.suivis.last?.texte.first == "ok lampe 1 0x0002 modele 40065 amaran COB 60d [intensite] : v1.4/1.69 A"
+                    + " ; liste de 1 lampe(s) enregistree (redemarrer pour l'appliquer)", "\(p.suivis.last?.texte ?? [])")
+        p.envoyer("mesh lampe 9 0x0002 02:00:00:00:0D:01 40065 \"A\"")
+        #expect(await attendre { p.suivis.last?.commande.hasPrefix("mesh lampe 9") == true && p.suivis.last?.etat.estFinal == true })
+        #expect(p.suivis.last?.texte == ["erreur : mesh lampe <1-1> <adresse> <mac> <code> <nom>"])
+    }
+
+    /// Comme le pont : `argv[6]` est un jeton seulement s'il reste un mot apres lui et s'il a la forme
+    /// `v<x.y>[/<x.y>]` ; sinon tout est le nom, sans erreur.
+    @Test func lePontSimuleLitLeJetonCommeLeFirmware() async throws {
+        let p = pontDemo()
+        defer { p.deconnecter() }
+        #expect(await connecte(p))
+        p.envoyer("mesh lampes 1")
+        #expect(await attendre { p.suivis.last?.etat == .terminee })
+        #expect(p.suivis.last?.texte == ["ok liste de 1 lampe(s) : envoyer mesh lampe 1 a 1 [v<x.y>[/<x.y>]]"])
+        let tete = "mesh lampe 1 0x0002 02:00:00:00:0D:01 40065"
+        var vu = Set<String>()
+        func envoyer(_ fin: String, _ attendu: String, _ n: Int = #line) async {
+            let ligne = "\(tete) \(fin)"
+            p.envoyer(ligne)
+            #expect(await attendre { p.suivis.last?.commande == ligne && p.suivis.last?.etat.estFinal == true }, "ligne \(n) : \(ligne)")
+            #expect(p.suivis.last?.fin?.ok == true, "ligne \(n) : \(p.suivis.last?.texte ?? [])")
+            #expect(p.suivis.last?.texte.contains { $0.contains(attendu) } == true, "ligne \(n) : \(p.suivis.last?.texte ?? [])")
+            vu.insert(ligne)
+        }
+        // Nom entre guillemets sans jeton, meme s'il a la forme d'une version : le nom reste intact.
+        await envoyer("\"v2\"", "logiciel inconnu : v2 ;")
+        await envoyer("\"v2 bureau\"", "logiciel inconnu : v2 bureau ;")
+        await envoyer("\"v1.4 bureau\"", "logiciel inconnu : v1.4 bureau ;")
+        // Un seul mot de la forme d'un jeton, sans rien apres : c'est le nom.
+        await envoyer("v1.4", "logiciel inconnu : v1.4 ;")
+        // Jeton puis nom : version et nom.
+        await envoyer("v1.4/1.69 \"A\"", "logiciel 1.4 (BLE 1.69) : A ;")
+        await envoyer("v1.4 \"v2 bureau\"", "logiciel 1.4 : v2 bureau ;")
+        // Jeton mal forme suivi d'un nom : tout est le nom, sans erreur.
+        for mot in ["v1.4.2", "v1", "v1.4/", "v1.4/1", "v1234.5"] {
+            await envoyer("\(mot) \"A\"", "logiciel inconnu : \(mot) A ;")
+        }
+        // Un nom ordinaire, un mot qui commence par v sans chiffre.
+        p.envoyer("mesh lampe 9 0x0002 02:00:00:00:0D:01 40065 \"A\"")
+        #expect(await attendre { p.suivis.last?.commande.hasPrefix("mesh lampe 9") == true && p.suivis.last?.etat.estFinal == true })
+        #expect(p.suivis.last?.texte == ["erreur : mesh lampe <1-1> <adresse> <mac> <code> [v<x.y>[/<x.y>]] <nom>"])
+        await envoyer("\"Vase\"", "logiciel inconnu : Vase ;")
+        await envoyer("vente \"A\"", "logiciel inconnu : vente A ;")
+        #expect(vu.count == 13)
+    }
+
     @Test func chargementRefuseParLesPreControles() async throws {
         var faux = ReseauDemo.reseau
         faux.lampes[1].adresse = 0x7F38
@@ -151,6 +287,15 @@ struct TrousseauTests {
 
     @Test func enMemoire() throws {
         try Self.exercer(TrousseauMemoire())
+    }
+
+    /// Le trousseau rend les versions des lampes comme il les a rangees.
+    @Test func gardeLesVersions() throws {
+        let t = TrousseauMemoire()
+        try t.ranger(ReseauDemo.reseau)
+        let r = try t.lire()
+        #expect(r.lampes.map(\.logiciel) == ["1.4", "1.4", "1.4"] && r.lampes.map(\.ble) == ["1.69", "1.69", nil])
+        #expect(try t.apercu()?.lampes.map(\.jetonVersion) == ["v1.4/1.69", "v1.4/1.69", "v1.4"])
     }
 
     /// Vrai trousseau (service de test, nettoye) : seulement sur demande,

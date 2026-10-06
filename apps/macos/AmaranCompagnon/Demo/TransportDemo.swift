@@ -19,11 +19,21 @@ final class TransportDemo: Transport {
     }
 
     private let vitesse: Double
-    private let etat = Mutex(Etat())
+    private let etat: Mutex<Etat>
 
     /// `vitesse` : facteur du temps du pont simule (les tests vont plus vite).
-    init(vitesse: Double = 1) {
+    /// `annonceLogiciel` faux : un pont d'avant la fiche des lampes (tests).
+    init(vitesse: Double = 1, annonceLogiciel: Bool = true) {
         self.vitesse = vitesse
+        var memoire = MemoireDemo.initiale
+        if !annonceLogiciel {
+            memoire.annonceLogiciel = false
+            for i in memoire.lampes.indices {
+                memoire.lampes[i].logiciel = nil
+                memoire.lampes[i].ble = nil
+            }
+        }
+        etat = Mutex(Etat(memoire: memoire))
     }
 
     func ouvrir() async throws -> AsyncStream<EvenementTransport> {

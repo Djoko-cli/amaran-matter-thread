@@ -84,6 +84,8 @@ final class Pont {
     private(set) var reglages: HelloBase.ReglagesSession?
     /// Facteur de temps du mode demo (1 : temps reel ; les tests accelerent).
     @ObservationIgnored var vitesseDemo: Double = 1
+    /// Faux (tests) : le pont simule n'annonce pas la capacite `logiciel`.
+    @ObservationIgnored var demoAnnonceLogiciel = true
 
     // Acces reseau (Pont+Reseau.swift)
     /// Ponts dont ce Mac a la cle UDP (trousseau des ponts, jamais celui de la demo).
@@ -406,7 +408,7 @@ final class Pont {
         let t: any Transport
         switch source {
         case .demo:
-            if demo == nil { demo = TransportDemo(vitesse: vitesseDemo) }
+            if demo == nil { demo = TransportDemo(vitesse: vitesseDemo, annonceLogiciel: demoAnnonceLogiciel) }
             t = demo!
         case .serie(let chemin, let serie):
             // Le meme pont (meme numero de serie USB) peut revenir sous un autre nom ;

@@ -62,6 +62,7 @@ private struct CarteLampe: View {
             LigneInfo("Modèle", lampe.config.map { c in
                 (c.catalogue == true ? c.modele : "non catalogué (code \(c.code ?? 0))") ?? "?"
             })
+            LigneInfo("Logiciel", lampe.config.map { Interpretation.logiciel($0, pontPrendLesVersions: pont.etat.a(.logiciel)) })
             LigneInfo("Maison", Interpretation.maison(e?.maison))
             LigneInfo("État lu", Interpretation.etat(e?.lue))
             LigneInfo("Joignable", e?.entendue == true ? Format.oui(joignable) : "jamais entendue",

@@ -142,7 +142,8 @@ extension Pont {
 
     /// Ecarts entre la base, la copie et le pont (panneau « Cles »).
     var ecartsCles: [EcartCles] {
-        ComparaisonCles.ecarts(base: base, copie: copie, pont: apercuPont, pontConnu: etat.mesh != nil)
+        ComparaisonCles.ecarts(base: base, copie: copie, pont: apercuPont, pontConnu: etat.mesh != nil,
+                               pontPrendLesVersions: etat.a(.logiciel))
     }
 
     /// Lampes du pont que la base (ou, sans elle, la copie) dit capables de plus.
@@ -162,6 +163,13 @@ extension Pont {
         do {
             var r = try source == .amaranDesktop ? lireBaseAmaran() : trousseauCourant.lire()
             defer { effacer(&r) }
+            // Un pont sans la capacite `logiciel` lirait le jeton de version comme le debut du
+            // nom : il charge sans versions (et la verification ne les attend pas).
+            if !etat.a(.logiciel), r.lampes.contains(where: { $0.jetonVersion != nil }) {
+                for i in r.lampes.indices { r.lampes[i].logiciel = nil; r.lampes[i].ble = nil }
+                note("Ce pont ne prend pas la version des lampes : mettre à jour son firmware. "
+                     + "Le chargement se fait sans les versions.")
+            }
             try r.verifier()
             charge = ChargementEnCours(attendu: r.apercu, restantes: r.commandes(), etapeDepuis: maintenant())
             chargement = .enCours("clés")
