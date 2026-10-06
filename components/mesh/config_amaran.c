@@ -15,6 +15,7 @@
 
 #define ESPACE "amaran"
 #define CLE_LISTE "lampes"
+#define CLE_LOGICIELS "logiciels"  // versions des lampes, a part (spec fiche des lampes 3)
 
 static const char *TAG = "config";
 
@@ -30,7 +31,8 @@ static const char *const NOMS_V1[2] = {"lampe0", "lampe1"};
 static SemaphoreHandle_t s_verrou;
 static StaticSemaphore_t s_verrou_memoire;
 static liste_t s_actuelle, s_nouvelle;
-static uint8_t s_tampon[sizeof(liste_entete_t) + LISTE_CAPACITE * sizeof(liste_lampe_t)];
+static uint8_t s_tampon[sizeof(liste_entete_t) + LISTE_CAPACITE * sizeof(liste_lampe_v2_t)];
+static uint8_t s_tampon_logiciels[sizeof(liste_entete_t) + LISTE_CAPACITE * sizeof(liste_logiciel_nvs_t)];
 
 static void verrouiller(void) { xSemaphoreTake(s_verrou, portMAX_DELAY); }
 
@@ -72,13 +74,30 @@ static esp_err_t lire_liste(nvs_handle_t h, liste_t *l) {
   } else if (liste_valider(l, &fautive) != LISTE_OK) {
     ESP_LOGE(TAG, "liste des lampes invalide (lampe %d) : liste vide", fautive + 1);
     memset(l, 0, sizeof(*l));
+  } else {
+    // Les versions, par MAC : absentes (liste chargee avant le plan 3b-3, ou par un
+    // firmware plus ancien) ou illisibles, elles restent inconnues.
+    size_t m = sizeof(s_tampon_logiciels);
+    const esp_err_t e = nvs_get_blob(h, CLE_LOGICIELS, s_tampon_logiciels, &m);
+    if (e == ESP_OK) {
+      if (!liste_logiciels_depuis_nvs(l, s_tampon_logiciels, (uint32_t)m)) {
+        ESP_LOGE(TAG, "versions des lampes illisibles (format) : inconnues");
+      }
+    } else if (e != ESP_ERR_NVS_NOT_FOUND) {
+      ESP_LOGE(TAG, "versions des lampes illisibles (%s) : inconnues", esp_err_to_name(e));
+    }
   }
   return ESP_OK;
 }
 
+// La liste, puis ses versions : un firmware d'avant le plan 3b-3 relit la premiere
+// et ignore la seconde.
 static esp_err_t ecrire_liste(nvs_handle_t h, const liste_t *l) {
   liste_vers_nvs(l, s_tampon);
-  return nvs_set_blob(h, CLE_LISTE, s_tampon, liste_taille_nvs(l));
+  esp_err_t err = nvs_set_blob(h, CLE_LISTE, s_tampon, liste_taille_nvs(l));
+  if (err != ESP_OK) return err;
+  liste_logiciels_vers_nvs(l, s_tampon_logiciels);
+  return nvs_set_blob(h, CLE_LOGICIELS, s_tampon_logiciels, liste_logiciels_taille_nvs(l));
 }
 
 // Ancien format, converti une fois : l'emplacement i gardait l'endpoint 2 + i.

@@ -142,12 +142,15 @@ static int mesh_lampes(int argc, char **argv) {
   s_brouillon.n = (uint8_t)n;
   s_attendues = (uint8_t)n;
   s_donnees = 0;
-  printf("ok liste de %" PRIu32 " lampe(s) : envoyer mesh lampe 1 a %" PRIu32 "\n", n, n);
+  // LISTE_JETON_AIDE : ce pont prend la version (outils/cles_amaran.py le cherche ici).
+  printf("ok liste de %" PRIu32 " lampe(s) : envoyer mesh lampe 1 a %" PRIu32 " " LISTE_JETON_AIDE "\n", n, n);
   return 0;
 }
 
-// mesh lampe <n> <adresse> <mac> <code> <nom...> : le code avant le nom, qu'un nombre
-// peut terminer (« Lampe 2 »).
+// mesh lampe <n> <adresse> <mac> <code> [v<logiciel>[/<ble>]] <nom...> : le code avant
+// le nom, qu'un nombre peut terminer ("Lampe 2") ; la version, facultative, se
+// reconnait a sa forme et n'est jamais le dernier mot (liste_lire_logiciel_argv : sinon,
+// c'est le debut du nom).
 static int mesh_lampe(int argc, char **argv) {
   if (!s_attendues) {
     printf("erreur : mesh lampes <N> d'abord\n");
@@ -159,15 +162,16 @@ static int mesh_lampe(int argc, char **argv) {
   if (argc < 7 || !texte_lire_nombre(argv[2], &n) || n < 1 || n > s_attendues ||
       !texte_lire_nombre(argv[3], &adresse) || adresse > 0xFFFF || !texte_lire_mac(argv[4], l.mac) ||
       !texte_lire_nombre(argv[5], &code)) {
-    printf("erreur : mesh lampe <1-%u> <adresse> <mac> <code> <nom>\n", (unsigned)s_attendues);
+    printf("erreur : mesh lampe <1-%u> <adresse> <mac> <code> " LISTE_JETON_AIDE " <nom>\n", (unsigned)s_attendues);
     return 1;
   }
   l.adresse = (uint16_t)adresse;
   l.code = code;
+  const int premier = liste_lire_logiciel_argv(argc, argv, 6, l.logiciel, l.ble);
   size_t pos = 0;
-  for (int i = 6; i < argc; i++) {
+  for (int i = premier; i < argc; i++) {
     const size_t m = strlen(argv[i]);
-    const size_t espace = i > 6 ? 1 : 0;
+    const size_t espace = i > premier ? 1 : 0;
     if (pos + espace + m >= LISTE_NOM_MAX) break;
     if (espace) l.nom[pos++] = ' ';
     memcpy(l.nom + pos, argv[i], m);
@@ -175,7 +179,7 @@ static int mesh_lampe(int argc, char **argv) {
   }
   l.nom[pos] = '\0';
   // Cette lampe seule d'abord (adresse, MAC, nom) : l'erreur vise la bonne ligne.
-  // Statique : 772 octets, trop pour la pile de la console (4 Ko dans l'ecoute).
+  // Statique : 1 028 octets, trop pour la pile de la console (4 Ko dans l'ecoute).
   static liste_t une;
   memset(&une, 0, sizeof(une));
   une.n = 1;
@@ -210,8 +214,11 @@ static int mesh_lampe(int argc, char **argv) {
     snprintf(fin, sizeof(fin), " ; liste de %u lampe(s) enregistree (redemarrer pour l'appliquer)", (unsigned)total);
   }
   const catalogue_modele_t *m = catalogue_trouver(code);
-  printf("ok lampe %" PRIu32 " 0x%04x modele %" PRIu32 " %s [%s] : %s%s\n", n, l.adresse, code,
-         catalogue_connu(code) ? m->nom : "non catalogue", catalogue_capacites_texte(m->capacites), l.nom, fin);
+  char logiciel[24];
+  liste_texte_logiciel(&l, logiciel, sizeof(logiciel));
+  printf("ok lampe %" PRIu32 " 0x%04x modele %" PRIu32 " %s [%s] logiciel %s : %s%s\n", n, l.adresse, code,
+         catalogue_connu(code) ? m->nom : "non catalogue", catalogue_capacites_texte(m->capacites),
+         logiciel[0] ? logiciel : "inconnu", l.nom, fin);
   return 0;
 }
 

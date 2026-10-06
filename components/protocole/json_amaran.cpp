@@ -106,7 +106,8 @@ void helloId(Writer &w, uint32_t n, uint32_t ms, const HelloId &h) {
   w.str("nom", h.nom, 32);
   w.end();
   w.arr("caps");
-  for (const char *c : {"matter", "thread", "mesh", "catalogue", "ordres", "led", "log", "trames", "udp", "cle", "texte"})
+  for (const char *c : {"matter", "thread", "mesh", "catalogue", "ordres", "led", "log", "trames", "udp", "cle", "texte",
+                        "logiciel"})
     w.str(nullptr, c);
   w.end();
 }
@@ -159,6 +160,9 @@ void configLampe(Writer &w, uint32_t n, uint32_t ms, int lampe, const liste_lamp
   w.boolean("catalogue", catalogue_connu(l.code));
   capacites(w, m->capacites);
   w.str("type", typeCode(m->type));
+  // Versions du logiciel de la lampe (spec fiche des lampes 3) : null si inconnues.
+  w.str("logiciel", l.logiciel[0] ? l.logiciel : nullptr, LISTE_LOGICIEL_MAX - 1);
+  w.str("ble", l.ble[0] ? l.ble : nullptr, LISTE_LOGICIEL_MAX - 1);
 }
 
 // --- etat

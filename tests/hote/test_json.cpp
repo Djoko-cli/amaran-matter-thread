@@ -684,7 +684,9 @@ static EtatSante sante(uint32_t ms) {
 }
 
 static void testExemples() {
-  const liste_lampe_t l1 = lampeListe(0x0002, 0x01, "Lampe bureau", 2);
+  liste_lampe_t l1 = lampeListe(0x0002, 0x01, "Lampe bureau", 2);
+  strcpy(l1.logiciel, "1.4");
+  strcpy(l1.ble, "1.69");
   liste_lampe_t l2 = lampeListe(0x0004, 0x02, "Lumi\xc3\xa8re fen\xc3\xaatre", 3);
   lampe_t p1 = lampeLue(0x0002, true, 430, 83390, 40);
   lampe_t p2 = lampeLue(0x0004, false, 600, 83398, 41);
@@ -1064,6 +1066,8 @@ static void testPiresCas() {
   memset(&l, 0xFF, sizeof(l));
   memset(l.nom, '"', LISTE_NOM_MAX - 1);  // 31 guillemets : 62 octets echappes
   l.nom[LISTE_NOM_MAX - 1] = 0;
+  strcpy(l.logiciel, "123.456");
+  strcpy(l.ble, "789.123");
   l.code = M;
   configLampe(gW, M, M, LISTE_CAPACITE - 1, l);
   std::string s = finish(gW, &ok);

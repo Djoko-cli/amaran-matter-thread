@@ -104,6 +104,9 @@ static void detail(int i) {
          a->mac[3], a->mac[4], a->mac[5]);
   printf("  modele    : %" PRIu32 " %s (%s)\n", a->code, catalogue_connu(a->code) ? m->nom : "non catalogue",
          catalogue_capacites_texte(m->capacites));
+  char logiciel[24];
+  liste_texte_logiciel(a, logiciel, sizeof(logiciel));
+  printf("  logiciel  : %s\n", logiciel[0] ? logiciel : "inconnu (recharger le pont)");
   printf("  Maison    : ");
   imprimer_maison(i);
   if (a->endpoint && !pont_endpoint(i)) printf(" (garde EP%u)", (unsigned)a->endpoint);

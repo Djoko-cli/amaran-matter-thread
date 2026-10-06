@@ -178,7 +178,7 @@ Chaque instantané est une suite de lignes d'un même type, une par `bloc`. L'ap
 | `session` | réglages en vigueur : `transport` (`usb` ou `udp`), `periode_ms`, `lampes_ms`, `compteurs_ms`, `reseau_ms`, `bail_s`, `log`, `trames` |
 | `limites` | `ligne_max` (1 024), `cmd_max` (127) |
 
-**Bloc `identite`** : `boot` ; `mac` (MAC de la puce) ; `id` (`fabricant`, `produit`, `serie` = `AMARAN-<MAC>`, `nom`) ; `caps`, les capacités : `matter`, `thread`, `mesh`, `catalogue`, `ordres` (ordres de lampe asynchrones), `led`, `log`, `trames`, `udp` (canal par Thread), `cle` (`json cle`), `texte` (texte des commandes à distance). L'app se règle sur `caps`, pas sur la version du firmware.
+**Bloc `identite`** : `boot` ; `mac` (MAC de la puce) ; `id` (`fabricant`, `produit`, `serie` = `AMARAN-<MAC>`, `nom`) ; `caps`, les capacités : `matter`, `thread`, `mesh`, `catalogue`, `ordres` (ordres de lampe asynchrones), `led`, `log`, `trames`, `udp` (canal par Thread), `cle` (`json cle`), `texte` (texte des commandes à distance), `logiciel` (`mesh lampe` prend la version du logiciel de la lampe, et le bloc `lampe` la rend). L'app se règle sur `caps`, pas sur la version du firmware.
 
 ### 5.2 `config`
 
@@ -188,7 +188,7 @@ Réglages lents : émis avec `hello`, et de nouveau après toute commande `mesh`
 
 **Bloc `mesh`** : `cles` (chargées ou non), `empreintes` (`reseau`, `application`, ou `null` sans clés), `adresse` de l'ESP32, `iv_nvs` (l'IV Index gardé en NVS), `balayage` (`fenetre_ms`, `intervalle_ms`), et l'en-tête de la liste : `lampes` (*N*), `capacite` (16), `releve_ms` (période de relecture), `groupe` (`C000`). Les clés chargées par `mesh cles` ne valent qu'après le redémarrage : jusque-là, ce bloc montre les empreintes en service.
 
-**Bloc `lampe`**, une ligne par lampe de la liste en service : `lampe`, `adresse`, `mac`, `nom`, `code`, `modele` (nom du modèle, ou celui du repli), `catalogue` (code connu ou non), `capacites`, `type`. Une liste chargée par `mesh lampes` ne vaut, elle aussi, qu'après le redémarrage.
+**Bloc `lampe`**, une ligne par lampe de la liste en service : `lampe`, `adresse`, `mac`, `nom`, `code`, `modele` (nom du modèle, ou celui du repli), `catalogue` (code connu ou non), `capacites`, `type`, `logiciel` et `ble` (versions du logiciel de commande et du module Bluetooth de la lampe, `x.y`, chargées depuis la base d'amaran Desktop ; `null` si inconnues). Une liste chargée par `mesh lampes` ne vaut, elle aussi, qu'après le redémarrage.
 
 ### 5.3 `etat`
 
@@ -295,7 +295,7 @@ Ordres de lampe : un numéro hors de la liste, ou un argument hors bornes, reço
 | commandes | relire une lampe | `lampe <n> releve` |
 | commandes | retirer de Maison, remettre (confirmation) | `mesh lampe <n> masquer`, `mesh lampe <n> afficher` |
 | commandes | période de relecture | `mesh releve <1-60 s>` |
-| clés | charger le pont | `mesh cles <reseau> <application>`, `mesh lampes <N>`, une ligne `mesh lampe <n> <adresse> <mac> <code> <nom>` par lampe, puis `redemarre` |
+| clés | charger le pont | `mesh cles <reseau> <application>`, `mesh lampes <N>`, une ligne `mesh lampe <n> <adresse> <mac> <code> [v<logiciel>[/<ble>]] <nom>` par lampe (la version seulement si `caps` contient `logiciel`), puis `redemarre` |
 | console | tout le reste | la ligne tapée, préfixée d'un `id` |
 
 L'app confirme avant d'envoyer `redemarre`, `decommission`, `mesh oublie`, `mesh adresse`, `mesh iv` et `mesh lampe <n> masquer`. Elle n'envoie qu'une commande à la fois, et attend sa `reponse` `fin` (3 s au plus sans `debut`) avant la suivante.
@@ -352,11 +352,11 @@ Pont → app : le pont a deux lampes, toutes deux dans Maison ; « Lumière fen�
 
 ```
 <RS>{"v":1,"t":"hello","n":0,"ms":83512,"bloc":"base","rev":1,"fw":"0.1.0-d569f01","date":"Oct  5 2026","heure":"14:02:11","idf":"v5.5.4","puce":"esp32c6","boot":"3FA2C901","reset":"logiciel","reset_n":3,"up_s":83,"session":{"transport":"usb","periode_ms":1000,"lampes_ms":10000,"compteurs_ms":1000,"reseau_ms":5000,"bail_s":30,"log":false,"trames":false},"limites":{"ligne_max":1024,"cmd_max":127}}
-<RS>{"v":1,"t":"hello","n":1,"ms":83522,"bloc":"identite","boot":"3FA2C901","mac":"F0F5BD0A0B0C","id":{"fabricant":"TEST_VENDOR","produit":"TEST_PRODUCT","serie":"AMARAN-F0F5BD0A0B0C","nom":"Pont amaran"},"caps":["matter","thread","mesh","catalogue","ordres","led","log","trames","udp","cle","texte"]}
+<RS>{"v":1,"t":"hello","n":1,"ms":83522,"bloc":"identite","boot":"3FA2C901","mac":"F0F5BD0A0B0C","id":{"fabricant":"TEST_VENDOR","produit":"TEST_PRODUCT","serie":"AMARAN-F0F5BD0A0B0C","nom":"Pont amaran"},"caps":["matter","thread","mesh","catalogue","ordres","led","log","trames","udp","cle","texte","logiciel"]}
 <RS>{"v":1,"t":"config","n":2,"ms":83532,"bloc":"catalogue","modeles":[{"code":40065,"nom":"amaran COB 60d","capacites":["intensite"],"type":"variable","cct_k":null}],"repli":{"nom":"modele non catalogue","capacites":["intensite"],"type":"variable","cct_k":null}}
 <RS>{"v":1,"t":"config","n":3,"ms":83542,"bloc":"mesh","cles":true,"empreintes":{"reseau":"1A2B3C4D","application":"5E6F7A8B"},"adresse":"7F38","iv_nvs":0,"balayage":{"fenetre_ms":20,"intervalle_ms":40},"lampes":2,"capacite":16,"releve_ms":2000,"groupe":"C000"}
-<RS>{"v":1,"t":"config","n":4,"ms":83552,"bloc":"lampe","lampe":1,"adresse":"0002","mac":"020000000001","nom":"Lampe bureau","code":40065,"modele":"amaran COB 60d","catalogue":true,"capacites":["intensite"],"type":"variable"}
-<RS>{"v":1,"t":"config","n":5,"ms":83562,"bloc":"lampe","lampe":2,"adresse":"0004","mac":"020000000002","nom":"Lumière fenêtre","code":40065,"modele":"amaran COB 60d","catalogue":true,"capacites":["intensite"],"type":"variable"}
+<RS>{"v":1,"t":"config","n":4,"ms":83552,"bloc":"lampe","lampe":1,"adresse":"0002","mac":"020000000001","nom":"Lampe bureau","code":40065,"modele":"amaran COB 60d","catalogue":true,"capacites":["intensite"],"type":"variable","logiciel":"1.4","ble":"1.69"}
+<RS>{"v":1,"t":"config","n":5,"ms":83562,"bloc":"lampe","lampe":2,"adresse":"0004","mac":"020000000002","nom":"Lumière fenêtre","code":40065,"modele":"amaran COB 60d","catalogue":true,"capacites":["intensite"],"type":"variable","logiciel":null,"ble":null}
 <RS>{"v":1,"t":"etat","n":6,"ms":83572,"bloc":"pont","boot":"3FA2C901","up_s":83,"mesh":{"pret":true,"diag":"ok"},"ordres":{"total":6,"confirmes":5,"abandons":0,"tenus":1,"delai_total_ms":2150,"delai_max_ms":620,"lents":0},"releves":41,"trames":80}
 <RS>{"v":1,"t":"etat","n":7,"ms":83582,"bloc":"lampe","lampe":1,"maison":{"endpoint":2,"vue":true,"masquee":false},"entendue":true,"lue":{"marche":true,"intensite":430},"joignable":true,"reponse_ms":83390,"consigne":null,"repondues":40,"part_10min":97,"alerte":false}
 <RS>{"v":1,"t":"etat","n":8,"ms":83592,"bloc":"lampe","lampe":2,"maison":{"endpoint":3,"vue":true,"masquee":false},"entendue":true,"lue":{"marche":false,"intensite":600},"joignable":true,"reponse_ms":83398,"consigne":null,"repondues":41,"part_10min":100,"alerte":false}
