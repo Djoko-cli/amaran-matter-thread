@@ -46,10 +46,11 @@ démarrage) :
 | Fabricant | `VendorName` | `Aputure` |
 | Modèle | `ProductName` | le nom du catalogue (`amaran COB 60d`) ; modèle non catalogué : `amaran <code>` |
 | N° de série | `SerialNumber` | `AMARAN-<MAC de la lampe>`, 12 hexa majuscules sans séparateur, comme le pont |
-| Programme interne | `SoftwareVersionString` | `<commande> (BLE <ble>)`, par exemple `1.4 (BLE 1.69)` ; `<commande>` seul si le module Bluetooth n'est pas connu ; absent si aucune version n'est connue (Maison n'affiche alors pas la ligne) |
+| Programme interne | `SoftwareVersionString` et `SoftwareVersion` | `<logiciel> (BLE <ble>)`, par exemple `1.4 (BLE 1.69)` ; `<logiciel>` seul si le module Bluetooth n'est pas connu ; et la forme numérique du logiciel, `x × 1000 + y` (1004 pour 1.4), comme le nœud a les deux ; absents si aucune version n'est connue. **Maison ne l'affiche pas** (banc du prototype, 3 essais, voir 7) : il reste pour les autres contrôleurs et pour l'app |
 
 `NodeLabel` et `UniqueID` ne changent pas. Le fabricant est le fabricant réel ;
-la marque est dans le modèle.
+la marque est dans le modèle. Chaque lampe porte aussi le `ConfigurationVersion`
+de son cluster (Matter 1.4), égal à celui du nœud et mis à jour avec lui (4).
 
 ## 3. La version, de la base jusqu'au pont
 
@@ -67,61 +68,104 @@ inconnue (jamais envoyée au pont).
 **La commande** gagne un jeton facultatif, avant le nom :
 
 ```
-mesh lampe <n> <adresse> <mac> <code> [v<commande>[/<ble>]] <nom>
+mesh lampe <n> <adresse> <mac> <code> [v<logiciel>[/<ble>]] "<nom>"
 ```
 
 Exemple : `mesh lampe 2 0x0004 02:00:00:00:00:02 40065 v1.4/1.69 "Lampe fenêtre"`.
-- Le pont reconnaît le jeton à sa forme : `v`, une version, puis
-  facultativement `/` et une version.
-- Un mot qui commence par `v` suivi d'un chiffre mais n'a pas cette forme est
-  refusé (`erreur : version <...> : attendu v<x.y>[/<x.y>]`), pour qu'une faute
-  de frappe ne finisse pas dans le nom.
-- Sans jeton, les versions de la lampe sont inconnues : une ancienne app ou un
-  ancien script chargent toujours le pont.
-- La réponse `ok lampe ...` cite la version reçue.
+- Le mot qui suit le code est le jeton s'il a sa forme (`v`, une version, puis
+  facultativement `/` et une version), s'il ne contient pas d'espace et s'il
+  est suivi d'au moins un mot. Sinon, c'est le début du nom, sans erreur : un
+  nom comme « v2 », « v2 bureau » ou, entre guillemets, « v1.4 bureau » reste
+  un nom. L'app et le script mettent toujours le nom entre guillemets. Une
+  version mal tapée à la main finit dans le nom, et la réponse le montre.
+  (Précisé au prototype : la première règle refusait un nom qui commence par
+  `v` suivi d'un chiffre, et le refus tombait après l'envoi des clés.)
+- Sans jeton, les versions de la lampe sont inconnues.
+- La réponse `ok lampe ...` cite la version reçue (`logiciel <version>` ou
+  `logiciel inconnu`).
 - La règle de lecture (jeton et versions) vit dans le composant `liste`, en C
   pur, testé sur le Mac.
+- Une ligne de plus de 127 octets est refusée par la console : l'app et le
+  script la refusent avant d'envoyer les clés.
 
-**La liste en NVS** passe au format 3 (`LISTE_VERSION 3`) : deux champs par
-lampe, `commande` et `ble`, chaînes de 8 octets NUL compris (vides : inconnue).
-16 lampes : 256 octets de plus. `liste_depuis_nvs` relit le format 2 (versions
-vides) ; la liste est réécrite au format 3 au prochain chargement. La
-migration du format 1 reste ce qu'elle est (versions vides). Le firmware
-`ecoute`, qui partage les composants, suit.
+**Un ancien firmware** prendrait le jeton pour le début du nom. Le pont qui
+prend la version le dit : la capacité `logiciel` dans `hello` `identite`
+(pour l'app), et la fin `[v<x.y>[/<x.y>]]` de sa réponse à `mesh lampes <N>`
+(pour le script ; la même constante, `LISTE_JETON_AIDE`, des deux côtés, liée
+par un test). Sans elle, l'app et le script chargent sans versions et le
+disent (« mettre à jour son firmware »).
+
+**En NVS**, la clé `lampes` reste au format 2 : un firmware d'avant ce plan la
+relit toujours, et un retour en arrière ne fait perdre que les versions, jamais
+les lampes ni leur place dans Maison. (Précisé au prototype : un format 3 de
+`lampes` rendait le retour en arrière destructeur.) Les versions vont sous une
+clé à part, `logiciels` : un en-tête, puis, pour chaque lampe dont le logiciel
+est connu, sa MAC et ses deux versions (22 octets). Elles sont rangées par
+MAC : une liste rechargée par un ancien firmware ne prête jamais à une lampe
+les versions d'une autre. Une entrée mal formée, ou d'une MAC absente, est
+ignorée. La migration du format 1 reste ce qu'elle est (versions inconnues).
+En mémoire, chaque lampe porte ses deux versions (`logiciel`, `ble`). Le
+firmware `ecoute`, qui partage les composants, suit.
 
 **Le protocole JSON** (`docs/PROTOCOLE-JSON.md`) : le bloc `config` `lampe`
-gagne `"logiciel"` et `"ble"` (chaînes, ou `null` si inconnues). Ajout
-compatible : la révision reste 1.
+gagne `"logiciel"` et `"ble"` (chaînes, ou `null` si inconnues), `caps` gagne
+`logiciel`. Ajout compatible : la révision reste 1.
 
-**`outils/cles_amaran.py`** lit les deux colonnes et envoie le jeton quand la
-version est connue et bien formée.
+**`outils/cles_amaran.py`** lit les deux colonnes (en texte seulement : un
+nombre perdrait ses zéros) et envoie le jeton quand la version est connue et
+bien formée, et que le pont le prend. Un `ble` connu sans logiciel n'est
+jamais envoyé (le pont refuse un `ble` seul) : ce n'est pas un écart dans
+l'app non plus.
 
 ## 4. `ConfigurationVersion`
 
-Faits (06/10/2026, esp-matter `c5b9ea8`) : l'attribut existe sur le cluster
-Basic Information du nœud (créé à 0 par esp-matter) ; la pile sait
-l'incrémenter (`chip::app::Clusters::BasicInformation::GetClusterInstance()->IncreaseConfigurationVersion()`,
-valeur gardée par le `ConfigurationManager`, donc en NVS) ; rien ne l'appelle
-aujourd'hui, ni esp-matter ni le pont. Maison suit l'apparition et le retrait
-des lampes par la `PartsList` de l'agrégateur, à laquelle elle est abonnée ;
-mais les attributs fixes d'une lampe (fabricant, modèle, série, version), elle
-les lit une fois et les garde.
+Faits (06/10/2026, esp-matter `c5b9ea8`, lus en préparant le prototype) :
+- l'attribut est servi par le cluster Basic Information « code-driven » de la
+  pile, qui le lit à chaque fois dans le `ConfigurationManager` ; sur ESP32,
+  celui-ci rend la constante `CHIP_DEVICE_CONFIG_DEVICE_CONFIGURATION_VERSION`
+  (1) et ne sait pas la ranger (`StoreConfigurationVersion` : non pris en
+  charge). La macro n'a qu'un usage, à l'exécution ;
+- esp-matter garde l'instance du cluster dans un espace anonyme : pas d'appel
+  public à `IncreaseConfigurationVersion` ;
+- Maison suit l'apparition et le retrait des lampes par la `PartsList` de
+  l'agrégateur, à laquelle elle est abonnée ; mais les attributs fixes d'une
+  lampe (fabricant, modèle, série, version), elle les lit une fois et les
+  garde ;
+- les attributs de la fiche des lampes (cluster Bridged Device Basic
+  Information) sont servis par le stockage d'esp-matter, qui copie leurs
+  valeurs.
 
-Le pont incrémente `ConfigurationVersion`, sous le verrou de la pile Matter :
+Donc :
+- `firmware/main/CHIPProjectConfig.h` définit la macro comme l'appel
+  `pont_version_configuration()` : le pont tient la version lui-même, en NVS
+  (clé `cfgver` de l'espace `amaran`), sans toucher à ESP-IDF ni à esp-matter ;
+- pour l'annoncer, le pont fait changer la DataVersion du cluster avec la
+  valeur (Matter 7.10.3 : jamais une valeur nouvelle sous une DataVersion
+  ancienne, sinon un contrôleur qui se réabonne avec un `DataVersionFilter`
+  saute le cluster) : `NotifyAttributeChanged` du cluster enregistré, protégé,
+  atteint par un pointeur de membre pris dans une classe dérivée. Si le cluster
+  manquait : le simple signalement, journalisé.
+
+Le pont incrémente `ConfigurationVersion` (valeur et annonce sous le verrou de
+la pile ; une à la fois, sous le verrou des expositions) :
 - **au démarrage**, une fois les lampes exposées, si l'empreinte de ce qui est
-  exposé diffère de celle gardée en NVS (clé `fiche` de l'espace `amaran`) ;
-  puis il range la nouvelle empreinte. L'empreinte couvre, pour chaque lampe
-  exposée, dans l'ordre des numéros d'endpoint : le numéro, `NodeLabel`,
-  `VendorName`, `ProductName`, `SerialNumber`, `SoftwareVersionString` ; et
-  une constante de format, changée si la liste des attributs change. Le
-  premier démarrage du firmware de ce plan l'incrémente donc une fois : c'est
-  ce qui doit faire relire les fiches de lampes déjà appairées ;
-- **en marche**, quand une lampe apparaît (première réponse, `afficher`) ou
-  disparaît (`masquer`), comme le prévoit Matter 1.4 pour un changement
-  d'endpoints ; l'empreinte en NVS est mise à jour du même geste.
+  exposé diffère de celle gardée en NVS (clé `fiche`) ; puis il range la
+  nouvelle empreinte. L'empreinte couvre, pour chaque lampe exposée, dans
+  l'ordre des numéros d'endpoint : le numéro, le type d'appareil, le nom et la
+  fiche ; et une constante de format, changée si ce qu'elle couvre change. Elle
+  vit dans le composant `liste` (testée sur le Mac). Le premier démarrage du
+  firmware de ce plan l'incrémente donc une fois (de 1 à 2) : c'est ce qui doit
+  faire relire les fiches de lampes déjà appairées ;
+- **en marche**, quand une lampe entre dans Maison (première réponse,
+  `afficher`) ou en sort (`masquer`), comme le prévoit Matter 1.4 pour un
+  changement d'endpoints ; l'empreinte en NVS est mise à jour du même geste.
 
-Un échec d'écriture est journalisé et compté, jamais bloquant : au pire,
-Maison garde l'ancienne fiche.
+La version est rangée avant l'empreinte : une NVS qui refuserait la seconde
+ferait monter la version à chaque démarrage, jamais reculer ; l'échec est
+journalisé et compté. Une NVS illisible au démarrage (autre chose qu'une clé
+absente) bloque tout incrément jusqu'au démarrage suivant : la version rangée
+est peut-être plus haute que celle lue, et `ConfigurationVersion` ne doit
+jamais reculer. La console `matter` montre la version.
 
 ## 5. L'app
 
@@ -130,55 +174,93 @@ Maison garde l'ancienne fiche.
 - **`LampeReseau`** gagne `logiciel` et `ble` (facultatifs). La copie du
   trousseau et la sauvegarde chiffrée les gardent ; une copie ou une
   sauvegarde plus ancienne se relit (versions inconnues).
-- **« Charger le pont »** (`ReseauMesh`) envoie le jeton, et la vérification
-  après redémarrage (`VerificationChargement`) compare aussi les versions.
+- **« Charger le pont »** (`ReseauMesh`) envoie le jeton si le pont a la
+  capacité `logiciel` (sinon il charge sans versions et le dit), et la
+  vérification après redémarrage (`VerificationChargement`) compare aussi les
+  versions.
 - **Comparaison base / copie / pont** (`ComparaisonCles`) : les versions font
   partie de la lampe. Après la mise à jour, la carte Clés montre que le pont
   diffère de la base et propose de le charger ; de même après une mise à jour
   des lampes par Sidus, une fois la base relue. Une version inconnue d'un côté
   et connue de l'autre est un écart (le pont n'a pas tout).
 - **Carte de la lampe** (tableau de bord, Commandes) : une ligne « Logiciel »,
-  `1.4 (BLE 1.69)`, ou « inconnu (recharger le pont) ».
+  `1.4 (BLE 1.69)`, ou « inconnu (recharger le pont) », ou, si le pont ne
+  prend pas la version, « inconnu (firmware du pont à mettre à jour) ». Sans
+  la capacité, l'absence de version côté pont n'est pas un écart à résoudre
+  par « Charger le pont » (ce serait une boucle) : la carte Clés dit de mettre
+  à jour le firmware.
 - **Mode démo** : des versions inventées (`1.4`, `1.69` sont des versions, pas
   des valeurs du réseau de Djoko ; elles peuvent servir d'exemple).
 
 ## 6. Tests sur le Mac
 
-- `tests/hote` : le jeton (forme correcte, sans `/`, abîmé, absent, nom qui
-  commence par `v` sans chiffre) ; le format 3 aller-retour ; la relecture du
-  format 2 et du format 1 ; la forme de `SoftwareVersionString` ; l'empreinte
-  (stable, change avec chaque champ, indépendante de l'ordre de chargement
-  pour un même jeu d'endpoints).
-- `outils/test_cles_amaran.py` : le jeton envoyé, et pas d'envoi d'une version
-  mal formée.
+- `tests/hote` : le jeton (forme correcte, sans `/`, abîmé, absent) et la règle
+  des mots de `mesh lampe` (jeton suivi d'un nom ; « v2 », « v2 bureau »,
+  « v1.4 » seul et un nom entre guillemets restent des noms) ; la clé
+  `lampes` au format 2 sans versions ; la clé `logiciels` aller-retour, relue
+  par MAC sur une liste dans un autre ordre, entrée mal formée ou MAC absente
+  ignorées ; la migration du format 1 (versions inconnues) ; la fiche
+  (modèle catalogué ou non, série, programme interne) ; l'empreinte (stable,
+  change avec chaque champ, indépendante de l'ordre de chargement).
+- `outils/test_cles_amaran.py` : le jeton envoyé si le pont le prend ; rien
+  sinon, avec l'avertissement ; noms entre guillemets ; ligne trop longue
+  refusée avant tout envoi ; version en nombre ignorée ; la constante
+  `LISTE_JETON_AIDE` de `liste.h` égale à celle du script.
 - App : lecture de la base avec et sans les colonnes, valeurs mal formées ;
-  trousseau et sauvegarde relus sans les champs ; lignes de chargement ;
-  écarts de version dans la comparaison et la vérification ; carte de lampe.
+  trousseau et sauvegarde relus sans les champs ; lignes de chargement, avec
+  et sans la capacité ; écarts de version dans la comparaison et la
+  vérification ; carte de lampe ; simulateur fidèle à la règle des mots.
 
 ## 7. Banc, avec Djoko
 
+0. Sauvegarde de la flash entière avant de flasher (`esptool.py read_flash`,
+   hors du dépôt : elle contient des clés).
 1. Flash sans effacement. Au premier démarrage, le journal dit
-   `ConfigurationVersion` incrémentée ; au second, non.
+   `ConfigurationVersion 2` ; au second, « inchangée ». `matter` montre la
+   version.
 2. Dans Maison, sans rien réappairer : la fiche du pont inchangée ; la fiche
    des deux lampes : `Aputure`, `AMARAN-<MAC>`, `amaran COB 60d`, et pas
-   encore de programme interne (la liste en NVS est au format 2).
+   encore de programme interne (aucune version en NVS).
 3. Depuis l'app : la carte Clés montre l'écart de version ; « Charger le
-   pont » ; après le redémarrage, plus d'écart ; dans Maison, `1.4 (BLE 1.69)`
-   sur les deux lampes.
+   pont » ; après le redémarrage, plus d'écart ; `ConfigurationVersion` monte ;
+   dans Maison, `1.4 (BLE 1.69)` sur les deux lampes.
 4. Pièces, scènes et automatisations des lampes intactes dans Maison.
 5. `mesh lampe 2 masquer` puis `afficher` (lampe 2, que Djoko accepte de
-   reconfigurer) : noter si la lampe revient comme nouvel accessoire ou garde
-   sa pièce.
-6. Sur secteur : démarrage normal (voyant blanc), Maison réactive.
+   reconfigurer) : la version monte à chaque geste ; noter si la lampe revient
+   comme nouvel accessoire ou garde sa pièce.
+6. Sur secteur : démarrage normal (voyant blanc), Maison réactive ; `taches` :
+   tas au plus bas comparé au banc B du plan 3b-2 (106 Ko).
 
 Les valeurs réelles (MAC, n° de série des lampes) ne vont jamais dans le dépôt
 ni dans `docs/BANC.md`.
+
+**Banc du prototype (06/10/2026, avec Djoko)** : flash sans effacement après
+sauvegarde de la flash ; `ConfigurationVersion` 2 au premier démarrage, puis
+inchangée ; dans Maison, sans rien réappairer, la fiche des deux lampes est
+remplie (`Aputure`, `AMARAN-<MAC>`, `amaran COB 60d`) ; pièces, scènes et
+automatisations intactes. La carte Clés de l'app montre l'écart (copie sans
+versions), « Copier depuis amaran Desktop » puis « Charger le pont » : plus
+d'écart, `1.4 (BLE 1.69)` sur les deux cartes de lampe, version 3. Mais
+Maison n'affiche pas de programme interne pour les lampes, ni avec
+`SoftwareVersionString` seul, ni avec `SoftwareVersion` en plus (version 4), ni
+avec le `ConfigurationVersion` de chaque lampe (version 5), même après avoir
+rouvert Maison ; un pont HomeKit (HAP) de Djoko montre bien celui de ses
+accessoires. Conclusion : Maison n'affiche pas la version d'un accessoire
+Matter ponté. `masquer` (version 6 : la tuile disparaît) puis `afficher`
+(version 7) : la lampe revient comme un nouvel accessoire, comme avant
+(décision 7) : `ConfigurationVersion` n'y change rien. Sur cette lampe revenue, Maison refusait
+ensuite de changer l'icône (« Impossible de modifier ce réglage »), avec ou sans
+le `ConfigurationVersion` par lampe ; retirer le pont de Maison puis le
+réappairer l'a réglé. Sur secteur : voyant
+normal, Maison pilote les lampes. Tas au plus bas 102 Ko juste après un
+démarrage (106 Ko au banc B du plan 3b-2, après une heure).
 
 ## 8. Risques et questions ouvertes
 
 | Risque | Parade | Où |
 |---|---|---|
-| Maison ne relit pas les attributs fixes d'une lampe déjà appairée, même avec `ConfigurationVersion` | banc 2 ; si la fiche reste « Unknown » : essayer aussi le `ConfigurationVersion` du cluster Bridged Device Basic Information de chaque lampe (attribut facultatif, créé par esp-matter sur demande) ; en dernier recours, documenter qu'il faut retirer et remettre le pont | prototype, puis banc |
-| `GetClusterInstance()` nul si le cluster Basic Information n'est pas géré par l'intégration du code généré dans cette version | le vérifier au prototype ; repli : écrire l'attribut par l'API d'esp-matter et notifier | prototype |
-| le jeton `v...` pris pour un nom (« v2 » comme nom de lampe) | seul un `v` suivi d'un chiffre est jugé ; « v2 » sans point est refusé, à renommer dans amaran Desktop | tests |
+| Maison ne relit pas les attributs fixes d'une lampe déjà appairée, même avec `ConfigurationVersion` | levé au banc du prototype : elle relit fabricant, modèle et série | banc |
+| Maison n'affiche pas le programme interne d'une lampe pontée | constaté au banc du prototype (3 essais) ; la version reste exposée (autres contrôleurs) et visible dans l'app ; le README le dit | — |
+| le pointeur de membre vers `NotifyAttributeChanged` dépend de l'enregistrement d'esp-matter (`DefaultServerCluster`) | si le cluster manque, repli journalisé (signalement sans DataVersion) ; à revoir à chaque mise à jour d'esp-matter | banc 1 et 3 |
+| un retour à un firmware d'avant ce plan | la clé `lampes` reste au format 2 : seules les versions sont ignorées ; `ConfigurationVersion` revient à 1 (constante de la pile) : Maison voit une valeur plus basse jusqu'au retour de ce firmware, qui reprend sa valeur rangée | — |
 | une ancienne app recharge un pont à jour et efface les versions | voulu : la liste chargée fait foi ; la carte Clés de la nouvelle app le montre | — |
