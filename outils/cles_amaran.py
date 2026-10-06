@@ -4,7 +4,7 @@
 Lit la base locale d'amaran Desktop, puis envoie par la console du pont :
     mesh cles <reseau> <application>
     mesh lampes <N>
-    mesh lampe <n> <adresse> <mac> <code> <nom>     (une ligne par lampe)
+    mesh lampe <n> <adresse> <mac> <code> [v<logiciel>[/<ble>]] "<nom>"   (une ligne par lampe)
     redemarre
 
 Les cles ne sont jamais affichees : seulement leurs empreintes (8 premiers
@@ -48,10 +48,14 @@ CAPACITE = 16  # LISTE_CAPACITE du pont : il refuse lui-meme une liste plus long
 INVITE = "amaran>"
 # Reponse du pont a `mesh cles` : ok cles <EMPREINTE RESEAU> <EMPREINTE APPLICATION> (...)
 REPONSE_CLES = re.compile(r"ok cles ([0-9A-Fa-f]{8}) ([0-9A-Fa-f]{8})(?:\s|$)")
-# Reponse a `mesh lampe` : ok lampe <n> 0x<adresse> modele <code> <nom du modele> [<capacites>] : <nom>,
-# et, pour la derniere, " ; liste de <N> lampe(s) enregistree (...)".
-REPONSE_LAMPE = re.compile(r"ok lampe (\d+) 0x[0-9A-Fa-f]{4} modele (\d+) (.+?) \[([a-z+]*)\] : (.*?)"
-                           r"(?: ; liste de (\d+) lampe\(s\) enregistree.*)?$")
+# Reponse a `mesh lampe` : ok lampe <n> 0x<adresse> modele <code> <nom du modele> [<capacites>]
+# logiciel <version ou inconnu> : <nom>, et, pour la derniere, " ; liste de <N> lampe(s)
+# enregistree (...)". Un pont d'avant le plan 3b-3 ne dit pas le logiciel.
+REPONSE_LAMPE = re.compile(r"ok lampe (?P<n>\d+) 0x[0-9A-Fa-f]{4} modele (?P<code>\d+) (?P<modele>.+?) "
+                           r"\[(?P<capacites>[a-z+]*)\](?: logiciel (?P<logiciel>.+?))? : (?P<nom>.*?)"
+                           r"(?: ; liste de (?P<total>\d+) lampe\(s\) enregistree.*)?$")
+# Version d'un logiciel de lampe (spec fiche des lampes 3) : comme le pont, sinon inconnue.
+VERSION = re.compile(r"[0-9]{1,3}\.[0-9]{1,3}")
 # Modeles SIG serveurs qui disent une capacite dans la composition d'une lampe.
 MODELE_CTL = 0x1303  # Light CTL Server : temperature de couleur
 MODELE_HSL = 0x1307  # Light HSL Server : couleur
@@ -105,6 +109,35 @@ def lire_code(code):
     return int(texte) if texte.isdigit() and int(texte) < 2 ** 32 else 0
 
 
+LIGNE_MAX = 127  # la console du pont refuse une ligne plus longue
+
+
+def lire_version(v):
+    """Version x.y de la base, en texte seulement (un nombre perdrait ses zeros : 1.10), ou None."""
+    texte = v.strip() if isinstance(v, str) else ""
+    return texte if VERSION.fullmatch(texte) else None
+
+
+def nom_cite(nom):
+    """Le nom entre guillemets, comme le decoupe la console (esp_console_split_argv) : un nom
+    qui commence par v suivi d'un chiffre n'est jamais pris pour la version."""
+    return '"%s"' % nom.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def jeton_logiciel(l):
+    """Jeton de `mesh lampe` : v<logiciel>[/<ble>], ou "" si le logiciel est inconnu."""
+    if not l.get("logiciel"):
+        return ""
+    return "v%s/%s" % (l["logiciel"], l["ble"]) if l.get("ble") else "v%s" % l["logiciel"]
+
+
+def texte_logiciel(l):
+    """Ce que le pont repond (et ce que Maison affiche) : 1.4 (BLE 1.69), 1.4, ou inconnu."""
+    if not l.get("logiciel"):
+        return "inconnu"
+    return "%s (BLE %s)" % (l["logiciel"], l["ble"]) if l.get("ble") else l["logiciel"]
+
+
 def lire_reseau(chemin):
     """Cles et lampes de la base, ouverte en lecture seule."""
     import re as _re
@@ -115,7 +148,9 @@ def lire_reseau(chemin):
                 "select net_key, app_key from mesh where net_key is not null and app_key is not null").fetchall()
             # `code` et `composition_data` : absentes d'une base plus ancienne, sans gravite.
             colonnes = {c[1] for c in con.execute("pragma table_info(fixtures)")}
-            extra = ", ".join(c if c in colonnes else "null" for c in ("code", "composition_data"))
+            # Versions du logiciel (plan 3b-3) : absentes d'une base plus ancienne, sans gravite.
+            extra = ", ".join(c if c in colonnes else "null" for c in
+                              ("code", "composition_data", "control_software_version", "ble_software_version"))
             lignes = con.execute(
                 "select node_address, mac_address, name, %s from fixtures "
                 "where node_address is not null order by node_address" % extra).fetchall()
@@ -136,7 +171,7 @@ def lire_reseau(chemin):
     if len(lignes) > CAPACITE:
         raise ErreurCles("%d lampes, le pont en gere %d" % (len(lignes), CAPACITE))
     lampes = []
-    for adresse, mac, nom, code, composition in lignes:
+    for adresse, mac, nom, code, composition, logiciel, ble in lignes:
         try:
             # Valider l'adresse : int, 1..0x7FFF
             if not isinstance(adresse, int) or adresse < 1 or adresse > 0x7FFF:
@@ -152,7 +187,8 @@ def lire_reseau(chemin):
         except (AttributeError, TypeError):
             raise ErreurCles("lampe illisible dans la base (adresse %r)" % (adresse,))
         lampes.append({"adresse": adresse, "mac": mac.upper(), "nom": nom, "code": lire_code(code),
-                       "declare": capacites_declarees(composition)})
+                       "declare": capacites_declarees(composition),
+                       "logiciel": lire_version(logiciel), "ble": lire_version(ble)})
     return {"reseau": reseau, "application": application, "lampes": lampes}
 
 
@@ -164,17 +200,31 @@ def empreinte(cle):
 def resume(r):
     lignes = ["cles : reseau %s, application %s" % (empreinte(r["reseau"]), empreinte(r["application"]))]
     for i, l in enumerate(r["lampes"], 1):
-        lignes.append("lampe %d : 0x%04X %s (%s), modele %s" % (i, l["adresse"], l["nom"], l["mac"],
-                                                             l["code"] or "inconnu"))
+        lignes.append("lampe %d : 0x%04X %s (%s), modele %s, logiciel %s" % (
+            i, l["adresse"], l["nom"], l["mac"], l["code"] or "inconnu", texte_logiciel(l)))
     return lignes
 
 
-def commandes(r):
-    """`mesh cles`, `mesh lampes <N>`, puis une ligne par lampe : le code avant le nom."""
+# Reponse a `mesh lampes <N>` d'un pont qui prend la version (plan 3b-3) : un pont plus
+# ancien lirait le jeton comme le debut du nom.
+VERSION_PERMISE = "[v<x.y>[/<x.y>]]"
+
+
+def commandes(r, versions=True):
+    """`mesh cles`, `mesh lampes <N>`, puis une ligne par lampe : le code, la version, le nom.
+
+    versions=False : sans jeton, pour un pont qui ne prend pas la version.
+    """
     lignes = ["mesh cles %s %s" % (r["reseau"].hex().upper(), r["application"].hex().upper()),
               "mesh lampes %d" % len(r["lampes"])]
     for i, l in enumerate(r["lampes"], 1):
-        lignes.append("mesh lampe %d 0x%04X %s %d %s" % (i, l["adresse"], l["mac"], l["code"], l["nom"]))
+        jeton = jeton_logiciel(l) if versions else ""
+        ligne = "mesh lampe %d 0x%04X %s %d %s%s" % (i, l["adresse"], l["mac"], l["code"],
+                                                    jeton + " " if jeton else "", nom_cite(l["nom"]))
+        if len(ligne.encode()) > LIGNE_MAX:
+            raise ErreurCles("lampe %d : nom trop long pour la console du pont (%s) : le raccourcir dans "
+                             "amaran Desktop" % (i, l["nom"]))
+        lignes.append(ligne)
     return lignes
 
 
@@ -192,12 +242,12 @@ def ajouter_fictives(r, n):
         while adresse in prises:
             adresse += 1
         r["lampes"].append({"adresse": adresse, "mac": "02:00:00:00:00:%02X" % k, "nom": "Fictive %d" % k,
-                            "code": 0, "declare": set()})
+                            "code": 0, "declare": set(), "logiciel": None, "ble": None})
         prises.add(adresse)
     return r
 
 
-def verifier_lampes(reponses, r, sortie=print):
+def verifier_lampes(reponses, r, sortie=print, versions=True):
     """Lit les reponses aux lignes `mesh lampe` : modeles a cataloguer, et liste enregistree.
 
     Les reponses sont celles des lampes, dans l'ordre. Leve ErreurCles si la
@@ -205,15 +255,18 @@ def verifier_lampes(reponses, r, sortie=print):
     """
     for i, (reponse, l) in enumerate(zip(reponses, r["lampes"]), 1):
         m = REPONSE_LAMPE.match(reponse)
-        if not m or int(m.group(1)) != i:
+        if not m or int(m.group("n")) != i:
             raise ErreurCles("reponse inattendue du pont a mesh lampe %d : %s" % (i, reponse))
-        connues = set(m.group(4).split("+"))
+        if versions and l.get("logiciel") and m.group("logiciel") != texte_logiciel(l):
+            raise ErreurCles("le pont n'a pas pris la version de la lampe %d (%s) : mettre a jour son firmware"
+                             % (i, m.group("logiciel") or "non dite"))
+        connues = set(m.group("capacites").split("+"))
         for capacite, modele in (("cct", "temperature de couleur (Light CTL)"), ("couleur", "couleur (Light HSL)")):
             if capacite in l["declare"] and capacite not in connues:
                 sortie("modele a cataloguer : lampe %d (%s, code %s) declare la %s, que le pont ne lui connait "
                        "pas : marche et intensite seulement" % (i, l["nom"], l["code"] or "inconnu", modele))
     dernier = REPONSE_LAMPE.match(reponses[-1]) if reponses else None
-    if not dernier or dernier.group(6) is None or int(dernier.group(6)) != len(r["lampes"]):
+    if not dernier or dernier.group("total") is None or int(dernier.group("total")) != len(r["lampes"]):
         raise ErreurCles("le pont n'a pas enregistre la liste des lampes : ne pas le redemarrer, relancer l'outil")
 
 
@@ -291,12 +344,17 @@ def attendre_redemarrage(port, attente=3.0):
 
 def charger(port, r, attente=3.0, sortie=print):
     """Charge les cles et les lampes de r dans le pont, puis le redemarre."""
+    commandes(r)  # toute ligne trop longue est refusee ici, avant d'envoyer les cles
     verifier_pont(port, attente)
-    cles, liste, *lampes = commandes(r)  # `mesh cles`, `mesh lampes <N>`, puis une ligne par lampe
+    cles, liste, *_ = commandes(r)  # `mesh cles`, `mesh lampes <N>`, puis une ligne par lampe
     verifier_empreintes(envoyer(port, [cles], attente=attente, sortie=sortie)[0], r)
     sortie("empreintes du pont identiques aux notres")
-    envoyer(port, [liste], attente=attente, sortie=sortie)
-    verifier_lampes(envoyer(port, lampes, attente=attente, sortie=sortie), r, sortie=sortie)
+    versions = VERSION_PERMISE in envoyer(port, [liste], attente=attente, sortie=sortie)[0]
+    if not versions and any(l.get("logiciel") for l in r["lampes"]):
+        sortie("avertissement : ce pont ne prend pas la version des lampes (firmware d'avant le plan 3b-3) : "
+               "liste chargee sans versions")
+    lampes = commandes(r, versions=versions)[2:]
+    verifier_lampes(envoyer(port, lampes, attente=attente, sortie=sortie), r, sortie=sortie, versions=versions)
     port.write(b"redemarre\r\n")
     if attendre_redemarrage(port, attente):
         sortie("pont redemarre avec les nouvelles cles")

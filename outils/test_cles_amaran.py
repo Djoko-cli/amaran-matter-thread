@@ -122,9 +122,128 @@ class TestEmpreintesEtCommandes(unittest.TestCase):
         self.assertEqual(ca.commandes(r), [
             "mesh cles %s %s" % (NET.upper(), APP.upper()),
             "mesh lampes 2",
-            "mesh lampe 1 0x0002 70:3E:97:00:00:01 40065 Lampe A",
-            "mesh lampe 2 0x0004 70:3E:97:00:00:02 40065 Lampe B",
+            "mesh lampe 1 0x0002 70:3E:97:00:00:01 40065 \"Lampe A\"",
+            "mesh lampe 2 0x0004 70:3E:97:00:00:02 40065 \"Lampe B\"",
         ])
+
+
+def base_avec_versions(dossier, versions):
+    """Base d'amaran Desktop recente : les colonnes des versions (plan 3b-3), une paire par lampe de LAMPES."""
+    chemin = os.path.join(dossier, "amaran.db")
+    con = sqlite3.connect(chemin)
+    con.execute("create table mesh (uuid text, net_key varchar(32), app_key varchar(32), state integer)")
+    con.execute("create table fixtures (uuid text, mac_address text, name text, node_address integer, "
+                "device_key text, code text, composition_data text, control_software_version text, "
+                "ble_software_version text)")
+    con.execute("insert into mesh values (?, ?, ?, 3)", ("m0", NET.upper(), APP.upper()))
+    for (adresse, mac, nom), (logiciel, ble) in zip(LAMPES, versions):
+        con.execute("insert into fixtures values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    ("f%d" % adresse, mac, nom, adresse, "00" * 16, "40065", COMPO_60D, logiciel, ble))
+    con.commit()
+    con.close()
+    return chemin
+
+
+class TestVersions(unittest.TestCase):
+    """Plan 3b-3 : la version du logiciel des lampes, de la base au pont."""
+
+    def test_versions_lues_et_jeton(self):
+        # LAMPES : adresse 4 puis 2 ; la base est relue par adresse.
+        r = ca.lire_reseau(base_avec_versions(tempfile.mkdtemp(), [("1.4", "1.69"), ("1.4", None)]))
+        self.assertEqual([(l["logiciel"], l["ble"]) for l in r["lampes"]], [("1.4", None), ("1.4", "1.69")])
+        self.assertEqual(ca.commandes(r)[2:], [
+            "mesh lampe 1 0x0002 70:3E:97:00:00:01 40065 v1.4 \"Lampe A\"",
+            "mesh lampe 2 0x0004 70:3E:97:00:00:02 40065 v1.4/1.69 \"Lampe B\"",
+        ])
+        self.assertIn("logiciel 1.4 (BLE 1.69)", ca.resume(r)[2])
+
+    def test_version_mal_formee_jamais_envoyee(self):
+        r = ca.lire_reseau(base_avec_versions(tempfile.mkdtemp(), [("1.4.2", "1.69"), (" ", "x")]))
+        self.assertEqual([(l["logiciel"], l["ble"]) for l in r["lampes"]], [(None, None), (None, "1.69")])
+        self.assertEqual(ca.commandes(r)[2:], [
+            "mesh lampe 1 0x0002 70:3E:97:00:00:01 40065 \"Lampe A\"",
+            "mesh lampe 2 0x0004 70:3E:97:00:00:02 40065 \"Lampe B\"",
+        ], "ble sans logiciel : pas de jeton")
+        self.assertIn("logiciel inconnu", ca.resume(r)[1])
+
+    def test_base_sans_les_colonnes(self):
+        r = ca.lire_reseau(base_factice(tempfile.mkdtemp()))
+        self.assertTrue(all(l["logiciel"] is None and l["ble"] is None for l in r["lampes"]))
+
+    def test_reponse_avec_logiciel(self):
+        m = ca.REPONSE_LAMPE.match("ok lampe 2 0x0004 modele 40065 amaran COB 60d [intensite] logiciel 1.4 (BLE 1.69)"
+                                   " : Lampe B ; liste de 2 lampe(s) enregistree (redemarrer pour l'appliquer)")
+        self.assertEqual((m.group("logiciel"), m.group("nom"), m.group("total")), ("1.4 (BLE 1.69)", "Lampe B", "2"))
+        m = ca.REPONSE_LAMPE.match("ok lampe 1 0x0002 modele 40065 amaran COB 60d [intensite] : Lampe A")
+        self.assertEqual((m.group("logiciel"), m.group("nom")), (None, "Lampe A"), "pont d'avant le plan 3b-3")
+
+    def test_verifier_lampes_compare_la_version(self):
+        r = ca.lire_reseau(base_avec_versions(tempfile.mkdtemp(), [("1.4", "1.69"), ("1.4", "1.69")]))
+        bonnes = ["ok lampe 1 0x0002 modele 40065 amaran COB 60d [intensite] logiciel 1.4 (BLE 1.69) : Lampe A",
+                  "ok lampe 2 0x0004 modele 40065 amaran COB 60d [intensite] logiciel 1.4 (BLE 1.69) : Lampe B"
+                  " ; liste de 2 lampe(s) enregistree (redemarrer pour l'appliquer)"]
+        ca.verifier_lampes(bonnes, r, sortie=lambda _: None)
+        ancien = [b.replace(" logiciel 1.4 (BLE 1.69)", "") for b in bonnes]
+        with self.assertRaises(ca.ErreurCles):
+            ca.verifier_lampes(ancien, r, sortie=lambda _: None)
+        ca.verifier_lampes(ancien, r, sortie=lambda _: None, versions=False)
+
+    def test_chargement_selon_le_pont(self):
+        r = ca.lire_reseau(base_avec_versions(tempfile.mkdtemp(), [("1.4", "1.69"), ("1.4", "1.69")]))
+        cles = "mesh cles %s %s" % (NET.upper(), APP.upper())
+        for permise, jeton in ((True, "v1.4/1.69 "), (False, "")):
+            capture = []
+            ok_liste = "ok liste de 2 lampe(s) : envoyer mesh lampe 1 a 2" + (" [v<x.y>[/<x.y>]]" if permise else "")
+            logiciel = " logiciel 1.4 (BLE 1.69)" if permise else ""
+            port = PortFactice(["mesh", "mesh pret : oui", "amaran>", cles,
+                                "ok cles A8FAED6A 811407F1 (redemarrer pour les appliquer)", ok_liste,
+                                "ok lampe 1 0x0002 modele 40065 amaran COB 60d [intensite]%s : Lampe A" % logiciel,
+                                "ok lampe 2 0x0004 modele 40065 amaran COB 60d [intensite]%s : Lampe B ; liste de 2 "
+                                "lampe(s) enregistree (redemarrer pour l'appliquer)" % logiciel,
+                                "redemarre", "redemarrage"])
+            ca.charger(port, r, attente=1, sortie=capture.append)
+            self.assertEqual(port.ecrit[3:5], ["mesh lampe 1 0x0002 70:3E:97:00:00:01 40065 %s\"Lampe A\"\r\n" % jeton,
+                                               "mesh lampe 2 0x0004 70:3E:97:00:00:02 40065 %s\"Lampe B\"\r\n" % jeton])
+            self.assertEqual(any("ne prend pas la version" in c for c in capture), not permise)
+
+
+class TestNomsEtLignes(unittest.TestCase):
+    """Plan 3b-3 : un nom n'est jamais pris pour la version, une ligne trop longue ne part pas."""
+
+    def test_nom_qui_ressemble_a_une_version(self):
+        r = ca.lire_reseau(base_factice(tempfile.mkdtemp(), lampes=((2, "70:3E:97:00:00:01", "v1.4 bureau"),
+                                                                       (4, "70:3E:97:00:00:02", 'v2 "a" \\b'))))
+        self.assertEqual(ca.commandes(r)[2:], [
+            'mesh lampe 1 0x0002 70:3E:97:00:00:01 40065 "v1.4 bureau"',
+            'mesh lampe 2 0x0004 70:3E:97:00:00:02 40065 "v2 \\"a\\" \\\\b"',
+        ])
+
+    def test_ligne_trop_longue_refusee_avant_les_cles(self):
+        nom = '"' * 31
+        r = ca.lire_reseau(base_avec_versions(tempfile.mkdtemp(), [("123.456", "789.123"), ("1.4", None)]))
+        r["lampes"][1]["nom"] = nom  # 31 guillemets : 62 octets echappes
+        r["lampes"][1]["code"] = 4294967295  # base relue par adresse : la lampe 2 a les versions longues
+        with self.assertRaises(ca.ErreurCles):
+            ca.commandes(r)
+        port = PortFactice(["mesh pret : oui"])
+        with self.assertRaises(ca.ErreurCles):
+            ca.charger(port, r, attente=0.2, sortie=lambda _: None)
+        self.assertEqual(port.ecrit, [], "rien n'est envoye, pas meme mesh")
+        self.assertEqual(len(ca.commandes(r, versions=False)[3].encode()) <= ca.LIGNE_MAX, True,
+                         "sans jeton, le pire nom tient")
+
+    def test_version_en_nombre_ignoree(self):
+        self.assertIsNone(ca.lire_version(1.1))
+        self.assertIsNone(ca.lire_version(1))
+        self.assertEqual(ca.lire_version(" 1.10 "), "1.10")
+
+    def test_marqueur_du_pont(self):
+        """Le marqueur cherche dans la reponse a `mesh lampes N` est celui du firmware (liste.h)."""
+        chemin = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "components", "liste", "include",
+                              "liste.h")
+        with open(chemin) as f:
+            m = re.search(r'#define LISTE_JETON_AIDE "(.*)"', f.read())
+        self.assertEqual(m.group(1), ca.VERSION_PERMISE)
 
 
 class TestFictives(unittest.TestCase):
@@ -133,7 +252,7 @@ class TestFictives(unittest.TestCase):
         self.assertEqual([l["nom"] for l in r["lampes"]], ["Lampe A", "Lampe B", "Fictive 1", "Fictive 2"])
         self.assertEqual([l["adresse"] for l in r["lampes"][2:]], [0x0100, 0x0101])
         self.assertEqual(ca.commandes(r)[1], "mesh lampes 4")
-        self.assertEqual(ca.commandes(r)[-1], "mesh lampe 4 0x0101 02:00:00:00:00:02 0 Fictive 2")
+        self.assertEqual(ca.commandes(r)[-1], "mesh lampe 4 0x0101 02:00:00:00:00:02 0 \"Fictive 2\"")
 
     def test_fictives_sautent_une_adresse_prise(self):
         lampes = ((0x0100, "70:3E:97:00:00:01", "Lampe A"),)
@@ -201,7 +320,7 @@ class TestSortie(unittest.TestCase):
         texte = "\n".join(capture)
         self.assertEqual(code, 0)
         self.assertIn("mesh lampes 4", texte)
-        self.assertIn("mesh lampe 4 0x0101 02:00:00:00:00:02 0 Fictive 2", texte)
+        self.assertIn("mesh lampe 4 0x0101 02:00:00:00:00:02 0 \"Fictive 2\"", texte)
 
     def test_option_fictives_au_dela_de_la_capacite(self):
         capture = []
@@ -322,8 +441,8 @@ class TestChargement(unittest.TestCase):
             "mesh\r\n",  # d'abord verifier le pont
             self.cles + "\r\n",
             "mesh lampes 2\r\n",
-            "mesh lampe 1 0x0002 70:3E:97:00:00:01 40065 Lampe A\r\n",
-            "mesh lampe 2 0x0004 70:3E:97:00:00:02 40065 Lampe B\r\n",
+            "mesh lampe 1 0x0002 70:3E:97:00:00:01 40065 \"Lampe A\"\r\n",
+            "mesh lampe 2 0x0004 70:3E:97:00:00:02 40065 \"Lampe B\"\r\n",
             "redemarre\r\n",
         ])
         self.assertFalse(any("cataloguer" in ligne for ligne in self.capture))
@@ -399,7 +518,7 @@ class TestChargement(unittest.TestCase):
         with self.assertRaises(ca.ErreurCles) as cm:
             self.charger(port)
         self.assertIn("lampe 1 : adresse hors de l'unicast", str(cm.exception))
-        self.assertEqual(port.ecrit[-1], "mesh lampe 1 0x0002 70:3E:97:00:00:01 40065 Lampe A\r\n")
+        self.assertEqual(port.ecrit[-1], "mesh lampe 1 0x0002 70:3E:97:00:00:01 40065 \"Lampe A\"\r\n")
         self.assertNotIn("redemarre\r\n", port.ecrit)
 
     def test_liste_refusee_par_le_pont_arrete_tout(self):
