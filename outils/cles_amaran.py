@@ -113,9 +113,9 @@ LIGNE_MAX = 127  # la console du pont refuse une ligne plus longue
 
 
 def lire_version(v):
-    """Version x.y de la base, en texte seulement (un nombre perdrait ses zeros : 1.10), ou None."""
-    texte = v.strip() if isinstance(v, str) else ""
-    return texte if VERSION.fullmatch(texte) else None
+    """Version x.y de la base, en texte seulement (un nombre perdrait ses zeros : 1.10), exacte
+    (comme l'app : " 1.4" est inconnue), ou None."""
+    return v if isinstance(v, str) and VERSION.fullmatch(v) else None
 
 
 def nom_cite(nom):

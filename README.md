@@ -113,7 +113,7 @@ Sur l'USB, en français (`python3 outils/console.py --port <port> "<commande>"`,
 - `lampe <n> on|off|niveau <0-1000>|releve` : le niveau est arrondi au pour cent (la lampe ne garde pas mieux) ;
 - `mesh lampe <n> masquer|afficher` : retirer la lampe de Maison, qui l'oublie alors (voir « À savoir »), ou l'y remettre, avec le même numéro (`afficher` y fait aussi entrer une lampe jamais vue) ;
 - `mesh` : réseau, empreintes des clés, compteurs ; `mesh releve <s>`, `mesh balayage`, `mesh ecoute on|off`, `mesh autotest`, etc. ;
-- `mesh lampes <N>`, puis `mesh lampe <n> <adresse> <mac> <code> [v<logiciel>[/<ble>]] "<nom>"` : la liste des lampes, tout ou rien, avec la version du logiciel de chaque lampe si elle est connue (c'est ce qu'envoie `outils/cles_amaran.py`) ; la version n'est lue que suivie du nom, et un nom entre guillemets reste un nom ;
+- `mesh lampes <N>`, puis `mesh lampe <n> <adresse> <mac> <code> [v<logiciel>[/<ble>]] "<nom>"` : la liste des lampes, tout ou rien, avec la version du logiciel de chaque lampe si elle est connue (c'est ce qu'envoie `outils/cles_amaran.py`) ; la version n'est lue que suivie du nom, et un nom entre guillemets reste un nom ; une copie de `outils/cles_amaran.py` d'avant le plan 3b-3 ne lit plus la réponse de ce firmware à `mesh lampe` : prendre celle du dépôt ;
 - `matter` : mise en service, Thread, abonnements, codes, identité, `ConfigurationVersion` (incrémentée quand ce que Maison voit des lampes change, pour qu'elle relise leur fiche) ;
 - `led [test|stop]`, `cause`, `taches`, `redemarre` ;
 - `decommission` : retire le pont de Maison (toutes les fabriques Matter) et efface la clé UDP, puis redémarre ;

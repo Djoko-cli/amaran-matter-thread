@@ -160,9 +160,11 @@ la pile ; une à la fois, sous le verrou des expositions) :
   `afficher`) ou en sort (`masquer`), comme le prévoit Matter 1.4 pour un
   changement d'endpoints ; l'empreinte en NVS est mise à jour du même geste.
 
-La version est rangée avant l'empreinte : une NVS qui refuserait la seconde
-ferait monter la version à chaque démarrage, jamais reculer ; l'échec est
-journalisé et compté. Une NVS illisible au démarrage (autre chose qu'une clé
+La version est rangée seule d'abord, et n'est annoncée que si elle l'est (sinon
+le démarrage suivant relirait l'ancienne : Maison la verrait reculer) ;
+l'empreinte vient ensuite : une NVS qui refuserait la seconde ferait monter la
+version à chaque démarrage, jamais reculer. Chaque échec est journalisé et
+compté. Une NVS illisible au démarrage (autre chose qu'une clé
 absente) bloque tout incrément jusqu'au démarrage suivant : la version rangée
 est peut-être plus haute que celle lue, et `ConfigurationVersion` ne doit
 jamais reculer. La console `matter` montre la version.

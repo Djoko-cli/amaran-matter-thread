@@ -235,7 +235,8 @@ class TestNomsEtLignes(unittest.TestCase):
     def test_version_en_nombre_ignoree(self):
         self.assertIsNone(ca.lire_version(1.1))
         self.assertIsNone(ca.lire_version(1))
-        self.assertEqual(ca.lire_version(" 1.10 "), "1.10")
+        self.assertEqual(ca.lire_version("1.10"), "1.10")
+        self.assertIsNone(ca.lire_version(" 1.10 "), "espaces : inconnue, comme dans l'app")
 
     def test_marqueur_du_pont(self):
         """Le marqueur cherche dans la reponse a `mesh lampes N` est celui du firmware (liste.h)."""

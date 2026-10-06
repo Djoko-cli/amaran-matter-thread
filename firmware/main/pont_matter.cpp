@@ -321,19 +321,31 @@ static void configuration_changee(const char *raison) {
   }
   const uint32_t empreinte = empreinte_exposee();
   const uint32_t v = s_version_config + 1;
+  // La version d'abord, seule : si elle n'est pas rangee, elle n'est pas annoncee (au
+  // prochain demarrage, la pile relirait l'ancienne : Maison la verrait reculer).
   nvs_handle_t h;
   esp_err_t err = nvs_open(NVS_ESPACE, NVS_READWRITE, &h);
   if (err == ESP_OK) {
     err = nvs_set_u32(h, NVS_VERSION_CONFIG, v);
-    if (err == ESP_OK) err = nvs_set_u32(h, NVS_FICHE, empreinte);
     if (err == ESP_OK) err = nvs_commit(h);
+    if (err == ESP_OK) {
+      esp_err_t e = nvs_set_u32(h, NVS_FICHE, empreinte);
+      if (e == ESP_OK) e = nvs_commit(h);
+      if (e == ESP_OK) {
+        s_fiche_rangee = empreinte;
+      } else {
+        s_echecs_config = s_echecs_config + 1;
+        ESP_LOGE(TAG, "empreinte de la fiche non rangee en NVS (%s)", esp_err_to_name(e));
+      }
+    }
     nvs_close(h);
   }
-  if (err == ESP_OK) {
-    s_fiche_rangee = empreinte;
-  } else {
+  if (err != ESP_OK) {
     s_echecs_config = s_echecs_config + 1;
-    ESP_LOGE(TAG, "ConfigurationVersion %" PRIu32 " non rangee en NVS (%s)", v, esp_err_to_name(err));
+    xSemaphoreGive(s_verrou_exposition);
+    ESP_LOGE(TAG, "ConfigurationVersion %" PRIu32 " non rangee en NVS (%s) : non annoncee (%s)", v,
+             esp_err_to_name(err), raison);
+    return;
   }
   {
     lock::ScopedChipStackLock verrou(portMAX_DELAY);

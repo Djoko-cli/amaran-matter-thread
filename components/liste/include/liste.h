@@ -115,7 +115,7 @@ void liste_afficher(liste_lampe_t *l);                   // exposee, meme jamais
 typedef struct {
   uint8_t version;          // LISTE_VERSION
   uint8_t n;
-  uint8_t taille_lampe;     // sizeof(liste_lampe_t)
+  uint8_t taille_lampe;     // sizeof(liste_lampe_v2_t), ou d'une entree de la cle logiciels
   uint8_t reserve;
 } liste_entete_t;
 
