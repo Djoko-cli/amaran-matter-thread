@@ -25,6 +25,9 @@
 #include <platform/ESP32/OpenthreadLauncher.h>
 
 #include <app/InteractionModelEngine.h>
+#include <app/reporting/reporting.h>
+#include <app/server-cluster/DefaultServerCluster.h>
+#include <data_model_provider/esp_matter_data_model_provider.h>
 #include <app/server/CommissioningWindowManager.h>
 #include <app/server/Server.h>
 #include <platform/DeviceInstanceInfoProvider.h>
@@ -77,6 +80,24 @@ static volatile uint32_t s_effet_fin[EMPLACEMENTS];
 // esp_matter::start : le protocole JSON les rend ensuite sans verrou.
 static char s_qr[128], s_manuel[32], s_fabricant[33], s_produit[33], s_serie[33];
 static volatile bool s_infos_lues;
+
+// Copie de chaque lampe exposee : sa fiche dans Maison et l'empreinte en derivent
+// (spec fiche des lampes 2 et 4).
+static liste_lampe_t s_lampe[LISTE_CAPACITE];
+
+// ConfigurationVersion du noeud (spec fiche des lampes 4), rendue a la pile par
+// pont_version_configuration (CHIPProjectConfig.h). En NVS (espace amaran) : la
+// version, et l'empreinte de ce qui etait expose quand elle a change.
+#define NVS_ESPACE "amaran"
+#define NVS_VERSION_CONFIG "cfgver"
+#define NVS_FICHE "fiche"
+static volatile uint32_t s_version_config = 1;  // celle de la pile, tant que rien n'a change
+static volatile uint32_t s_echecs_config;       // versions non rangees en NVS
+static uint32_t s_fiche_rangee;                 // 0 : jamais rangee
+// NVS illisible au demarrage (autre chose qu'une cle absente) : la version rangee est
+// peut-etre plus haute que celle lue. Rien n'est plus incremente, pour ne jamais
+// faire reculer ConfigurationVersion (Matter l'interdit).
+static bool s_config_bloquee;
 
 // --- Abonnements : intervalle maximal plafonne (lecon du Halo : apres un
 // redemarrage du noeud, Apple ne se reabonne que quand cet intervalle expire).
@@ -221,6 +242,126 @@ static void ecrire_numero_de_serie(void) {
   nvs_close(h);
 }
 
+// --- ConfigurationVersion (spec fiche des lampes 4)
+
+extern "C" uint32_t pont_version_configuration(void) { return s_version_config; }
+
+// NotifyAttributeChanged est protege : un pointeur de membre pris dans une classe
+// derivee (jamais construite) s'applique a toute DefaultServerCluster. Il augmente la
+// DataVersion du cluster et signale l'attribut aux abonnes (Matter 7.10.3 : une valeur
+// ne change jamais sans sa DataVersion).
+struct AccesCluster : chip::app::DefaultServerCluster {
+  static void notifier(chip::app::DefaultServerCluster *c, chip::AttributeId a) {
+    (c->*(&AccesCluster::NotifyAttributeChanged))(a, chip::app::DataModel::AttributeChangeType::kReportable);
+  }
+};
+
+// Sous le verrou de la pile. Le cluster Basic Information du noeud est tenu par
+// l'enregistrement d'esp-matter (DefaultServerCluster) ; s'il manquait, le simple
+// signalement, sans DataVersion.
+static void annoncer_version(void) {
+  chip::app::ServerClusterInterface *c = esp_matter::data_model::provider::get_instance().registry().Get(
+      chip::app::ConcreteClusterPath(chip::kRootEndpointId, BasicInformation::Id));
+  if (c) {
+    AccesCluster::notifier(static_cast<chip::app::DefaultServerCluster *>(c),
+                           BasicInformation::Attributes::ConfigurationVersion::Id);
+  } else {
+    ESP_LOGE(TAG, "cluster Basic Information introuvable : ConfigurationVersion signalee sans DataVersion");
+    MatterReportingAttributeChangeCallback(chip::kRootEndpointId, BasicInformation::Id,
+                                           BasicInformation::Attributes::ConfigurationVersion::Id);
+  }
+}
+
+// Ce que Maison voit des lampes : chaque lampe exposee, son numero et sa fiche.
+static uint32_t empreinte_exposee(void) {
+  const liste_lampe_t *lampes[LISTE_CAPACITE];
+  uint16_t eps[LISTE_CAPACITE];
+  int n = 0;
+  for (int i = 0; i < LISTE_CAPACITE; i++) {
+    if (!s_ep_lampe[i]) continue;
+    lampes[n] = &s_lampe[i];
+    eps[n++] = s_ep_lampe[i];
+  }
+  return liste_empreinte_fiches(lampes, eps, n);
+}
+
+// Avant esp_matter::start : la pile lit la version des sa premiere lecture.
+static void lire_version_configuration(void) {
+  nvs_handle_t h;
+  esp_err_t err = nvs_open(NVS_ESPACE, NVS_READONLY, &h);
+  if (err == ESP_ERR_NVS_NOT_FOUND) return;  // espace jamais ecrit : version 1
+  if (err == ESP_OK) {
+    uint32_t v = 0;
+    err = nvs_get_u32(h, NVS_VERSION_CONFIG, &v);
+    if (err == ESP_OK && v) s_version_config = v;
+    if (err == ESP_OK || err == ESP_ERR_NVS_NOT_FOUND) {
+      err = nvs_get_u32(h, NVS_FICHE, &s_fiche_rangee);
+      if (err == ESP_ERR_NVS_NOT_FOUND) err = ESP_OK;
+    }
+    nvs_close(h);
+  }
+  if (err != ESP_OK) {
+    s_config_bloquee = true;
+    ESP_LOGE(TAG, "ConfigurationVersion illisible en NVS (%s) : plus incrementee jusqu'au prochain demarrage",
+             esp_err_to_name(err));
+  }
+}
+
+// Version incrementee, rangee avec l'empreinte, puis annoncee (Maison relit l'appareil).
+// Une a la fois, et les lampes exposees lues d'un seul tenant : sous s_verrou_exposition,
+// pris avant celui de la pile, comme exposer_lampe. La version est rangee avant
+// l'empreinte : une NVS qui refuserait la seconde ferait monter la version a chaque
+// demarrage (compte dans s_echecs_config), jamais reculer.
+static void configuration_changee(const char *raison) {
+  xSemaphoreTake(s_verrou_exposition, portMAX_DELAY);
+  if (s_config_bloquee) {
+    xSemaphoreGive(s_verrou_exposition);
+    ESP_LOGW(TAG, "ConfigurationVersion non incrementee (%s) : NVS illisible au demarrage", raison);
+    return;
+  }
+  const uint32_t empreinte = empreinte_exposee();
+  const uint32_t v = s_version_config + 1;
+  nvs_handle_t h;
+  esp_err_t err = nvs_open(NVS_ESPACE, NVS_READWRITE, &h);
+  if (err == ESP_OK) {
+    err = nvs_set_u32(h, NVS_VERSION_CONFIG, v);
+    if (err == ESP_OK) err = nvs_set_u32(h, NVS_FICHE, empreinte);
+    if (err == ESP_OK) err = nvs_commit(h);
+    nvs_close(h);
+  }
+  if (err == ESP_OK) {
+    s_fiche_rangee = empreinte;
+  } else {
+    s_echecs_config = s_echecs_config + 1;
+    ESP_LOGE(TAG, "ConfigurationVersion %" PRIu32 " non rangee en NVS (%s)", v, esp_err_to_name(err));
+  }
+  {
+    lock::ScopedChipStackLock verrou(portMAX_DELAY);
+    s_version_config = v;
+    annoncer_version();
+  }
+  // La meme version sur chaque lampe exposee (ConfigurationVersion du cluster Bridged
+  // Device Basic Information, Matter 1.4) : attribute::report prend le verrou de la pile.
+  esp_matter_attr_val_t val = esp_matter_uint32(v);
+  for (int i = 0; i < LISTE_CAPACITE; i++) {
+    if (!s_ep_lampe[i]) continue;
+    attribute::report(s_ep_lampe[i], BridgedDeviceBasicInformation::Id,
+                      BridgedDeviceBasicInformation::Attributes::ConfigurationVersion::Id, &val);
+  }
+  xSemaphoreGive(s_verrou_exposition);
+  ESP_LOGI(TAG, "ConfigurationVersion %" PRIu32 " (%s)", v, raison);
+}
+
+// Au demarrage, les lampes exposees : la version change si Maison voit autre chose
+// qu'au dernier changement (firmware, liste rechargee, lampe masquee hors marche).
+static void verifier_configuration(void) {
+  if (s_fiche_rangee != empreinte_exposee()) {
+    configuration_changee("fiche des lampes changee depuis le dernier changement");
+  } else {
+    ESP_LOGI(TAG, "ConfigurationVersion %" PRIu32 " (inchangee)", s_version_config);
+  }
+}
+
 // --- Lampes dans Maison (spec N lampes 5 et 7)
 
 // Le type d'appareil que donne le catalogue. Seule la lampe a intensite variable
@@ -254,7 +395,10 @@ static uint16_t activer(int lampe, endpoint_t *ep) {
   return id;
 }
 
-static esp_err_t exposer_lampe(int lampe, const liste_lampe_t *l) {
+// *entree (si non nul) : vrai si la lampe vient d'entrer dans Maison (creee ou
+// reactivee), faux si elle y etait deja ou en cas d'echec.
+static esp_err_t exposer_lampe(int lampe, const liste_lampe_t *l, bool *entree) {
+  if (entree) *entree = false;
   if (lampe < 0 || lampe >= LISTE_CAPACITE || !l) return ESP_ERR_INVALID_ARG;
   if (!esp_matter::is_started() || !s_verrou_exposition) return ESP_ERR_INVALID_STATE;
   xSemaphoreTake(s_verrou_exposition, portMAX_DELAY);
@@ -271,6 +415,7 @@ static esp_err_t exposer_lampe(int lampe, const liste_lampe_t *l) {
   }
   if (ep) {
     const uint16_t id = activer(lampe, ep);
+    if (entree) *entree = true;
     xSemaphoreGive(s_verrou_exposition);
     ESP_LOGI(TAG, "lampe %d de nouveau dans Maison : EP%u", lampe + 1, id);
     return ESP_OK;
@@ -290,6 +435,7 @@ static esp_err_t exposer_lampe(int lampe, const liste_lampe_t *l) {
     if (ep) pret = ajouter_type(ep, m) == ESP_OK && endpoint::set_parent_endpoint(ep, s_agregateur) == ESP_OK;
     if (pret) {
       snprintf(s_nom_lampe[lampe], sizeof(s_nom_lampe[lampe]), "%s", l->nom);
+      s_lampe[lampe] = *l;
       cluster_t *pontee = cluster::get(ep, BridgedDeviceBasicInformation::Id);
       if (pontee) {
         // Sans NONVOLATILE (create_node_label le mettrait en NVS, et ce premier nom
@@ -297,6 +443,24 @@ static esp_err_t exposer_lampe(int lampe, const liste_lampe_t *l) {
         attribute::create(pontee, BridgedDeviceBasicInformation::Attributes::NodeLabel::Id,
                           ATTRIBUTE_FLAG_WRITABLE, esp_matter_char_str(s_nom_lampe[lampe], strlen(s_nom_lampe[lampe])),
                           32);
+        // Fiche de la lampe (spec fiche des lampes 2) : la valeur est copiee par
+        // esp-matter. Version inconnue : pas d'attribut, Maison n'affiche pas la ligne.
+        namespace B = cluster::bridged_device_basic_information::attribute;
+        liste_fiche_t f;
+        liste_fiche(l, &f);
+        static char fabricant[] = LISTE_FABRICANT;
+        B::create_vendor_name(pontee, fabricant, strlen(fabricant));
+        B::create_product_name(pontee, f.produit, strlen(f.produit));
+        B::create_serial_number(pontee, f.serie, strlen(f.serie));
+        // Celle du noeud : elle ne recule jamais, et suit chaque changement de fiche.
+        attribute::create(pontee, BridgedDeviceBasicInformation::Attributes::ConfigurationVersion::Id,
+                          ATTRIBUTE_FLAG_NONE, esp_matter_uint32(s_version_config));
+        if (f.logiciel[0]) {
+          // Les deux, comme le noeud : Maison n'affiche pas la chaine seule (banc du
+          // prototype 3b-3).
+          B::create_software_version(pontee, f.logiciel_nombre);
+          B::create_software_version_string(pontee, f.logiciel, strlen(f.logiciel));
+        }
       }
       // Les etats relus changent CurrentLevel souvent : ecriture en flash differee.
       attribute::set_deferred_persistence(
@@ -311,6 +475,7 @@ static esp_err_t exposer_lampe(int lampe, const liste_lampe_t *l) {
     return ESP_FAIL;
   }
   const uint16_t id = activer(lampe, ep);
+  if (entree) *entree = true;
   if (id != l->endpoint) {
     const esp_err_t err = config_maj_endpoint(l->mac, id);
     if (err != ESP_OK) ESP_LOGE(TAG, "lampe %d : numero EP%u non sauve (%s)", lampe + 1, id, esp_err_to_name(err));
@@ -323,7 +488,10 @@ static esp_err_t exposer_lampe(int lampe, const liste_lampe_t *l) {
 
 esp_err_t pont_exposer(int lampe, const liste_lampe_t *l) {
   if (!s_pret) return ESP_ERR_INVALID_STATE;
-  return exposer_lampe(lampe, l);
+  bool entree = false;
+  const esp_err_t err = exposer_lampe(lampe, l, &entree);
+  if (entree) configuration_changee("lampe ajoutee a Maison");
+  return err;
 }
 
 esp_err_t pont_masquer(int lampe) {
@@ -353,6 +521,7 @@ esp_err_t pont_masquer(int lampe) {
     }
   }
   xSemaphoreGive(s_verrou_exposition);
+  if (id && err == ESP_OK) configuration_changee("lampe retiree de Maison");
   return err;
 }
 
@@ -365,6 +534,7 @@ esp_err_t pont_demarrer(const amaran_config_t *cfg, pont_ordre_cb_t ordre) {
   s_verrou_exposition = xSemaphoreCreateMutex();
   if (!s_verrou_exposition) return ESP_ERR_NO_MEM;
   ecrire_numero_de_serie();
+  lire_version_configuration();  // avant start : la pile la lit des la premiere lecture
 
   node::config_t cfg_noeud;
   snprintf(cfg_noeud.root_node.basic_information.node_label,
@@ -432,7 +602,8 @@ esp_err_t pont_demarrer(const amaran_config_t *cfg, pont_ordre_cb_t ordre) {
     }
     ordre_ep[b + 1] = i;
   }
-  for (int k = 0; k < n; k++) exposer_lampe(ordre_ep[k], &cfg->liste.lampes[ordre_ep[k]]);
+  for (int k = 0; k < n; k++) exposer_lampe(ordre_ep[k], &cfg->liste.lampes[ordre_ep[k]], NULL);
+  verifier_configuration();
   s_pret = true;
   return ESP_OK;
 }
@@ -556,6 +727,8 @@ void pont_afficher(bool distant) {
   }
   printf("  identite        : %s, %s, n/s %s\n", fabricant, produit, serie);
   printf("  version         : %s\n", esp_app_get_description()->version);
+  printf("  configuration   : version %" PRIu32 "%s\n", s_version_config,
+         s_echecs_config ? " (non rangee en NVS : voir le journal)" : "");
   for (int i = 0; i < LISTE_CAPACITE; i++) {
     if (s_ep_lampe[i]) printf("  EP%u             : %s\n", (unsigned)s_ep_lampe[i], s_nom_lampe[i]);
   }
