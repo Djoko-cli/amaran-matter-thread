@@ -43,7 +43,7 @@ Comme le brief et la spec de Halo, à l'identique :
   déclaré dans `apps/macos/project.yml` ; ses outils (`sign_update`,
   `generate_keys`) viennent de l'archive 2.10.0, passés par `SPARKLE_BIN` ;
 - `Info.plist` : `SUFeedURL`
-  (`https://raw.githubusercontent.com/Djoko-cli/amaran-60d-matter/main/apps/macos/appcast.xml`),
+  (`https://raw.githubusercontent.com/Djoko-cli/amaran-matter-thread/main/apps/macos/appcast.xml`),
   `SUPublicEDKey`, `SUEnableInstallerLauncherService`, `SUEnableAutomaticChecks`,
   `SUAutomaticallyUpdate`, `SUScheduledCheckInterval` = 86400 ;
 - droits `mach-lookup` `fr.djoko.amaran.compagnon-spks` et `-spki` ;

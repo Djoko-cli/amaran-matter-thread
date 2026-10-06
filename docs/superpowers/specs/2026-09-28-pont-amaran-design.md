@@ -59,7 +59,8 @@ Hors périmètre (v1) :
 8. **Luminosité linéaire, sans gamma** : 50 % dans Maison = 50,0 % dans
    amaran Desktop. C'est l'inverse du Halo (gamma 2), assumé pour le miroir.
 9. **Dépôt `~/Dev/amaran`, hors iCloud**, public sur GitHub
-   (`Djoko-cli/amaran-60d-matter`) ; doc en français.
+   (`Djoko-cli/amaran-matter-thread`, d'abord `amaran-60d-matter` ; renommé le 07/10/2026) ;
+   doc en français.
 
 ## 3. Faits établis
 
@@ -722,7 +723,7 @@ Sur la carte :
   n'ouvrent jamais de port série.
 
 **Dépôt**
-- `~/Dev/amaran`, dépôt public sur GitHub (`Djoko-cli/amaran-60d-matter`, remote
+- `~/Dev/amaran`, dépôt public sur GitHub (`Djoko-cli/amaran-matter-thread`, remote
   `origin`), commits et doc en français.
 - `telink` est repris d'amaran-bridge (MIT) : en-tête de licence conservé,
   mention dans le README.
