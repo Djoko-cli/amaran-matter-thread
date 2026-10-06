@@ -108,12 +108,12 @@ Bouton BOOT : appui court, redémarrage ; de 2 à 8 s, rien ; 8 s ou plus, désa
 
 Sur l'USB, en français (`python3 outils/console.py --port <port> "<commande>"`, ou tout terminal série) :
 - `lampes` : une ligne par lampe (sa place dans Maison : `EP<n>`, « jamais vue », « masquee » ou « hors de Maison » ; état lu, joignabilité, relectures répondues), puis les ordres ;
-- `lampe <n>` : le détail d'une lampe (adresse, MAC, modèle et capacités, consigne, relectures sur 10 min) ;
+- `lampe <n>` : le détail d'une lampe (adresse, MAC, modèle et capacités, version de son logiciel, consigne, relectures sur 10 min) ;
 - `lampe <n> on|off|niveau <0-1000>|releve` : le niveau est arrondi au pour cent (la lampe ne garde pas mieux) ;
 - `mesh lampe <n> masquer|afficher` : retirer la lampe de Maison, qui l'oublie alors (voir « À savoir »), ou l'y remettre, avec le même numéro (`afficher` y fait aussi entrer une lampe jamais vue) ;
 - `mesh` : réseau, empreintes des clés, compteurs ; `mesh releve <s>`, `mesh balayage`, `mesh ecoute on|off`, `mesh autotest`, etc. ;
-- `mesh lampes <N>`, puis `mesh lampe <n> <adresse> <mac> <code> <nom>` : la liste des lampes, tout ou rien (c'est ce qu'envoie `outils/cles_amaran.py`) ;
-- `matter` : mise en service, Thread, abonnements, codes, identité ;
+- `mesh lampes <N>`, puis `mesh lampe <n> <adresse> <mac> <code> [v<logiciel>[/<ble>]] "<nom>"` : la liste des lampes, tout ou rien, avec la version du logiciel de chaque lampe si elle est connue (c'est ce qu'envoie `outils/cles_amaran.py`) ; la version n'est lue que suivie du nom, et un nom entre guillemets reste un nom ;
+- `matter` : mise en service, Thread, abonnements, codes, identité, `ConfigurationVersion` (incrémentée quand ce que Maison voit des lampes change, pour qu'elle relise leur fiche) ;
 - `led [test|stop]`, `cause`, `taches`, `redemarre` ;
 - `decommission` : retire le pont de Maison (toutes les fabriques Matter) et efface la clé UDP, puis redémarre ;
 - `json …` : le mode machine de l'app compagnon ([docs/PROTOCOLE-JSON.md](docs/PROTOCOLE-JSON.md)). Le pont démarre toujours en console texte ; `json 1` passe en mode machine, `json 0` (ou 30 s sans rien de l'app) revient au texte. `json cle nouvelle <64 hexa>` crée la clé UDP de l'accès par Thread (la réponse ne la montre qu'en mode machine, une seule fois ; la console texte n'en montre que l'empreinte), `json cle efface` l'efface ; `json trames 1|0` envoie ou coupe les trames du Bluetooth Mesh décodées.
@@ -122,13 +122,14 @@ Une commande inconnue répond `Commande inconnue : "<nom>" (help)`.
 
 ## À savoir
 
+- Dans Maison, la fiche de chaque lampe montre son fabricant (`Aputure`), son modèle et son numéro de série (`AMARAN-<MAC de la lampe>`). La version de son logiciel est aussi exposée en Matter, mais Maison ne l'affiche pas pour un accessoire Matter ponté (constaté au banc du 06/10/2026) : l'app compagnon la montre.
 - Une lampe éteinte depuis Maison, ou depuis amaran Desktop, ignore sa molette et le bouton de sa molette. Pour la rallumer à la main : couper puis remettre son alimentation. Son état au retour varie : allumée vers 40 %, allumée à son niveau retenu, ou éteinte.
 - Une lampe dont la molette est à 0 % reste en marche, mais n'éclaire pas : Maison la montre éteinte, à son dernier niveau. La toucher dans Maison la rallume à ce niveau (à 40 % seulement sur une installation neuve, quand Maison n'a encore aucun niveau pour elle). Le pont ne l'éteint jamais de lui-même : sa molette reste vive. Mais juste après avoir tourné la molette à 0, Maison la montre encore allumée quelques secondes : l'éteindre à ce moment-là l'éteint « par l'app », et sa molette ne répond plus.
 - Maison suit la molette et amaran Desktop en 2 s environ : les lampes ne signalent rien d'elles-mêmes, et le pont les relit toutes les 2 s (`mesh releve <s>` pour changer).
 - amaran Desktop, lui, ne suit pas les ordres venus de Maison.
 - Maison ne montre une lampe « Pas de réponse », puis son retour, qu'après avoir touché sa tuile. Le pont publie pourtant chaque changement.
 - Pour la luminosité, taper sur la jauge de Maison est plus fluide que la faire glisser : un glissé envoie une valeur toutes les 150 à 300 ms.
-- Une lampe n'entre dans Maison qu'à sa première réponse, puis y reste : absente, elle y est « Pas de réponse », et garde sa tuile, sa pièce et ses scènes. Pour la retirer de Maison : `mesh lampe <n> masquer`. Maison oublie alors la lampe : remise (`afficher`, avec le même numéro), elle revient comme un nouvel accessoire, sous son nom d'amaran Desktop, sans le nom donné dans Maison, ni groupe, ni scènes, ni automatisations (banc du 05/10/2026).
+- Une lampe n'entre dans Maison qu'à sa première réponse, puis y reste : absente, elle y est « Pas de réponse », et garde sa tuile, sa pièce et ses scènes. Pour la retirer de Maison : `mesh lampe <n> masquer`. Maison oublie alors la lampe : remise (`afficher`, avec le même numéro), elle revient comme un nouvel accessoire, sous son nom d'amaran Desktop, sans le nom donné dans Maison, ni groupe, ni scènes, ni automatisations (banc du 05/10/2026). Il est arrivé que Maison refuse ensuite de changer l'icône de la lampe revenue (« Impossible de modifier ce réglage ») : retirer le pont de Maison puis le réappairer l'a réglé (06/10/2026).
 - Retirer une lampe dans amaran Desktop, puis recharger la liste (`outils/cles_amaran.py`), lui fait perdre son numéro : remise plus tard, elle revient comme une lampe nouvelle.
 - `mesh oublie` efface les clés, mais garde la liste des lampes : leurs tuiles restent, en « Pas de réponse », jusqu'au rechargement des clés. `mesh lampes 0` vide la liste.
 - Un modèle que le pont ne connaît pas encore est piloté en marche et intensité seulement. `outils/cles_amaran.py` signale une lampe qui déclare la température de couleur ou la couleur : modèle à cataloguer.
