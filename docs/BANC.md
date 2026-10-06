@@ -316,3 +316,15 @@ Firmware du banc A (`c5128fa`) ; app de `main` (`75b88fe`), signée de l'équipe
   - Graphiques continus sur l'heure : relectures répondues entre 94 et 100 % pour les deux lampes, tas libre plat (112 Ko).
   - À la fin : lampe 1 allumée et éteinte deux fois, confirmées en 348 à 367 ms (essai 1) ; Maison suit.
   - `taches` à distance : pile libre au plus bas `udp` 1 612 o, `json` 1 820 o, `distant` 4 428 o, `console` 5 768 o ; tas libre 114 Ko, 106 Ko au plus bas. Le chemin distant (HMAC, lignes envoyées par la tâche `udp`) prend 1,7 Ko de plus à `udp` qu'au banc A : c'est la marge la plus serrée, à surveiller si ce chemin grossit.
+
+## Plan 3b-3 : la fiche des lampes dans Maison (06/10/2026)
+
+Banc du prototype (même code que `main`, firmware `0.1.0-9ca8ce0`), avec Djoko. Flash sans effacement, après une sauvegarde de la flash entière (hors du dépôt).
+
+- **Démarrage** : les deux lampes dans Maison (EP2, EP3) ; `ConfigurationVersion` 2 au premier démarrage, inchangée au suivant.
+- **Maison, sans rien réappairer** : la fiche des deux lampes passe de « Unknown » à Fabricant `Aputure`, N° de série `AMARAN-<MAC de la lampe>`, Modèle `amaran COB 60d` ; pièces, scènes et automatisations intactes.
+- **Versions par l'app** : la carte Clés montre l'écart (la copie de ce Mac n'avait pas encore les versions) ; « Copier depuis amaran Desktop » puis « Charger le pont » : plus d'écart, `1.4 (BLE 1.69)` sur les deux cartes de lampe et dans `lampe <n>`, `ConfigurationVersion` 3.
+- **Programme interne** : Maison ne l'affiche pas pour une lampe, ni avec `SoftwareVersionString` seul, ni avec `SoftwareVersion` en plus (version 4), ni avec le `ConfigurationVersion` de chaque lampe (version 5), même Maison rouverte. Un pont HomeKit (HAP) montre pourtant celui de ses accessoires : Maison n'affiche pas la version d'un accessoire Matter ponté.
+- **Retirer, puis remettre** (lampe 2) : `masquer` (version 6) retire la tuile ; `afficher` (version 7) la remet comme un nouvel accessoire, comme avant (décision 7). Maison refusait ensuite de changer son icône (« Impossible de modifier ce réglage ») ; retirer le pont de Maison puis le réappairer l'a réglé, la fiche revient remplie.
+- **Secteur** : voyant éteint avec la lueur blanche toutes les 10 s ; Maison pilote les lampes.
+- **Mémoire** (app, juste après un démarrage) : tas libre 108 Ko, 102 Ko au plus bas ; pile libre au plus bas `json` 1 820 o, `console` 4 332 o, `distant` 5 704 o, `lampes` 3 756 o, `amaran_tx` 2 020 o. La liste en mémoire a grandi (versions) et chaque lampe a quatre attributs de plus.
