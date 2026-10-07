@@ -10,10 +10,10 @@ enum Ecran: String, CaseIterable, Identifiable {
 
     var titre: String {
         switch self {
-        case .tableau: "Tableau de bord"
-        case .graphiques: "Graphiques"
-        case .trames: "Trames"
-        case .commandes: "Commandes et console"
+        case .tableau: tr("Tableau de bord")
+        case .graphiques: tr("Graphiques")
+        case .trames: tr("Trames")
+        case .commandes: tr("Commandes et console")
         }
     }
 
@@ -60,17 +60,18 @@ struct ContenuPrincipal: View {
                     Bandeau(texte: alerte.texte, couleur: .red, icone: "exclamationmark.octagon.fill")
                 }
                 if pont.estDemo {
-                    Bandeau(texte: "Mode démo : un pont simulé à trois lampes ; ses clés et ses MAC sont inventées, et le trousseau de la démo est à part.",
+                    Bandeau(texte: tr("Mode démo : un pont simulé à trois lampes ; ses clés et ses MAC sont inventées, et le trousseau de la démo est à part."),
                             couleur: .purple, icone: "play.rectangle.fill")
                 }
                 if let banc = pont.commandeDeBanc {
-                    Bandeau(texte: "Commande en cours : « \(PolitiqueCommandes.masquerCle(banc.commande)) ». La console du pont ne lit plus rien jusqu'à la fin.",
+                    let commande = PolitiqueCommandes.masquerCle(banc.commande)
+                    Bandeau(texte: tr("Commande en cours : « \(commande) ». La console du pont ne lit plus rien jusqu'à la fin."),
                             couleur: .orange, icone: "hourglass")
                 }
                 if case .enCours(let etape) = pont.chargement {
-                    Bandeau(texte: "Chargement du pont : \(etape)…", couleur: .blue, icone: "key")
+                    Bandeau(texte: tr("Chargement du pont : \(etape)…"), couleur: .blue, icone: "key")
                 } else if pont.chargement == .attenteRedemarrage {
-                    Bandeau(texte: "Chargement du pont : redémarrage, puis vérification…", couleur: .blue, icone: "key")
+                    Bandeau(texte: tr("Chargement du pont : redémarrage, puis vérification…"), couleur: .blue, icone: "key")
                 }
                 Group {
                     switch ecran {
@@ -129,8 +130,8 @@ struct ContenuPrincipal: View {
                 Label("Libérer le port", systemImage: "eject")
             }
             .help(pont.source?.estReseau == true
-                  ? "json 0 puis fermeture de la session réseau"
-                  : "json 0 puis fermeture du port, pour flasher")
+                  ? tr("json 0 puis fermeture de la session réseau")
+                  : tr("json 0 puis fermeture du port, pour flasher"))
             .disabled(pont.phase == .ferme || pont.estDemo)
         }
     }
@@ -189,7 +190,7 @@ struct PanneauConnexion: View {
                         } label: {
                             Label {
                                 Text(verbatim: pont.titre(pont: p))
-                                Text(verbatim: "\(p.hote) · clé \(p.empreinte)")
+                                Text(verbatim: tr("\(p.hote) · clé \(p.empreinte)"))
                             } icon: {
                                 Image(systemName: "point.3.connected.trianglepath.dotted")
                             }
@@ -220,7 +221,7 @@ struct PanneauConnexion: View {
             HStack {
                 switch pont.etatTransport {
                 case .ferme, .erreur, .libere:
-                    Button(pont.source == nil ? "Connecter" : "Reconnecter") {
+                    Button(pont.source == nil ? tr("Connecter") : tr("Reconnecter")) {
                         if pont.source == nil {
                             if let s = pont.sourceParDefaut { pont.connecter(s) }
                         } else {
@@ -229,7 +230,7 @@ struct PanneauConnexion: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(pont.source == nil && pont.sourceParDefaut == nil)
-                    .help(pont.source == nil ? "Choisir le pont dans le menu ci-dessus" : "")
+                    .help(pont.source == nil ? tr("Choisir le pont dans le menu ci-dessus") : "")
                 default:
                     Button("Déconnecter") { pont.deconnecter() }
                 }
@@ -247,23 +248,23 @@ struct PanneauConnexion: View {
 
     private var libelleSource: String {
         switch pont.source {
-        case .demo: "Démo"
+        case .demo: tr("Démo")
         case .serie(let chemin, let serie): pont.titre(serie: serie, chemin: chemin)
         case .reseau(let nom): pont.titre(reseau: nom)
-        case nil: "Choisir une source…"
+        case nil: tr("Choisir une source…")
         }
     }
 
     private var libelleTransport: String {
         switch pont.etatTransport {
-        case .ferme: pont.source?.estReseau == true ? "Session réseau fermée" : "Port fermé"
-        case .ouverture: "Ouverture…"
-        case .ouvert: "Ouvert · \(pont.phase.libelle)"
+        case .ferme: pont.source?.estReseau == true ? tr("Session réseau fermée") : tr("Port fermé")
+        case .ouverture: tr("Ouverture…")
+        case .ouvert: tr("Ouvert · \(pont.phase.libelle)")
         case .attente(let prochain, let raison):
-            "\(raison)\nRéouverture \(prochain.formatted(.relative(presentation: .numeric)))"
+            tr("\(raison)\nRéouverture \(prochain.formatted(.relative(presentation: .numeric).locale(Localisation.partagee.locale)))")
         case .libere:
-            pont.source?.estReseau == true ? "Session réseau fermée (json 0)" : "Port libéré (json 0) : flasher est possible"
-        case .erreur(let e): "Erreur : \(e)"
+            pont.source?.estReseau == true ? tr("Session réseau fermée (json 0)") : tr("Port libéré (json 0) : flasher est possible")
+        case .erreur(let e): tr("Erreur : \(e)")
         }
     }
 }

@@ -13,17 +13,17 @@ public enum ErreurChargement: Error, Sendable, Equatable, CustomStringConvertibl
     public var description: String {
         switch self {
         case .pasLePont:
-            "Ce port n'est pas un pont amaran en mode machine : rien n'a été envoyé."
+            tr("Ce port n'est pas un pont amaran en mode machine : rien n'a été envoyé.")
         case .commande(let c, let raison):
-            "« \(PolitiqueCommandes.masquerCle(c)) » : \(raison). Le pont n'est pas redémarré : relancer le chargement."
+            tr("« \(PolitiqueCommandes.masquerCle(c)) » : \(raison). Le pont n'est pas redémarré : relancer le chargement.")
         case .empreintes(let r, let a):
-            "Le pont a enregistré d'autres clés (empreintes \(r), attendues \(a)) : ne pas le redémarrer, relancer le chargement."
+            tr("Le pont a enregistré d'autres clés (empreintes \(r), attendues \(a)) : ne pas le redémarrer, relancer le chargement.")
         case .listeNonEnregistree:
-            "Le pont n'a pas enregistré la liste des lampes : ne pas le redémarrer, relancer le chargement."
+            tr("Le pont n'a pas enregistré la liste des lampes : ne pas le redémarrer, relancer le chargement.")
         case .pasRedemarre:
-            "Le pont n'a pas redémarré : vérifier l'onglet Clés après un redémarrage."
+            tr("Le pont n'a pas redémarré : vérifier l'onglet Clés après un redémarrage.")
         case .apresRedemarrage(let ecart):
-            "Après le redémarrage, le pont ne montre pas ce qui a été chargé : \(ecart)."
+            tr("Après le redémarrage, le pont ne montre pas ce qui a été chargé : \(ecart).")
         }
     }
 }
@@ -50,21 +50,23 @@ public enum VerificationChargement {
     /// Ce que le pont montre apres son redemarrage (`config`, blocs `mesh` et
     /// `lampe`), compare a ce qui a ete charge : nil s'il est identique.
     public static func ecart(_ attendu: ApercuReseau, mesh: ConfigMesh?, lampes: [Int: ConfigLampe]) -> String? {
-        guard let pont = ApercuReseau.dePont(mesh: mesh, lampes: lampes) else { return "pas de clés" }
+        guard let pont = ApercuReseau.dePont(mesh: mesh, lampes: lampes) else { return tr("pas de clés") }
         guard pont.memesCles(que: attendu) else {
-            return "empreintes \(pont.empreinteReseau) \(pont.empreinteApplication), attendues "
-                + "\(attendu.empreinteReseau) \(attendu.empreinteApplication)"
+            let (r, a) = (pont.empreinteReseau, pont.empreinteApplication)
+            let (ar, aa) = (attendu.empreinteReseau, attendu.empreinteApplication)
+            return tr("empreintes \(r) \(a), attendues \(ar) \(aa)")
         }
         guard pont.lampes.count == attendu.lampes.count else {
-            return "\(pont.lampes.count) lampe(s), \(attendu.lampes.count) attendue(s)"
+            return tr("\(pont.lampes.count) lampe(s), \(attendu.lampes.count) attendue(s)")
         }
         for (i, (p, a)) in zip(pont.lampes, attendu.lampes).enumerated()
         where ApercuReseau.identites([p]) != ApercuReseau.identites([a]) {
-            return "lampe \(i + 1) différente"
+            return tr("lampe \(i + 1) différente")
         }
         for (i, (p, a)) in zip(pont.lampes, attendu.lampes).enumerated()
         where ApercuReseau.versions([p]) != ApercuReseau.versions([a]) {
-            return "lampe \(i + 1) : versions différentes (pont : \(p.versionsTexte), chargées : \(a.versionsTexte))"
+            let (vp, va) = (p.versionsTexte, a.versionsTexte)
+            return tr("lampe \(i + 1) : versions différentes (pont : \(vp), chargées : \(va))")
         }
         return nil
     }

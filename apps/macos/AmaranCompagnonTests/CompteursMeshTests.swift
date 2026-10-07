@@ -5,7 +5,7 @@ import Foundation
 import Testing
 @testable import AmaranCompagnon
 
-@Suite("Compteurs du Mesh a distance")
+@Suite("Compteurs du Mesh a distance", .langue(.francais))
 struct CompteursMeshTests {
     @Test func parLUSBRienNeChange() {
         #expect(CompteursMesh.etat(aDistance: false, enDirect: false, periodeMs: 1000) == .normal)

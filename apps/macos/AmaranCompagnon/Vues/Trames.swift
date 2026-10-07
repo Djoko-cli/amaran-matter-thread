@@ -43,7 +43,7 @@ struct Trames: View {
                     }
                     .width(min: 100, ideal: 160)
                     TableColumn("Marche") { t in
-                        Text(verbatim: t.trame.marche.map { $0 ? "allumée" : "éteinte" } ?? "–")
+                        Text(verbatim: t.trame.marche.map { $0 ? tr("allumée") : tr("éteinte") } ?? "–")
                     }
                     .width(min: 60, ideal: 70, max: 90)
                     TableColumn("Intensité") { t in
@@ -71,7 +71,7 @@ struct Trames: View {
             Divider()
             HStack {
                 Text("\(lignes.count) affichées sur \(source.count)")
-                if figees != nil { Pastille(texte: "affichage figé", couleur: .orange) }
+                if figees != nil { Pastille("affichage figé", couleur: .orange) }
                 Spacer()
                 Text("Au plus 50 trames par seconde par l'USB, 10 à distance : « Sautées » compte les absentes.")
             }
@@ -86,8 +86,8 @@ struct Trames: View {
         HStack(spacing: 10) {
             Picker("Sens", selection: $filtre.sens) {
                 Text("Tous").tag(SensTrame?.none)
-                Text(verbatim: "→ émises").tag(SensTrame?.some(.tx))
-                Text(verbatim: "← reçues").tag(SensTrame?.some(.rx))
+                Text("→ émises").tag(SensTrame?.some(.tx))
+                Text("← reçues").tag(SensTrame?.some(.rx))
             }
             .pickerStyle(.segmented)
             .fixedSize()
@@ -120,7 +120,7 @@ struct Trames: View {
             Button {
                 figees = figees == nil ? pont.trames.elements : nil
             } label: {
-                Label(figees == nil ? "Figer" : "Reprendre", systemImage: figees == nil ? "pause" : "play")
+                Label(figees == nil ? tr("Figer") : tr("Reprendre"), systemImage: figees == nil ? "pause" : "play")
             }
             .help("Figer l'affichage sans rien demander au pont : les trames continuent d'être gardées")
             Button("Vider") {
@@ -162,21 +162,21 @@ private struct BarreFlux: View {
                     .disabled(!pont.peutEnvoyer("json trames 1") || !capable)
                     .help("json trames 1 ou 0 : le trafic Bluetooth Mesh en messages « trame »")
                 if coupe {
-                    Pastille(texte: "coupé par le pont après 60 s", couleur: .orange)
+                    Pastille("coupé par le pont après 60 s", couleur: .orange)
                     Button("Relancer") { pont.activerTrames(true) }
                         .controlSize(.small)
                         .disabled(!pont.peutEnvoyer("json trames 1"))
                 } else if let reste {
-                    Pastille(texte: "coupure dans \(reste) s", couleur: .blue)
+                    Pastille("coupure dans \(reste) s", couleur: .blue)
                     Button("Prolonger") { pont.activerTrames(true) }
                         .controlSize(.small)
                         .help("Renvoie json trames 1 : le pont repart pour 60 s")
                 } else if pont.tramesActives {
-                    Pastille(texte: "flux actif", couleur: .green)
+                    Pastille("flux actif", couleur: .green)
                 } else if pont.peutCommander && !capable {
-                    Pastille(texte: "ce pont n'annonce pas les trames", couleur: .secondary)
+                    Pastille("ce pont n'annonce pas les trames", couleur: .secondary)
                 } else {
-                    Pastille(texte: "flux coupé", couleur: .secondary)
+                    Pastille("flux coupé", couleur: .secondary)
                 }
                 Spacer()
                 if let t = pont.derniereTrame {
@@ -186,7 +186,7 @@ private struct BarreFlux: View {
                 }
                 Menu {
                     let actif = pont.tramesActives && !coupe
-                    Button(actif ? "Couper les trames (json trames 0)" : "Reprendre les trames (json trames 1)") {
+                    Button(actif ? tr("Couper les trames (json trames 0)") : tr("Reprendre les trames (json trames 1)")) {
                         pont.activerTrames(!actif)
                     }
                     .disabled(!pont.peutEnvoyer("json trames 1") || !pont.etat.a(.trames))

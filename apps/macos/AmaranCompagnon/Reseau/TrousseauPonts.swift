@@ -30,9 +30,9 @@ enum ErreurTrousseauPonts: Error, Equatable, Sendable, CustomStringConvertible {
     var description: String {
         switch self {
         case .absente(let nom):
-            "Clé absente de ce Mac pour \(nom).local : brancher le pont en USB, puis « Nouvelle clé… » (« Activer l'accès réseau… » si le pont n'a pas de clé)."
+            tr("Clé absente de ce Mac pour \(nom).local : brancher le pont en USB, puis « Nouvelle clé… » (« Activer l'accès réseau… » si le pont n'a pas de clé).")
         case .systeme(let s):
-            "Trousseau : \(SecCopyErrorMessageString(s, nil) as String? ?? String(s))"
+            tr("Trousseau : \(SecCopyErrorMessageString(s, nil) as String? ?? String(s))")
         }
     }
 }

@@ -50,7 +50,7 @@ enum Factice {
     static let cles = "insert into mesh values ('000102030405060708090A0B0C0D0E0F', '101112131415161718191a1b1c1d1e1f')"
 }
 
-@Suite("Cles du reseau")
+@Suite("Cles du reseau", .langue(.francais))
 struct ClesTests {
     @Test func empreinte() {
         #expect(Empreinte.de(Data(count: 16)) == "374708FF")
@@ -204,7 +204,7 @@ struct ClesTests {
     }
 }
 
-@Suite("Base d'amaran Desktop")
+@Suite("Base d'amaran Desktop", .langue(.francais))
 struct BaseAmaranDesktopTests {
     static let lampes = [
         // Composition (page 0) : en-tete de 11 octets, puis un element : OnOff et Lightness...
@@ -304,7 +304,7 @@ struct BaseAmaranDesktopTests {
     }
 }
 
-@Suite("Sauvegarde chiffree")
+@Suite("Sauvegarde chiffree", .langue(.francais))
 struct SauvegardeTests {
     static let phrase = "une phrase de passe assez longue"
 
@@ -371,7 +371,7 @@ struct SauvegardeTests {
     }
 }
 
-@Suite("Copie du trousseau : versions des lampes")
+@Suite("Copie du trousseau : versions des lampes", .langue(.francais))
 struct VersionsCopieTests {
     /// Le JSON d'une copie ou d'une sauvegarde faite avant la fiche des lampes : sans `logiciel` ni `ble`.
     @Test func copieSansLesChampsSeRelit() throws {
@@ -398,7 +398,7 @@ struct VersionsCopieTests {
     }
 }
 
-@Suite("Controles du chargement")
+@Suite("Controles du chargement", .langue(.francais))
 struct ChargementTests {
     @Test func reponsesDuPont() {
         let e = VerificationChargement.empreintesRendues(["ok cles 1a2b3c4d 5E6F7A8B (redemarrer pour les appliquer)"])
@@ -472,7 +472,7 @@ extension ChargementTests {
     }
 }
 
-@Suite("Comparaison des cles")
+@Suite("Comparaison des cles", .langue(.francais))
 struct ComparaisonTests {
     static let copie = Factice.reseau().apercu
 

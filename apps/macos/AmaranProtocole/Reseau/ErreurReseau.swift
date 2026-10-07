@@ -43,19 +43,19 @@ public enum ErreurTransportReseau: Error, Sendable, Equatable, CustomStringConve
     public var description: String {
         switch self {
         case .reseauLocalRefuse:
-            "Accès au réseau local refusé : Réglages Système › Confidentialité et sécurité › Réseau local › Amaran Compagnon."
+            tr("Accès au réseau local refusé : Réglages Système › Confidentialité et sécurité › Réseau local › Amaran Compagnon.")
         case .pasDeRoute:
-            "Pas de route IPv6 vers le réseau Thread (bug du noyau de macOS)."
+            tr("Pas de route IPv6 vers le réseau Thread (bug du noyau de macOS).")
         case .nomIntrouvable(let hote):
-            "Pont introuvable (\(hote)) : éteint, hors du réseau Thread, ou routeurs de bordure injoignables."
+            tr("Pont introuvable (\(hote)) : éteint, hors du réseau Thread, ou routeurs de bordure injoignables.")
         case .portInjoignable:
-            "Le pont n'a plus de clé : le brancher en USB, puis « Activer l'accès réseau… »."
+            tr("Le pont n'a plus de clé : le brancher en USB, puis « Activer l'accès réseau… ».")
         case .aucunDefi:
-            "Aucune réponse du pont : clé différente de la sienne, ou pont sans clé ? (vérifier par l'USB, carte Thread et Matter)"
+            tr("Aucune réponse du pont : clé différente de la sienne, ou pont sans clé ? (vérifier par l'USB, carte Thread et Matter)")
         case .cheminPerdu(let raison):
-            "Connexion réseau perdue : \(raison)"
+            tr("Connexion réseau perdue : \(raison)")
         case .autre(let raison):
-            "Erreur réseau : \(raison)"
+            tr("Erreur réseau : \(raison)")
         }
     }
 

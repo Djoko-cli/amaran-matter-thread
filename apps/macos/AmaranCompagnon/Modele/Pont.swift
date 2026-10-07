@@ -289,7 +289,7 @@ final class Pont {
         if changement, let nom = nomSource {
             // Comme Halo : la console garde ses lignes (l'historique de la session), seuls les
             // etats, trames et courbes repartent de zero.
-            note("Nouvelle source : \(nom). États, trames et courbes remis à zéro ; la console garde ses lignes.")
+            note(tr("Nouvelle source : \(nom). États, trames et courbes remis à zéro ; la console garde ses lignes."))
         }
         rafraichirCopie()
         ouvrir()
@@ -314,12 +314,12 @@ final class Pont {
         alerteReseau = nil
         if reseau {
             note(modeMachine
-                 ? "Session réseau fermée : json 0 envoyé. « Reconnecter » pour reprendre."
-                 : "Session réseau fermée. « Reconnecter » pour reprendre.")
+                 ? tr("Session réseau fermée : json 0 envoyé. « Reconnecter » pour reprendre.")
+                 : tr("Session réseau fermée. « Reconnecter » pour reprendre."))
         } else {
             note(modeMachine
-                 ? "Port libéré : json 0 envoyé, port fermé. Flasher est possible ; « Reconnecter » pour reprendre."
-                 : "Port libéré : port fermé. Flasher est possible ; « Reconnecter » pour reprendre.")
+                 ? tr("Port libéré : json 0 envoyé, port fermé. Flasher est possible ; « Reconnecter » pour reprendre.")
+                 : tr("Port libéré : port fermé. Flasher est possible ; « Reconnecter » pour reprendre."))
         }
     }
 
@@ -370,7 +370,7 @@ final class Pont {
         dernierCurseur = [:]
         propositionFermeture = false
         derniereReception = nil
-        interrompreChargement("source changée")
+        interrompreChargement(tr("source changée"))
         interrompreCreationCle()
         synchroniser()
     }
@@ -378,7 +378,7 @@ final class Pont {
     private var nomSource: String? {
         switch source {
         case .serie(let chemin, let serie): titre(serie: serie, chemin: chemin)
-        case .demo: "démo"
+        case .demo: tr("démo")
         case .reseau(let nom): repertoire.mac(pourSrp: nom) == nil ? "\(nom).local" : "\(titre(reseau: nom)) (\(nom).local)"
         case nil: nil
         }
@@ -414,7 +414,7 @@ final class Pont {
             // Le meme pont (meme numero de serie USB) peut revenir sous un autre nom ;
             // jamais un autre appareil, meme sous le nom d'avant.
             guard let port = Self.portDuPont(ports, chemin: chemin, serie: serie) else {
-                echecOuverture(ErreurTransport("Pont absent : aucune carte Espressif reconnue"))
+                echecOuverture(ErreurTransport(tr("Pont absent : aucune carte Espressif reconnue")))
                 return
             }
             t = TransportSerie(chemin: port.chemin)
@@ -444,7 +444,7 @@ final class Pont {
                     return
                 }
                 self.transportOuvert()
-                var raison = "flux terminé"
+                var raison = tr("flux terminé")
                 for await ev in flux {
                     guard self.generation == g else { break }
                     if case .ferme(let r) = ev { raison = r }
@@ -498,9 +498,9 @@ final class Pont {
         // est une ligne entiere, et la premiere est le hello du json 1 : rien a jeter.
         if genreTransport != .udp { recepteur.resynchroniser() }
         switch genreTransport {
-        case .demo: note("Pont de démonstration ouvert.")
-        case .udp: note("Session réseau ouverte : \(nomTransport).")
-        default: note("Port ouvert : \(nomTransport) (DTR = RTS = 0).")
+        case .demo: note(tr("Pont de démonstration ouvert."))
+        case .udp: note(tr("Session réseau ouverte : \(nomTransport)."))
+        default: note(tr("Port ouvert : \(nomTransport) (DTR = RTS = 0)."))
         }
         executer(moteur.ouvert(maintenant: maintenant(), genre: genreTransport ?? .usb))
     }
@@ -510,7 +510,7 @@ final class Pont {
         finActivite()
         moteur.ferme(maintenant: maintenant())
         synchroniser()
-        note("Transport fermé : \(raison)")
+        note(tr("Transport fermé : \(raison)"))
         interrompreCreationCle()
         if reconnexionAuto { planifierReconnexion(raison) } else { etatTransport = .ferme }
     }
@@ -528,7 +528,7 @@ final class Pont {
             } else if reconnexionAuto, essaisReconnexion < 40 {
                 planifierReconnexion(texte)
             } else {
-                etatTransport = .erreur("\(texte) — en attente d'un changement du réseau")
+                etatTransport = .erreur(tr("\(texte) — en attente d'un changement du réseau"))
             }
             return
         }
@@ -537,7 +537,7 @@ final class Pont {
             planifierReconnexion(texte)
         } else if reconnexionAuto {
             // Plus d'essais minutes (~3 min), mais le retour du port (IOKit) rouvre encore.
-            etatTransport = .erreur("\(texte) — en attente du retour du port")
+            etatTransport = .erreur(tr("\(texte) — en attente du retour du port"))
         } else {
             etatTransport = .erreur(texte)
         }
@@ -579,7 +579,7 @@ final class Pont {
         }
         if Self.portDuPont(nouveaux, chemin: chemin, serie: serie) != nil {
             essaisReconnexion = 0
-            planifierReconnexion("port revenu")
+            planifierReconnexion(tr("port revenu"))
         }
     }
 
@@ -595,7 +595,7 @@ final class Pont {
         switch etatTransport {
         case .attente, .erreur:
             essaisReconnexion = 0
-            planifierReconnexion("réseau changé")
+            planifierReconnexion(tr("réseau changé"))
         default:
             break
         }
@@ -646,12 +646,12 @@ final class Pont {
         case .fragment(let s):
             ajouterConsole(.fragment, s)
         case .abimee(let raison, let brut):
-            rejets.ajouter(Rejet(id: prochainId(), date: Date(), raison: "abîmée : \(raison)", brut: brut))
+            rejets.ajouter(Rejet(id: prochainId(), date: Date(), raison: tr("abîmée : \(raison)"), brut: brut))
         case .versionInconnue(let v, let t):
-            rejets.ajouter(Rejet(id: prochainId(), date: Date(), raison: "version \(v) inconnue",
+            rejets.ajouter(Rejet(id: prochainId(), date: Date(), raison: tr("version \(String(v)) inconnue"),
                                   brut: PolitiqueCommandes.masquerCle(t)))
         case .invalide(let t, let raison):
-            rejets.ajouter(Rejet(id: prochainId(), date: Date(), raison: "\(t) invalide : \(raison)", brut: ""))
+            rejets.ajouter(Rejet(id: prochainId(), date: Date(), raison: tr("\(t) invalide : \(raison)"), brut: ""))
         case .debordement(let s):
             ajouterConsole(.texte(.commande), s)
         }
@@ -681,7 +681,7 @@ final class Pont {
             for id in o.ids ?? [] {
                 guard let s = moteur.correlateur.suivi(numero: id) else { continue }
                 ajouterConsole(.retour(ok: o.issue != .abandon, session: s.origine == .session),
-                               "‹ id=\(id) « \(s.commande) » : \(Interpretation.ordre(o))", numero: id)
+                               tr("‹ id=\(String(id)) « \(s.commande) » : \(Interpretation.ordre(o))"), numero: id)
             }
         case .reponse(let r):
             let s = moteur.correlateur.suivi(numero: r.id)
@@ -690,23 +690,25 @@ final class Pont {
         case .log(let lg):
             ajouterConsole(.log, lg.txt ?? "")
         case .lampe(let e):
+            let ep = e.endpoint ?? 0
             let quoi = switch e.quoi {
-            case .entree: "entre dans Maison (EP\(e.endpoint ?? 0))"
-            case .masquee: "retirée de Maison"
-            case .remise: "remise dans Maison (EP\(e.endpoint ?? 0))"
-            case .echec: "endpoint Matter non créé"
-            case .inconnu, nil: "changement inconnu"
+            case .entree: tr("entre dans Maison (EP\(ep))")
+            case .masquee: tr("retirée de Maison")
+            case .remise: tr("remise dans Maison (EP\(ep))")
+            case .echec: tr("endpoint Matter non créé")
+            case .inconnu, nil: tr("changement inconnu")
             }
-            note("Lampe \(e.lampe) : \(quoi).")
+            note(tr("Lampe \(e.lampe) : \(quoi)."))
         case .alerte(let a):
             switch a.quoi {
             case .releves:
+                let (lampe, part) = (a.lampe ?? 0, a.part ?? 0)
                 note(a.manque == true
-                     ? "Lampe \(a.lampe ?? 0) : relectures manquées, \(a.part ?? 0) % répondues sur 10 min."
-                     : "Lampe \(a.lampe ?? 0) : relectures de nouveau répondues (\(a.part ?? 0) %).",
+                     ? tr("Lampe \(lampe) : relectures manquées, \(part) % répondues sur 10 min.")
+                     : tr("Lampe \(lampe) : relectures de nouveau répondues (\(part) %)."),
                      grave: a.manque == true)
             case .mesh:
-                note("Bluetooth Mesh : \(Interpretation.diag(a.diag)).", grave: a.diag != .ok)
+                note(tr("Bluetooth Mesh : \(Interpretation.diag(a.diag))."), grave: a.diag != .ok)
             case .inconnu, nil:
                 break
             }
@@ -722,7 +724,7 @@ final class Pont {
                 do {
                     try transport?.envoyer(d)
                 } catch {
-                    note("Envoi impossible : \(String(describing: error))")
+                    note(tr("Envoi impossible : \(String(describing: error))"))
                 }
                 journaliserEnvoi(d)
             case .rouvrir(let n):
@@ -736,7 +738,8 @@ final class Pont {
                 transport?.fermer()
             case .redemarrage(let ancien, let nouveau):
                 etat.viderDerives()
-                note("Redémarrage du pont détecté (boot \(ancien ?? "?") → \(nouveau ?? "?")) : états vidés.")
+                let (av, ap) = (ancien ?? "?", nouveau ?? "?")
+                note(tr("Redémarrage du pont détecté (boot \(av) → \(ap)) : états vidés."))
             case .note(let n):
                 if n == .aucuneReponse, genreTransport == .udp {
                     alerteReseau = .sansHello
@@ -750,17 +753,18 @@ final class Pont {
             case .commandeSansReponse(let id):
                 if creationCle?.id == id {
                     // `creationCle` reste arme : une reponse tardive doit encore etre rangee.
-                    note("Pas encore de réponse à la création de clé : une réponse tardive sera quand même rangée ; sinon l'accès réseau affichera « clé inconnue de ce Mac ».")
+                    note(tr("Pas encore de réponse à la création de clé : une réponse tardive sera quand même rangée ; sinon l'accès réseau affichera « clé inconnue de ce Mac »."))
                 }
                 if let s = moteur.correlateur.suivi(id) {
+                    let sansReponse = Self.texteSansReponse(moteur.correlateur.politique, commande: s.commande)
                     ajouterConsole(.retour(ok: false, session: s.origine == .session),
-                                   "‹ id=\(s.numero ?? 0) « \(s.commande) » : \(Self.texteSansReponse(moteur.correlateur.politique, commande: s.commande))",
+                                   tr("‹ id=\(String(s.numero ?? 0)) « \(s.commande) » : \(sansReponse)"),
                                    numero: s.numero)
                 }
             case .ordrePerdu(let id):
                 if let s = moteur.correlateur.suivi(id) {
                     ajouterConsole(.retour(ok: false, session: s.origine == .session),
-                                   "‹ id=\(s.numero ?? 0) « \(s.commande) » : aucune issue sous 10 s (ligne perdue ?)",
+                                   tr("‹ id=\(String(s.numero ?? 0)) « \(s.commande) » : aucune issue sous 10 s (ligne perdue ?)"),
                                    numero: s.numero)
                 }
             case .proposerFermeture:
@@ -833,8 +837,8 @@ final class Pont {
     static func texteSansReponse(_ p: PolitiqueDelais, commande: String = "") -> String {
         let delai = Int(p.delaiReponse(pour: commande))
         return p.renvois > 0
-            ? "sans réponse sous \(delai) s (\(p.renvois) renvois du même id)"
-            : "sans réponse sous \(delai) s (pas de réémission)"
+            ? tr("sans réponse sous \(delai) s (\(p.renvois) renvois du même id)")
+            : tr("sans réponse sous \(delai) s (pas de réémission)")
     }
 
     // MARK: - Commandes
@@ -864,7 +868,7 @@ final class Pont {
     @discardableResult
     func envoyer(_ commande: String, fusion: String? = nil, secret: Bool = false) -> UUID? {
         guard peutCommander else {
-            note("Pas de session machine : « \(PolitiqueCommandes.masquerCle(commande)) » n'est pas envoyée.")
+            note(tr("Pas de session machine : « \(PolitiqueCommandes.masquerCle(commande)) » n'est pas envoyée."))
             return nil
         }
         if aDistance, let raison = PolitiqueCommandes.autoriseeADistance(commande) {
@@ -890,7 +894,8 @@ final class Pont {
     /// Note d'une commande que la liste blanche du pont refuse : rien ne part. La raison
     /// du pont n'y est citee qu'une fois, telle quelle ; la commande, masquee.
     static func texteNonEnvoyee(_ commande: String, raison: String) -> String {
-        "« \(PolitiqueCommandes.masquerCle(commande.trimmingCharacters(in: .whitespaces))) » n'est pas envoyée : \(PolitiqueCommandes.refusDistant(raison))."
+        let masquee = PolitiqueCommandes.masquerCle(commande.trimmingCharacters(in: .whitespaces))
+        return tr("« \(masquee) » n'est pas envoyée : \(PolitiqueCommandes.refusDistant(raison)).")
     }
 
     /// Console brute : regles de 2.5, confirmations et interdits de 6.4.
@@ -907,7 +912,7 @@ final class Pont {
         default:
             break
         }
-        guard let transport else { return .refusee("Aucun pont connecté.") }
+        guard let transport else { return .refusee(tr("Aucun pont connecté.")) }
         let propre = ligne.trimmingCharacters(in: .whitespaces)
         let secret = PolitiqueCommandes.masquerCle(propre) != propre
         if consoleAvecId {
@@ -919,7 +924,7 @@ final class Pont {
             switch moteur.ligneBrute(propre) {
             case .success(let d):
                 do { try transport.envoyer(d) } catch {
-                    return .refusee("Envoi impossible : \(String(describing: error))")
+                    return .refusee(tr("Envoi impossible : \(String(describing: error))"))
                 }
                 journaliserEnvoi(d)
             case .failure(let e):
@@ -927,7 +932,7 @@ final class Pont {
             }
         }
         if PolitiqueCommandes.attendReenumeration(propre) {
-            note("Attente de la ré-énumération USB (le pont redémarre).")
+            note(tr("Attente de la ré-énumération USB (le pont redémarre)."))
         }
         return .envoyee
     }

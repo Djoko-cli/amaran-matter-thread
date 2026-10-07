@@ -5,7 +5,7 @@ import Foundation
 import Testing
 @testable import AmaranCompagnon
 
-@Suite("Trousseau des ponts (cles UDP)")
+@Suite("Trousseau des ponts (cles UDP)", .langue(.francais))
 struct TrousseauPontsTests {
     static let nom = "1A2B3C4D5E6F7081"
     static let cle = Data((0..<32).map { 0x40 &+ UInt8($0) })

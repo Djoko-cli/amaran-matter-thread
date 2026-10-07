@@ -14,10 +14,10 @@ enum EtatSessionPont: Equatable, Sendable {
 
     var libelle: String {
         switch self {
-        case .aucune: "pas de session"
-        case .enCours: "session en cours d'ouverture"
-        case .ouverte: "session ouverte"
-        case .refusee(let raison): "session refusée : \(raison)"
+        case .aucune: tr("pas de session")
+        case .enCours: tr("session en cours d'ouverture")
+        case .ouverte: tr("session ouverte")
+        case .refusee(let raison): tr("session refusée : \(raison)")
         }
     }
 }
@@ -31,7 +31,7 @@ extension Pont {
         case .ouvert:
             switch phase {
             case .connecte: return .ouverte
-            case .sansReponse: return .refusee("aucune réponse")
+            case .sansReponse: return .refusee(tr("aucune réponse"))
             default: return .enCours
             }
         case .ouverture, .attente: return .enCours

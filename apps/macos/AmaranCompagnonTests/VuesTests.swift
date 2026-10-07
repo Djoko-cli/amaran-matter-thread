@@ -11,7 +11,7 @@ import Testing
 
 private let t0 = Date(timeIntervalSinceReferenceDate: 800_000_000)
 
-@Suite("Filtres des trames")
+@Suite("Filtres des trames", .langue(.francais))
 struct FiltreTramesTests {
     static let ordre = Trame(sens: .tx, quoi: .ordre, lampe: 1, marche: true, intensite: 500, essai: 1, sautes: 0)
     static let demande = Trame(sens: .tx, quoi: .demande, lampe: nil, sautes: 0)
@@ -90,7 +90,7 @@ struct GraphiquesSegmentsTests {
     }
 }
 
-@Suite("Etat de session des ponts", .serialized)
+@Suite("Etat de session des ponts", .serialized, .langue(.francais))
 @MainActor
 struct EtatSessionTests {
     @Test func libelles() {
@@ -143,7 +143,7 @@ struct EtatSessionTests {
     }
 }
 
-@Suite("Acces reseau Thread : textes", .serialized)
+@Suite("Acces reseau Thread : textes", .serialized, .langue(.francais))
 @MainActor
 struct AccesReseauTextesTests {
     /// Relecture M6 : un pont connecte par l'USB sans nom SRP n'est pas « pas de pont ».
@@ -229,7 +229,7 @@ struct FluxTramesDistantTests {
     }
 }
 
-@Suite("Trames du pont simule", .serialized)
+@Suite("Trames du pont simule", .serialized, .langue(.francais))
 @MainActor
 struct TramesDeLaDemoTests {
     /// Rien sans `json trames 1` ; avec : la demande d'etat au groupe, l'ordre vers la

@@ -468,7 +468,7 @@ actor SimulateurDemo {
             memoire.appliquerChargement()
             sauver(memoire)
             ferme = true
-            sortie.yield(.ferme(raison: "le pont simulé redémarre"))
+            sortie.yield(.ferme(raison: tr("le pont simulé redémarre")))
             sortie.finish()
         case ("led", 2):
             reponse(id, l, debut: true)

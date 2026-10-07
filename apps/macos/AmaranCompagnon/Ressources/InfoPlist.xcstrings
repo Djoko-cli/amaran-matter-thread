@@ -1,0 +1,24 @@
+{
+  "sourceLanguage" : "fr",
+  "strings" : {
+    "NSLocalNetworkUsageDescription" : {
+      "comment" : "Autorisation reseau local (source Reseau, section 10).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Amaran Compagnon talks to the amaran bridge over the home's Thread network (UDP, through the border routers)."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Amaran Compagnon parle au pont amaran par le réseau Thread de la maison (UDP, par les routeurs de bordure)."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

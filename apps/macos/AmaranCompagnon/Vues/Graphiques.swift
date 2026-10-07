@@ -89,7 +89,7 @@ struct Graphiques: View {
                         grapheRefus(dMesh, debut: debut, fin: fin, redemarrages: redemarrages)
                         legende("Émissions refusées par la pile Bluetooth, par fenêtre ; courbe : part des émissions refusées.")
                     }
-                    Carte(titre: "Tas libre", icone: "memorychip") {
+                    Carte(titre: Text("Tas libre", tableName: "Titres"), icone: "memorychip") {
                         grapheTas(c, debut: debut, fin: fin, redemarrages: redemarrages)
                         legende("Mémoire libre du pont (trait plein) et son plus bas depuis le démarrage (pointillé).")
                     }
@@ -133,7 +133,7 @@ struct Graphiques: View {
         HStack(spacing: 10) {
             Image(systemName: "info.circle")
             Text(verbatim: texte + (demander
-                ? " : par le réseau, le pont ne les envoie que sur demande ; les courbes d'annonces, de NetMIC faux et de refus ne reçoivent plus de point."
+                ? tr(" : par le réseau, le pont ne les envoie que sur demande ; les courbes d'annonces, de NetMIC faux et de refus ne reçoivent plus de point.")
                 : "."))
                 .fixedSize(horizontal: false, vertical: true)
             Spacer()
@@ -149,14 +149,14 @@ struct Graphiques: View {
         .foregroundStyle(.blue)
     }
 
-    private func legende(_ texte: String) -> some View {
-        Text(verbatim: texte).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+    private func legende(_ texte: LocalizedStringKey) -> some View {
+        Text(texte).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
     }
 
     // MARK: - Donnees
 
     private func nom(_ lampe: Int) -> String {
-        let n = pont.lampes.first { $0.numero == lampe }?.nom ?? "Lampe \(lampe)"
+        let n = pont.lampes.first { $0.numero == lampe }?.nom ?? tr("Lampe \(lampe)")
         return "\(lampe) · \(n)"
     }
 
@@ -240,8 +240,10 @@ struct Graphiques: View {
     }
 
     private func grapheOrdres(_ d: [Difference], debut: Date, fin: Date, redemarrages: [Date]) -> some View {
-        let confirmes = points(d, "confirmés") { $0[.confirmes].map(Double.init) }
-        let abandons = points(d, "abandonnés") { $0[.abandons].map(Double.init) }
+        // Noms des series : ceux de la legende, dans la langue en vigueur.
+        let nomConfirmes = tr("confirmés"), nomAbandons = tr("abandonnés")
+        let confirmes = points(d, nomConfirmes) { $0[.confirmes].map(Double.init) }
+        let abandons = points(d, nomAbandons) { $0[.abandons].map(Double.init) }
         return Chart {
             ForEach((confirmes + abandons).filter { $0.valeur > 0 }) { x in
                 BarMark(xStart: .value("Début", x.debut), xEnd: .value("Fin", x.fin), y: .value("par fenêtre", x.valeur))
@@ -249,7 +251,7 @@ struct Graphiques: View {
             }
             reperes(redemarrages)
         }
-        .chartForegroundStyleScale(["confirmés": Color.green, "abandonnés": Color.red])
+        .chartForegroundStyleScale([nomConfirmes: Color.green, nomAbandons: Color.red])
         .chartXScale(domain: echelle(debut, fin))
         .chartPlotStyle { $0.clipped() }
         .chartYAxisLabel("par fenêtre")
@@ -257,8 +259,9 @@ struct Graphiques: View {
     }
 
     private func grapheAnnonces(_ d: [Difference], debut: Date, fin: Date, redemarrages: [Date]) -> some View {
-        let toutes = points(d, "annonces") { $0[.annonces].map(Double.init) }
-        let notres = points(d, "de notre réseau") { $0[.nidReconnu].map(Double.init) }
+        let nomToutes = tr("annonces"), nomNotres = tr("de notre réseau")
+        let toutes = points(d, nomToutes) { $0[.annonces].map(Double.init) }
+        let notres = points(d, nomNotres) { $0[.nidReconnu].map(Double.init) }
         return Chart {
             ForEach(toutes + notres) { p in
                 LineMark(x: .value("Heure", p.fin), y: .value("par fenêtre", p.valeur),
@@ -267,7 +270,7 @@ struct Graphiques: View {
             }
             reperes(redemarrages)
         }
-        .chartForegroundStyleScale(["annonces": Color.gray, "de notre réseau": Color.blue])
+        .chartForegroundStyleScale([nomToutes: Color.gray, nomNotres: Color.blue])
         .chartXScale(domain: echelle(debut, fin))
         .chartPlotStyle { $0.clipped() }
         .chartYAxisLabel("par fenêtre")

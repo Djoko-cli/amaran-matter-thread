@@ -37,10 +37,11 @@ enum CompteursMesh {
         case .normal:
             return nil
         case .nonReleves:
-            let heure = dernierReleve.map { " (dernier relevé à \($0.formatted(date: .omitted, time: .standard)))" } ?? ""
-            return "Compteurs du Mesh non relevés à distance\(heure)"
+            let style = Date.FormatStyle(date: .omitted, time: .standard, locale: Localisation.partagee.locale)
+            let heure = dernierReleve.map { tr(" (dernier relevé à \($0.formatted(style)))") } ?? ""
+            return tr("Compteurs du Mesh non relevés à distance\(heure)")
         case .demandes:
-            return "Compteurs du Mesh demandés, en attente du premier relevé"
+            return tr("Compteurs du Mesh demandés, en attente du premier relevé")
         }
     }
 
@@ -48,7 +49,7 @@ enum CompteursMesh {
     /// celui que le pont garde en NVS (`config` `mesh` `iv_nvs`), et la carte le dit.
     static func ivIndex(compteurs: Int?, ivNvs: Int?) -> (texte: String, deNvs: Bool)? {
         if let compteurs { return (String(compteurs), false) }
-        if let ivNvs { return ("\(ivNvs) (mémoire du pont)", true) }
+        if let ivNvs { return (tr("\(String(ivNvs)) (mémoire du pont)"), true) }
         return nil
     }
 }

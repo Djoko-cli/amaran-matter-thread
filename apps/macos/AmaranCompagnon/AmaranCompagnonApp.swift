@@ -1,10 +1,18 @@
-// Repris de Halo Compagnon (commit e114cd5) : fenetre, menus, reglages ; francais seulement.
+// Repris de Halo Compagnon (commit e114cd5) : fenetre, menus, reglages ; francais et anglais.
 import AmaranProtocole
 import SwiftUI
 
 @main
 struct AmaranCompagnonApp: App {
     @State private var pont = Self.creerPont()
+    /// Lu dans `body` : un changement de langue reconstruit aussi les menus.
+    @AppStorage(ReglageLangue.cle) private var choixLangue: ChoixLangue = .systeme
+
+    init() {
+        // Avant la premiere vue : les textes calcules partent dans la bonne langue. Pas sous
+        // les tests (hote de tests) : les vraies preferences de l'app ne sont pas touchees.
+        if !Self.hoteDeTests { ReglageLangue.appliquerAuLancement() }
+    }
 
     /// Les tests tournent dans l'app (TEST_HOST) : sous ce lanceur, ni le vrai trousseau,
     /// ni les vraies preferences (signet d'amaran Desktop, dernier pont) ne sont touches.
@@ -27,9 +35,11 @@ struct AmaranCompagnonApp: App {
     }
 
     var body: some Scene {
+        let _ = choixLangue
         WindowGroup("Amaran Compagnon", id: "principale") {
             ContenuPrincipal(ecranInitial: Self.ecranDemande)
                 .environment(pont)
+                .langueDeLInterface()
                 .frame(minWidth: 980, minHeight: 640)
                 .task {
                     // "Amaran Compagnon.app" --args -demo : demarre directement en mode demo.
@@ -40,14 +50,16 @@ struct AmaranCompagnonApp: App {
         }
         .defaultSize(width: 1280, height: 820)
         .commands {
+            // Titres calcules (tr) et non `LocalizedStringKey` : les menus ne
+            // recoivent pas la locale de l'environnement des fenetres.
             CommandGroup(after: .newItem) {
-                Button("Mode démo") { pont.connecter(.demo) }
+                Button(tr("Mode démo")) { pont.connecter(.demo) }
                     .keyboardShortcut("d", modifiers: [.command, .shift])
-                Button("Rafraîchir l'état (json etat)") { pont.rafraichir() }
+                Button(tr("Rafraîchir l'état (json etat)")) { pont.rafraichir() }
                     .keyboardShortcut("r", modifiers: [.command])
                     .disabled(!pont.peutCommander)
                 Divider()
-                Button("Libérer le port") { pont.libererPort() }
+                Button(tr("Libérer le port")) { pont.libererPort() }
                     .keyboardShortcut("l", modifiers: [.command, .shift])
                     .disabled(pont.phase == .ferme || pont.estDemo)
             }
@@ -56,6 +68,22 @@ struct AmaranCompagnonApp: App {
         Settings {
             FenetreReglages()
                 .environment(pont)
+                .langueDeLInterface()
         }
+    }
+}
+
+extension View {
+    /// Locale de l'environnement : celle de la langue choisie. `Text("...")`
+    /// y cherche sa traduction et les formats (dates, nombres) la suivent.
+    func langueDeLInterface() -> some View {
+        modifier(LangueDeLInterface())
+    }
+}
+
+private struct LangueDeLInterface: ViewModifier {
+    func body(content: Content) -> some View {
+        // Lire la locale ici fait dependre la vue de la langue (Observation).
+        content.environment(\.locale, Localisation.partagee.locale)
     }
 }

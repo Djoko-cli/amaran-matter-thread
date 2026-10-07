@@ -87,7 +87,7 @@ public final class TransportUDP: Transport {
         let refus: (any Error)? = etat.withLock { e in
             guard !e.fini, !e.echoue else {
                 if let erreur = e.erreur { return erreur }
-                return ErreurTransport("session réseau fermée par l'app")
+                return ErreurTransport(tr("session réseau fermée par l'app"))
             }
             e.session = session
             e.suite = suite
@@ -262,7 +262,7 @@ public final class TransportUDP: Transport {
             e.envoisEnCours += sortie.count
             return (c, sortie)
         }
-        guard let c else { throw ErreurTransport("session réseau fermée") }
+        guard let c else { throw ErreurTransport(tr("session réseau fermée")) }
         for d in datagrammes {
             c.send(content: d, completion: .contentProcessed { [weak self] _ in
                 self?.etat.withLock { $0.envoisEnCours -= 1 }
@@ -271,7 +271,7 @@ public final class TransportUDP: Transport {
     }
 
     public func fermer() {
-        file.async { [weak self] in self?.terminer("session réseau fermée par l'app") }
+        file.async { [weak self] in self?.terminer(tr("session réseau fermée par l'app")) }
     }
 
     /// Laisse partir ce qui est confie (`json 0`), 300 ms au plus, puis ferme.
@@ -281,7 +281,7 @@ public final class TransportUDP: Transport {
             guard let self else { return }
             let limite = ContinuousClock.now + .milliseconds(300)
             while ContinuousClock.now < limite, self.etat.withLock({ $0.envoisEnCours }) > 0 { usleep(5_000) }
-            self.terminer("session réseau fermée par l'app")
+            self.terminer(tr("session réseau fermée par l'app"))
         }
         if synchrone { travail() } else { DispatchQueue.global(qos: .userInitiated).async(execute: travail) }
     }

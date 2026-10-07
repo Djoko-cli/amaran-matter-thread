@@ -1,4 +1,4 @@
-// Repris de Halo Compagnon (commit e114cd5) : textes en francais seulement.
+// Repris de Halo Compagnon (commit e114cd5) : textes en francais et en anglais.
 import AmaranProtocole
 import SwiftUI
 
@@ -9,10 +9,13 @@ struct Carte<Contenu: View>: View {
     var accent: Color = .secondary
     @ViewBuilder let contenu: Contenu
 
-    init(titre: String, icone: String, accent: Color = .secondary, @ViewBuilder contenu: () -> Contenu) {
-        self.init(titre: Text(verbatim: titre), icone: icone, accent: accent, contenu: contenu)
+    init(titre: LocalizedStringKey, icone: String, accent: Color = .secondary, @ViewBuilder contenu: () -> Contenu) {
+        self.init(titre: Text(titre), icone: icone, accent: accent, contenu: contenu)
     }
 
+    /// Titre deja construit : `Text("...", tableName: "Titres")` pour un titre dont le texte
+    /// francais sert ailleurs avec une autre casse anglaise (titre de section contre
+    /// libelle de ligne), ou `Text(verbatim:)` pour un nom (de lampe).
     init(titre: Text, icone: String, accent: Color = .secondary, @ViewBuilder contenu: () -> Contenu) {
         self.titre = titre
         self.icone = icone
@@ -41,7 +44,12 @@ struct LigneInfo: View {
     var couleur: Color?
     var mono = false
 
-    init(_ libelle: String, _ valeur: String?, couleur: Color? = nil, mono: Bool = false) {
+    init(_ libelle: LocalizedStringKey, _ valeur: String?, couleur: Color? = nil, mono: Bool = false) {
+        self.init(libelle: Text(libelle), valeur, couleur: couleur, mono: mono)
+    }
+
+    /// Libelle deja calcule (dans la langue en vigueur).
+    init(verbatim libelle: String, _ valeur: String?, couleur: Color? = nil, mono: Bool = false) {
         self.init(libelle: Text(verbatim: libelle), valeur, couleur: couleur, mono: mono)
     }
 
@@ -77,6 +85,13 @@ struct Pastille: View {
     let texte: Text
     var couleur: Color = .secondary
 
+    /// Texte du catalogue de l'app.
+    init(_ cle: LocalizedStringKey, couleur: Color = .secondary) {
+        texte = Text(cle)
+        self.couleur = couleur
+    }
+
+    /// Texte deja calcule (libelle, valeur de la carte), tel quel.
     init(texte: String, couleur: Color = .secondary) {
         self.texte = Text(verbatim: texte)
         self.couleur = couleur
@@ -94,7 +109,7 @@ struct Pastille: View {
 
 /// Jauge "valeur / seuil".
 struct JaugeSeuil: View {
-    let libelle: String
+    let libelle: LocalizedStringKey
     let valeur: Int?
     let seuil: Int?
 
@@ -103,7 +118,7 @@ struct JaugeSeuil: View {
         let s = Double(max(seuil ?? 1, 1))
         VStack(alignment: .leading, spacing: 3) {
             HStack {
-                Text(verbatim: libelle).foregroundStyle(.secondary)
+                Text(libelle).foregroundStyle(.secondary)
                 Spacer()
                 Text(verbatim: "\(valeur.map(String.init) ?? "–") / \(seuil.map(String.init) ?? "–")").monospacedDigit()
             }
@@ -137,7 +152,7 @@ struct VoyantLed: View {
             .frame(width: taille, height: taille)
             .shadow(color: couleur.opacity(intensite * 0.9), radius: intensite * taille * 0.5)
         }
-        .accessibilityLabel(motif?.libelle ?? "voyant inconnu")
+        .accessibilityLabel(motif?.libelle ?? tr("voyant inconnu"))
     }
 
     /// Prochain instant (secondes depuis le debut du motif) ou le rendu change ;
@@ -230,13 +245,13 @@ enum Format {
         .hour(.twoDigits(amPM: .abbreviated)).minute(.twoDigits).second(.twoDigits)
         .secondFraction(.fractional(3))
 
-    /// Heure a la milliseconde ("14:02:11,512").
-    static func heure(_ d: Date) -> String { d.formatted(styleHeure) }
+    /// Heure a la milliseconde, aux formats de la langue en vigueur ("14:02:11,512").
+    static func heure(_ d: Date) -> String { d.formatted(styleHeure.locale(Localisation.partagee.locale)) }
 
     static func duree(secondes s: Int?) -> String {
         guard let s else { return "–" }
         let j = s / 86_400, h = (s % 86_400) / 3600, m = (s % 3600) / 60, sec = s % 60
-        if j > 0 { return "\(j) j \(h) h \(m) min" }
+        if j > 0 { return tr("\(j) j \(h) h \(m) min") }
         if h > 0 { return "\(h) h \(m) min \(sec) s" }
         if m > 0 { return "\(m) min \(sec) s" }
         return "\(sec) s"
@@ -249,12 +264,12 @@ enum Format {
 
     static func octets(_ v: Int?) -> String {
         guard let v else { return "–" }
-        return Int64(v).formatted(.byteCount(style: .memory))
+        return Int64(v).formatted(.byteCount(style: .memory).locale(Localisation.partagee.locale))
     }
 
     static func oui(_ b: Bool?) -> String {
         guard let b else { return "–" }
-        return b ? "oui" : "non"
+        return b ? tr("oui") : tr("non")
     }
 
     static func hexa(_ v: Int?) -> String {
@@ -265,14 +280,14 @@ enum Format {
 extension MoteurSession.Phase {
     var libelle: String {
         switch self {
-        case .ferme: "fermé"
-        case .attenteHello: "attente du hello"
-        case .connecte: "connecté"
-        case .resynchro: "resynchronisation"
-        case .ancienFirmware: "firmware sans mode JSON"
-        case .sansReponse: "sans réponse"
-        case .versionInconnue(let v): "protocole v\(v) inconnu"
-        case .modeHumain: "console texte"
+        case .ferme: tr("fermé")
+        case .attenteHello: tr("attente du hello")
+        case .connecte: tr("connecté")
+        case .resynchro: tr("resynchronisation")
+        case .ancienFirmware: tr("firmware sans mode JSON")
+        case .sansReponse: tr("sans réponse")
+        case .versionInconnue(let v): tr("protocole v\(String(v)) inconnu")
+        case .modeHumain: tr("console texte")
         }
     }
 
@@ -289,16 +304,16 @@ extension MoteurSession.Phase {
 extension MotifLed {
     var libelle: String {
         switch self {
-        case .identification: "identification (arc-en-ciel)"
-        case .desappairage: "désappairage (bouton BOOT tenu)"
-        case .redemarrage: "redémarrage (bouton BOOT)"
-        case .injoignable: "lampe injoignable (rouge ×3)"
-        case .panneRadio: "Bluetooth Mesh inopérant (rouge fixe)"
-        case .livree: "ordre confirmé (éclat vert)"
-        case .nonAppaire: "pas dans Maison (bleu)"
-        case .horsReseau: "hors réseau Thread (orange)"
-        case .operationnel: "opérationnel (lueur toutes les 10 s)"
-        case .inconnu: "motif inconnu"
+        case .identification: tr("identification (arc-en-ciel)")
+        case .desappairage: tr("désappairage (bouton BOOT tenu)")
+        case .redemarrage: tr("redémarrage (bouton BOOT)")
+        case .injoignable: tr("lampe injoignable (rouge ×3)")
+        case .panneRadio: tr("Bluetooth Mesh inopérant (rouge fixe)")
+        case .livree: tr("ordre confirmé (éclat vert)")
+        case .nonAppaire: tr("pas dans Maison (bleu)")
+        case .horsReseau: tr("hors réseau Thread (orange)")
+        case .operationnel: tr("opérationnel (lueur toutes les 10 s)")
+        case .inconnu: tr("motif inconnu")
         }
     }
 }

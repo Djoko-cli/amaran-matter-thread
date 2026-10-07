@@ -11,7 +11,7 @@ struct VueLampe: Identifiable, Equatable {
     let dernierOrdre: EvenementOrdre?
     var id: Int { numero }
 
-    var nom: String { config?.nom ?? "Lampe \(numero)" }
+    var nom: String { config?.nom ?? tr("Lampe \(numero)") }
     var dansMaison: Bool { etat?.maison?.endpoint != nil }
 }
 
@@ -53,9 +53,7 @@ extension Pont {
 
     /// Texte de la confirmation de « Retirer de Maison » (spec 3b, decision 7 ; banc 2
     /// du plan 3a).
-    static let avertissementRetrait = """
-        Maison retire la tuile de la lampe. Remise, elle reviendra comme un nouvel accessoire : \
-        son nom dans Maison, sa pièce si elle diffère de celle du pont, ses scènes et ses \
-        automatisations seront perdus.
-        """
+    static var avertissementRetrait: String {
+        tr("Maison retire la tuile de la lampe. Remise, elle reviendra comme un nouvel accessoire : son nom dans Maison, sa pièce si elle diffère de celle du pont, ses scènes et ses automatisations seront perdus.")
+    }
 }

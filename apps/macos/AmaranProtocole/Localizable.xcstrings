@@ -1,0 +1,2390 @@
+{
+  "sourceLanguage" : "fr",
+  "strings" : {
+    " (essai %lld)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : " (attempt %lld)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : " (essai %lld)"
+          }
+        }
+      }
+    },
+    " « %@ »" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : " “%@”"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : " « %@ »"
+          }
+        }
+      }
+    },
+    " — %lld trame(s) non émise(s) avant" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : " — %lld frame(s) not sent before"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : " — %lld trame(s) non émise(s) avant"
+          }
+        }
+      }
+    },
+    "%@ %%" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@%%"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ %%"
+          }
+        }
+      }
+    },
+    "%@ %@ : %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ %2$@: %3$@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ %2$@ : %3$@"
+          }
+        }
+      }
+    },
+    "%@ : %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@: %2$@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ : %2$@"
+          }
+        }
+      }
+    },
+    "%@ : en cours" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: in progress"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ : en cours"
+          }
+        }
+      }
+    },
+    "%lld %%" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld%%"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld %%"
+          }
+        }
+      }
+    },
+    "%lld lampe(s) : le pont en gère de 1 à %lld." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld lamp(s): the bridge handles 1 to %2$lld."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld lampe(s) : le pont en gère de 1 à %2$lld."
+          }
+        }
+      }
+    },
+    "%lld lampe(s), %lld attendue(s)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld lamp(s), %2$lld expected"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld lampe(s), %2$lld attendue(s)"
+          }
+        }
+      }
+    },
+    "%lld réseaux dans la base d'amaran Desktop, 1 attendu." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld networks in the amaran Desktop database, 1 expected."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld réseaux dans la base d'amaran Desktop, 1 attendu."
+          }
+        }
+      }
+    },
+    "Accès au réseau local refusé : Réglages Système › Confidentialité et sécurité › Réseau local › Amaran Compagnon." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Local network access denied: System Settings › Privacy & Security › Local Network › Amaran Compagnon."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accès au réseau local refusé : Réglages Système › Confidentialité et sécurité › Réseau local › Amaran Compagnon."
+          }
+        }
+      }
+    },
+    "Adresse 0x%@ en double." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Address 0x%@ appears twice."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adresse 0x%@ en double."
+          }
+        }
+      }
+    },
+    "Après le redémarrage, le pont ne montre pas ce qui a été chargé : %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "After the restart, the bridge does not show what was loaded: %@."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Après le redémarrage, le pont ne montre pas ce qui a été chargé : %@."
+          }
+        }
+      }
+    },
+    "Aucun caractère de contrôle n'est permis." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No control characters are allowed."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucun caractère de contrôle n'est permis."
+          }
+        }
+      }
+    },
+    "Aucune base d'amaran Desktop (*/amaran.db) dans ce dossier." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No amaran Desktop database (*/amaran.db) in this folder."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune base d'amaran Desktop (*/amaran.db) dans ce dossier."
+          }
+        }
+      }
+    },
+    "Aucune copie des clés sur ce Mac : « Copier depuis amaran Desktop »." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No copy of the keys on this Mac: “Copy from amaran Desktop”."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune copie des clés sur ce Mac : « Copier depuis amaran Desktop »."
+          }
+        }
+      }
+    },
+    "Aucune lampe dans la base d'amaran Desktop." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No lamps in the amaran Desktop database."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune lampe dans la base d'amaran Desktop."
+          }
+        }
+      }
+    },
+    "Aucune réponse : mauvais port, pont en mode téléchargement, ou commande longue en cours ? Nouvel essai toutes les 30 s." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No response: wrong port, bridge in download mode, or a long command running? Retrying every 30 s."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune réponse : mauvais port, pont en mode téléchargement, ou commande longue en cours ? Nouvel essai toutes les 30 s."
+          }
+        }
+      }
+    },
+    "Aucune réponse au json 1 par le réseau : nouvelle poignée de main." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No answer to json 1 over the network: new handshake."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune réponse au json 1 par le réseau : nouvelle poignée de main."
+          }
+        }
+      }
+    },
+    "Aucune réponse du pont : clé différente de la sienne, ou pont sans clé ? (vérifier par l'USB, carte Thread et Matter)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No answer from the bridge: a different key, or no key at all? (check over USB, in the Thread and Matter card)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune réponse du pont : clé différente de la sienne, ou pont sans clé ? (vérifier par l'USB, carte Thread et Matter)"
+          }
+        }
+      }
+    },
+    "Base d'amaran Desktop illisible (%@)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unreadable amaran Desktop database (%@)."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Base d'amaran Desktop illisible (%@)."
+          }
+        }
+      }
+    },
+    "Ce fichier n'est pas une sauvegarde d'Amaran Compagnon." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This file is not an Amaran Compagnon backup."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce fichier n'est pas une sauvegarde d'Amaran Compagnon."
+          }
+        }
+      }
+    },
+    "Ce pont ne prend pas la version des lampes : mettre à jour son firmware." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This bridge does not support lamp versions: update its firmware."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce pont ne prend pas la version des lampes : mettre à jour son firmware."
+          }
+        }
+      }
+    },
+    "Ce port n'est pas un pont amaran en mode machine : rien n'a été envoyé." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This port is not an amaran bridge in machine mode: nothing was sent."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ce port n'est pas un pont amaran en mode machine : rien n'a été envoyé."
+          }
+        }
+      }
+    },
+    "Change l'IV Index du réseau des lampes." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Changes the IV Index of the lamp network."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Change l'IV Index du réseau des lampes."
+          }
+        }
+      }
+    },
+    "Change l'adresse Bluetooth Mesh du pont." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Changes the bridge's Bluetooth Mesh address."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Change l'adresse Bluetooth Mesh du pont."
+          }
+        }
+      }
+    },
+    "Cherche l'IV Index : la console du pont reste occupée pendant la recherche." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Searches for the IV Index: the bridge console stays busy during the search."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cherche l'IV Index : la console du pont reste occupée pendant la recherche."
+          }
+        }
+      }
+    },
+    "Clé application : 16 octets attendus." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Application key: 16 bytes expected."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clé application : 16 octets attendus."
+          }
+        }
+      }
+    },
+    "Clé illisible dans la base d'amaran Desktop." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unreadable key in the amaran Desktop database."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clé illisible dans la base d'amaran Desktop."
+          }
+        }
+      }
+    },
+    "Clé réseau : 16 octets attendus." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Network key: 16 bytes expected."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clé réseau : 16 octets attendus."
+          }
+        }
+      }
+    },
+    "Commande non envoyée : %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Command not sent: %@."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Commande non envoyée : %@."
+          }
+        }
+      }
+    },
+    "Connexion réseau perdue : %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Network connection lost: %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connexion réseau perdue : %@"
+          }
+        }
+      }
+    },
+    "Efface la clé du réseau Thread : les sessions par le réseau tombent et le port 5480 se ferme." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erases the Thread network key: sessions over the network drop and port 5480 closes."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Efface la clé du réseau Thread : les sessions par le réseau tombent et le port 5480 se ferme."
+          }
+        }
+      }
+    },
+    "Efface les clés du réseau des lampes dans le pont." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erases the lamp network keys in the bridge."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Efface les clés du réseau des lampes dans le pont."
+          }
+        }
+      }
+    },
+    "Empreinte incohérente avec la clé reçue : clé non rangée." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fingerprint does not match the received key: key not stored."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empreinte incohérente avec la clé reçue : clé non rangée."
+          }
+        }
+      }
+    },
+    "Erreur réseau : %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Network error: %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erreur réseau : %@"
+          }
+        }
+      }
+    },
+    "Firmware sans mode JSON : flasher un firmware du pont avec le mode JSON. L'app reste en console seule." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Firmware without JSON mode: flash a bridge firmware that has JSON mode. The app stays in console-only mode."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Firmware sans mode JSON : flasher un firmware du pont avec le mode JSON. L'app reste en console seule."
+          }
+        }
+      }
+    },
+    "JSON invalide %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "invalid JSON %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "JSON invalide %@"
+          }
+        }
+      }
+    },
+    "Jamais de JSON ni d'octet RS vers le pont." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Never JSON or an RS byte to the bridge."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jamais de JSON ni d'octet RS vers le pont."
+          }
+        }
+      }
+    },
+    "L'app ajoute elle-même le préfixe id=<n>." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The app adds the id=<n> prefix itself."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'app ajoute elle-même le préfixe id=<n>."
+          }
+        }
+      }
+    },
+    "La copie de ce Mac n'a pas encore les versions des lampes : « Copier depuis amaran Desktop », puis « Charger le pont »." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This Mac's copy does not have the lamp versions yet: “Copy from amaran Desktop”, then “Load Bridge”."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La copie de ce Mac n'a pas encore les versions des lampes : « Copier depuis amaran Desktop », puis « Charger le pont »."
+          }
+        }
+      }
+    },
+    "Lampe %@ (%@, code %@) : déclare %@, que le pont ne lui connaît pas : marche et intensité seulement, modèle à cataloguer." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lamp %1$@ (%2$@, code %3$@): declares %4$@, which the bridge does not know for this lamp: on/off and brightness only, model to be added to the catalog."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lampe %1$@ (%2$@, code %3$@) : déclare %4$@, que le pont ne lui connaît pas : marche et intensité seulement, modèle à cataloguer."
+          }
+        }
+      }
+    },
+    "Lampe %lld : %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lamp %1$lld: %2$@."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lampe %1$lld : %2$@."
+          }
+        }
+      }
+    },
+    "Lampe %lld : MAC illisible." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lamp %lld: unreadable MAC."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lampe %lld : MAC illisible."
+          }
+        }
+      }
+    },
+    "Lampe %lld : adresse 0x%@ dans la plage du pont (0x7F00–0x7F7F)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lamp %1$lld: address 0x%2$@ is within the bridge's range (0x7F00–0x7F7F)."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lampe %1$lld : adresse 0x%2$@ dans la plage du pont (0x7F00–0x7F7F)."
+          }
+        }
+      }
+    },
+    "Lampe %lld : adresse 0x%@ hors de 0x0001–0x7FFF." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lamp %1$lld: address 0x%2$@ is outside 0x0001–0x7FFF."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lampe %1$lld : adresse 0x%2$@ hors de 0x0001–0x7FFF."
+          }
+        }
+      }
+    },
+    "Lampe %lld : la ligne de chargement fait %lld octets, %lld au plus (guillemets ou barres obliques inverses du nom comptés doubles) : raccourcir le nom." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lamp %1$lld: the load line is %2$lld bytes, %3$lld at most (quotes and backslashes in the name count twice): shorten the name."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lampe %1$lld : la ligne de chargement fait %2$lld octets, %3$lld au plus (guillemets ou barres obliques inverses du nom comptés doubles) : raccourcir le nom."
+          }
+        }
+      }
+    },
+    "Lampe %lld : version « %@ » illisible (forme 1.4 attendue)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lamp %1$lld: unreadable version “%2$@” (form 1.4 expected)."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lampe %1$lld : version « %2$@ » illisible (forme 1.4 attendue)."
+          }
+        }
+      }
+    },
+    "Lampe illisible dans la base d'amaran Desktop (adresse %@)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unreadable lamp in the amaran Desktop database (address %@)."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lampe illisible dans la base d'amaran Desktop (adresse %@)."
+          }
+        }
+      }
+    },
+    "Le pont a enregistré d'autres clés (empreintes %@, attendues %@) : ne pas le redémarrer, relancer le chargement." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The bridge stored other keys (fingerprints %1$@, expected %2$@): do not restart it, run the load again."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le pont a enregistré d'autres clés (empreintes %1$@, attendues %2$@) : ne pas le redémarrer, relancer le chargement."
+          }
+        }
+      }
+    },
+    "Le pont a quitté le mode machine (bail échu) : json 1 renvoyé." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The bridge left machine mode (lease expired): json 1 sent again."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le pont a quitté le mode machine (bail échu) : json 1 renvoyé."
+          }
+        }
+      }
+    },
+    "Le pont n'a pas de clés : « Charger le pont »." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The bridge has no keys: “Load Bridge”."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le pont n'a pas de clés : « Charger le pont »."
+          }
+        }
+      }
+    },
+    "Le pont n'a pas enregistré la liste des lampes : ne pas le redémarrer, relancer le chargement." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The bridge did not store the lamp list: do not restart it, run the load again."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le pont n'a pas enregistré la liste des lampes : ne pas le redémarrer, relancer le chargement."
+          }
+        }
+      }
+    },
+    "Le pont n'a pas les clés ou les lampes de la copie : « Charger le pont »." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The bridge does not have the copy's keys or lamps: “Load Bridge”."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le pont n'a pas les clés ou les lampes de la copie : « Charger le pont »."
+          }
+        }
+      }
+    },
+    "Le pont n'a pas redémarré : vérifier l'onglet Clés après un redémarrage." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The bridge did not restart: check the Keys card after a restart."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le pont n'a pas redémarré : vérifier l'onglet Clés après un redémarrage."
+          }
+        }
+      }
+    },
+    "Le pont n'a plus de clé : le brancher en USB, puis « Activer l'accès réseau… »." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The bridge no longer has a key: plug it in over USB, then “Enable Network Access…”."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le pont n'a plus de clé : le brancher en USB, puis « Activer l'accès réseau… »."
+          }
+        }
+      }
+    },
+    "Le pont refuse la nouvelle clé : %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The bridge refuses the new key: %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le pont refuse la nouvelle clé : %@"
+          }
+        }
+      }
+    },
+    "Les deux phrases de passe diffèrent." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The two passphrases differ."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les deux phrases de passe diffèrent."
+          }
+        }
+      }
+    },
+    "Les versions des lampes du pont diffèrent de la copie (inconnues ou changées) : « Charger le pont »." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The bridge's lamp versions differ from the copy (unknown or changed): “Load Bridge”."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les versions des lampes du pont diffèrent de la copie (inconnues ou changées) : « Charger le pont »."
+          }
+        }
+      }
+    },
+    "Ligne trop longue : %lld octets, %lld au plus avec le préfixe id=." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Line too long: %1$lld bytes, %2$lld at most including the id= prefix."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ligne trop longue : %1$lld octets, %2$lld au plus avec le préfixe id=."
+          }
+        }
+      }
+    },
+    "Ligne vide." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empty line."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ligne vide."
+          }
+        }
+      }
+    },
+    "MAC %@ en double." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MAC %@ appears twice."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MAC %@ en double."
+          }
+        }
+      }
+    },
+    "NetMIC faux, rien de déchiffré : IV Index faux (mesh iv cherche)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bad NetMIC, nothing decrypted: wrong IV Index (mesh iv cherche)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "NetMIC faux, rien de déchiffré : IV Index faux (mesh iv cherche)"
+          }
+        }
+      }
+    },
+    "Ouvre une nouvelle liste de lampes (effet au redémarrage, une fois complète)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opens a new lamp list (takes effect at restart, once complete)."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvre une nouvelle liste de lampes (effet au redémarrage, une fois complète)."
+          }
+        }
+      }
+    },
+    "Pas de route IPv6 vers le réseau Thread (bug du noyau de macOS)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No IPv6 route to the Thread network (macOS kernel bug)."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pas de route IPv6 vers le réseau Thread (bug du noyau de macOS)."
+          }
+        }
+      }
+    },
+    "Pas de réponse à json 1 sous 5 s : fermeture et réouverture du port." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No response to json 1 within 5 s: closing and reopening the port."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pas de réponse à json 1 sous 5 s : fermeture et réouverture du port."
+          }
+        }
+      }
+    },
+    "Phrase de passe fausse, ou fichier altéré." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wrong passphrase, or the file has been altered."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Phrase de passe fausse, ou fichier altéré."
+          }
+        }
+      }
+    },
+    "Phrase de passe trop courte : %lld caractères au moins (%lld)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Passphrase too short: at least %1$lld characters (%2$lld)."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Phrase de passe trop courte : %1$lld caractères au moins (%2$lld)."
+          }
+        }
+      }
+    },
+    "Pont introuvable (%@) : éteint, hors du réseau Thread, ou routeurs de bordure injoignables." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bridge not found (%@): off, outside the Thread network, or border routers unreachable."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pont introuvable (%@) : éteint, hors du réseau Thread, ou routeurs de bordure injoignables."
+          }
+        }
+      }
+    },
+    "Protocole v%@ non géré par cette app (v1) : console seule." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Protocol v%@ is not supported by this app (v1): console only."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Protocole v%@ non géré par cette app (v1) : console seule."
+          }
+        }
+      }
+    },
+    "Redémarre le pont (le port USB va se ré-énumérer)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restarts the bridge (the USB port will re-enumerate)."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Redémarre le pont (le port USB va se ré-énumérer)."
+          }
+        }
+      }
+    },
+    "Remplace les clés du réseau des lampes dans le pont (effet au redémarrage). « Charger le pont » vérifie en plus les empreintes." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Replaces the lamp network keys in the bridge (takes effect at restart). “Load Bridge” also checks the fingerprints."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remplace les clés du réseau des lampes dans le pont (effet au redémarrage). « Charger le pont » vérifie en plus les empreintes."
+          }
+        }
+      }
+    },
+    "Retire la lampe de Maison : remise, elle y reviendra comme un nouvel accessoire, sans son nom, ses scènes ni ses automatisations." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Removes the lamp from Apple Home: when put back, it returns as a new accessory, without its name, scenes, or automations."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retire la lampe de Maison : remise, elle y reviendra comme un nouvel accessoire, sans son nom, ses scènes ni ses automatisations."
+          }
+        }
+      }
+    },
+    "Retire le pont de Maison et de tout autre contrôleur Matter (clés du Mesh et lampes gardées ; la clé de l'accès par Thread est effacée)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Removes the bridge from Apple Home and any other Matter controller (Mesh keys and lamps are kept; the Thread access key is erased)."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retire le pont de Maison et de tout autre contrôleur Matter (clés du Mesh et lampes gardées ; la clé de l'accès par Thread est effacée)."
+          }
+        }
+      }
+    },
+    "Réponse au json 1 perdue : les commandes reprennent." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Response to json 1 lost: commands resume."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réponse au json 1 perdue : les commandes reprennent."
+          }
+        }
+      }
+    },
+    "Réponse sans clé lisible (64 hexa majuscules attendus) : clé non rangée." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reply without a readable key (64 uppercase hex digits expected): key not stored."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réponse sans clé lisible (64 hexa majuscules attendus) : clé non rangée."
+          }
+        }
+      }
+    },
+    "Sauvegarde de version %@ : cette app lit la version %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Backup of version %1$@: this app reads version %2$@."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sauvegarde de version %1$@ : cette app lit la version %2$@."
+          }
+        }
+      }
+    },
+    "Silence du pont depuis %lld s : json 1 renvoyé." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bridge silent for %lld s: json 1 sent again."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Silence du pont depuis %lld s : json 1 renvoyé."
+          }
+        }
+      }
+    },
+    "Texte de démarrage reçu : le pont a peut-être redémarré." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Startup text received: the bridge may have restarted."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Texte de démarrage reçu : le pont a peut-être redémarré."
+          }
+        }
+      }
+    },
+    "Utiliser « Libérer le port » : l'app enverra json 0 et fermera le port." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use “Release Port”: the app will send json 0 and close the port."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Utiliser « Libérer le port » : l'app enverra json 0 et fermera le port."
+          }
+        }
+      }
+    },
+    "Utiliser « Nouvelle clé… » : la clé rendue doit être rangée dans le trousseau." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use “New Key…”: the returned key must be stored in the keychain."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Utiliser « Nouvelle clé… » : la clé rendue doit être rangée dans le trousseau."
+          }
+        }
+      }
+    },
+    "abandonné : Bluetooth Mesh pas prêt, rien n'est parti vers la lampe" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "abandoned: Bluetooth Mesh not ready, nothing was sent to the lamp"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "abandonné : Bluetooth Mesh pas prêt, rien n'est parti vers la lampe"
+          }
+        }
+      }
+    },
+    "abandonné après %lld essai(s), %@ ms : la lampe ne répond pas" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "abandoned after %1$lld attempt(s), %2$@ ms: the lamp is not responding"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "abandonné après %1$lld essai(s), %2$@ ms : la lampe ne répond pas"
+          }
+        }
+      }
+    },
+    "accepté" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "accepted"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "accepté"
+          }
+        }
+      }
+    },
+    "allumée" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "on"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "allumée"
+          }
+        }
+      }
+    },
+    "allumée, %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "on, %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "allumée, %@"
+          }
+        }
+      }
+    },
+    "amaran Desktop a d'autres clés : réseau recréé ? « Copier depuis amaran Desktop », puis « Charger le pont »." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "amaran Desktop has other keys: network recreated? “Copy from amaran Desktop”, then “Load Bridge”."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "amaran Desktop a d'autres clés : réseau recréé ? « Copier depuis amaran Desktop », puis « Charger le pont »."
+          }
+        }
+      }
+    },
+    "amaran Desktop a d'autres lampes : « Copier depuis amaran Desktop », puis « Charger le pont »." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "amaran Desktop has other lamps: “Copy from amaran Desktop”, then “Load Bridge”."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "amaran Desktop a d'autres lampes : « Copier depuis amaran Desktop », puis « Charger le pont »."
+          }
+        }
+      }
+    },
+    "amaran Desktop a d'autres versions de lampes (mise à jour ?) : « Copier depuis amaran Desktop », puis « Charger le pont »." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "amaran Desktop has other lamp versions (update?): “Copy from amaran Desktop”, then “Load Bridge”."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "amaran Desktop a d'autres versions de lampes (mise à jour ?) : « Copier depuis amaran Desktop », puis « Charger le pont »."
+          }
+        }
+      }
+    },
+    "arguments invalides" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "invalid arguments"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "arguments invalides"
+          }
+        }
+      }
+    },
+    "aucune annonce de notre réseau : réseau recréé dans amaran Desktop ? Recopier les clés, puis recharger le pont" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no advertisements from our network: network recreated in amaran Desktop? Copy the keys again, then reload the bridge"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "aucune annonce de notre réseau : réseau recréé dans amaran Desktop ? Recopier les clés, puis recharger le pont"
+          }
+        }
+      }
+    },
+    "caractère de contrôle dans le nom" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "control character in the name"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "caractère de contrôle dans le nom"
+          }
+        }
+      }
+    },
+    "cause inconnue" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "unknown cause"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cause inconnue"
+          }
+        }
+      }
+    },
+    "champ absent : %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "missing field: %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "champ absent : %@"
+          }
+        }
+      }
+    },
+    "champ mal typé : %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "wrongly typed field: %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "champ mal typé : %@"
+          }
+        }
+      }
+    },
+    "clés absentes : charger le pont depuis l'onglet Clés" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "keys missing: load the bridge from the Keys card"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "clés absentes : charger le pont depuis l'onglet Clés"
+          }
+        }
+      }
+    },
+    "code inconnu" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "unknown code"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "code inconnu"
+          }
+        }
+      }
+    },
+    "commande inconnue" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "unknown command"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "commande inconnue"
+          }
+        }
+      }
+    },
+    "confirmé en %@ ms" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "confirmed in %@ ms"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "confirmé en %@ ms"
+          }
+        }
+      }
+    },
+    "confirmé en %@ ms (essai %lld)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "confirmed in %1$@ ms (attempt %2$lld)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "confirmé en %1$@ ms (essai %2$lld)"
+          }
+        }
+      }
+    },
+    "dans Maison (EP%lld)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "in Apple Home (EP%lld)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dans Maison (EP%lld)"
+          }
+        }
+      }
+    },
+    "demande d'état" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "state request"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "demande d'état"
+          }
+        }
+      }
+    },
+    "décodage impossible" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "cannot decode"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "décodage impossible"
+          }
+        }
+      }
+    },
+    "déjà tenu : rien n'est parti vers la lampe" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "already satisfied: nothing was sent to the lamp"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "déjà tenu : rien n'est parti vers la lampe"
+          }
+        }
+      }
+    },
+    "déjà traitée" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "already handled"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "déjà traitée"
+          }
+        }
+      }
+    },
+    "empreintes %@ %@, attendues %@ %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "fingerprints %1$@ %2$@, expected %3$@ %4$@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "empreintes %1$@ %2$@, attendues %3$@ %4$@"
+          }
+        }
+      }
+    },
+    "en cours" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "in progress"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "en cours"
+          }
+        }
+      }
+    },
+    "enveloppe : %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "envelope: %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "enveloppe : %@"
+          }
+        }
+      }
+    },
+    "erreur (voir le texte)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "error (see the text)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "erreur (voir le texte)"
+          }
+        }
+      }
+    },
+    "fichier vide" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "empty file"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "fichier vide"
+          }
+        }
+      }
+    },
+    "groupe" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "group"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "groupe"
+          }
+        }
+      }
+    },
+    "hors de Maison (endpoint non créé)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "outside Apple Home (endpoint not created)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hors de Maison (endpoint non créé)"
+          }
+        }
+      }
+    },
+    "inconnu (firmware du pont à mettre à jour)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "unknown (bridge firmware needs updating)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "inconnu (firmware du pont à mettre à jour)"
+          }
+        }
+      }
+    },
+    "inconnu (recharger le pont)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "unknown (reload the bridge)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "inconnu (recharger le pont)"
+          }
+        }
+      }
+    },
+    "inconnue" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "unknown"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "inconnue"
+          }
+        }
+      }
+    },
+    "inconnues" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "unknown"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "inconnues"
+          }
+        }
+      }
+    },
+    "interdite à distance" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "forbidden remotely"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "interdite à distance"
+          }
+        }
+      }
+    },
+    "issue inconnue" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "unknown outcome"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "issue inconnue"
+          }
+        }
+      }
+    },
+    "jamais lue" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "never read"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "jamais lue"
+          }
+        }
+      }
+    },
+    "jamais vue : entrera dans Maison à sa première réponse" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "never seen: will enter Apple Home on its first reply"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "jamais vue : entrera dans Maison à sa première réponse"
+          }
+        }
+      }
+    },
+    "la couleur" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "color"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "la couleur"
+          }
+        }
+      }
+    },
+    "la liste blanche du pont la refuse (« %@ »)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "the bridge's allow list refuses it (“%@”)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "la liste blanche du pont la refuse (« %@ »)"
+          }
+        }
+      }
+    },
+    "la température de couleur" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "color temperature"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "la température de couleur"
+          }
+        }
+      }
+    },
+    "lampe %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "lamp %lld"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "lampe %lld"
+          }
+        }
+      }
+    },
+    "lampe %lld : versions différentes (pont : %@, chargées : %@)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "lamp %1$lld: different versions (bridge: %2$@, loaded: %3$@)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "lampe %1$lld : versions différentes (pont : %2$@, chargées : %3$@)"
+          }
+        }
+      }
+    },
+    "lampe %lld différente" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "lamp %lld differs"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "lampe %lld différente"
+          }
+        }
+      }
+    },
+    "ligne machine coupée avant son LF" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "machine line cut before its LF"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ligne machine coupée avant son LF"
+          }
+        }
+      }
+    },
+    "ligne trop longue" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "line too long"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ligne trop longue"
+          }
+        }
+      }
+    },
+    "ne commence pas par {\"v\":" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "does not start with {\"v\":"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ne commence pas par {\"v\":"
+          }
+        }
+      }
+    },
+    "ne finit pas par }" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "does not end with }"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ne finit pas par }"
+          }
+        }
+      }
+    },
+    "noire : en marche à 0 %" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "dark: on at 0%"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "noire : en marche à 0 %"
+          }
+        }
+      }
+    },
+    "nom de %lld octets, %lld au plus" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "name of %1$lld bytes, %2$lld at most"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nom de %1$lld octets, %2$lld au plus"
+          }
+        }
+      }
+    },
+    "nom vide" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "empty name"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "nom vide"
+          }
+        }
+      }
+    },
+    "ok" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ok"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ok"
+          }
+        }
+      }
+    },
+    "opérationnel" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "operational"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "opérationnel"
+          }
+        }
+      }
+    },
+    "ordre" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "order"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ordre"
+          }
+        }
+      }
+    },
+    "pas de clés" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no keys"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pas de clés"
+          }
+        }
+      }
+    },
+    "pas encore entré dans le réseau des lampes" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "not yet joined the lamp network"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "pas encore entré dans le réseau des lampes"
+          }
+        }
+      }
+    },
+    "plus de %@ octets" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "more than %@ bytes"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "plus de %@ octets"
+          }
+        }
+      }
+    },
+    "retirée de Maison" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "removed from Apple Home"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "retirée de Maison"
+          }
+        }
+      }
+    },
+    "session réseau fermée" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "network session closed"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "session réseau fermée"
+          }
+        }
+      }
+    },
+    "session réseau fermée par l'app" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "network session closed by the app"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "session réseau fermée par l'app"
+          }
+        }
+      }
+    },
+    "trame inconnue" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "unknown frame"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "trame inconnue"
+          }
+        }
+      }
+    },
+    "trop de lignes par seconde" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "too many lines per second"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "trop de lignes par seconde"
+          }
+        }
+      }
+    },
+    "« %@ » : %@. Le pont n'est pas redémarré : relancer le chargement." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%1$@”: %2$@. The bridge was not restarted: run the load again."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "« %1$@ » : %2$@. Le pont n'est pas redémarré : relancer le chargement."
+          }
+        }
+      }
+    },
+    "état" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "state"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "état"
+          }
+        }
+      }
+    },
+    "éteinte" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "off"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "éteinte"
+          }
+        }
+      }
+    },
+    "éteinte (%@)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "off (%@)"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "éteinte (%@)"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

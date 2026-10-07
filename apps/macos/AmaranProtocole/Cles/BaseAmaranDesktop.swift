@@ -15,12 +15,12 @@ public enum ErreurBase: Error, Sendable, Equatable, CustomStringConvertible {
 
     public var description: String {
         switch self {
-        case .introuvable: "Aucune base d'amaran Desktop (*/amaran.db) dans ce dossier."
-        case .illisible(let raison): "Base d'amaran Desktop illisible (\(raison))."
-        case .reseaux(let n): "\(n) réseaux dans la base d'amaran Desktop, 1 attendu."
-        case .cle: "Clé illisible dans la base d'amaran Desktop."
-        case .aucuneLampe: "Aucune lampe dans la base d'amaran Desktop."
-        case .lampe(let a): "Lampe illisible dans la base d'amaran Desktop (adresse \(a))."
+        case .introuvable: tr("Aucune base d'amaran Desktop (*/amaran.db) dans ce dossier.")
+        case .illisible(let raison): tr("Base d'amaran Desktop illisible (\(raison)).")
+        case .reseaux(let n): tr("\(n) réseaux dans la base d'amaran Desktop, 1 attendu.")
+        case .cle: tr("Clé illisible dans la base d'amaran Desktop.")
+        case .aucuneLampe: tr("Aucune lampe dans la base d'amaran Desktop.")
+        case .lampe(let a): tr("Lampe illisible dans la base d'amaran Desktop (adresse \(a)).")
         }
     }
 }
@@ -61,7 +61,7 @@ public enum BaseAmaranDesktop {
 
     /// Lit le reseau d'une base deja en memoire (tests : base factice).
     public static func lire(octets: Data, maintenant: Date = Date()) throws(ErreurBase) -> ReseauMesh {
-        guard !octets.isEmpty else { throw .illisible("fichier vide") }
+        guard !octets.isEmpty else { throw .illisible(tr("fichier vide")) }
         var db: OpaquePointer?
         guard sqlite3_open_v2(":memory:", &db, SQLITE_OPEN_READWRITE, nil) == SQLITE_OK, let db else {
             throw .illisible("sqlite3_open_v2")

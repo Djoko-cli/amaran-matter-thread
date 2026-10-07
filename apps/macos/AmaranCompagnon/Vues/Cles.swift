@@ -15,14 +15,15 @@ struct CarteCles: View {
         Carte(titre: "Clés", icone: "key", accent: pont.ecartsCles.isEmpty ? .secondary : .orange) {
             Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 6) {
                 GridRow {
-                    Text("")
+                    Text(verbatim: "")
                     Text("Réseau").foregroundStyle(.secondary)
                     Text("Application").foregroundStyle(.secondary)
                     Text("Lampes").foregroundStyle(.secondary)
                 }
-                ligne("amaran Desktop", pont.base, absent: pont.erreurBase ?? (pont.dossierAmaran == nil ? "dossier non autorisé" : "non lue"))
-                ligne("Ce Mac", pont.copie, absent: "aucune copie")
-                ligne("Le pont", pont.apercuPont, absent: pont.etat.mesh == nil ? "–" : "sans clés")
+                ligne("amaran Desktop", pont.base,
+                      absent: pont.erreurBase ?? (pont.dossierAmaran == nil ? tr("dossier non autorisé") : tr("non lue")))
+                ligne(tr("Ce Mac"), pont.copie, absent: tr("aucune copie"))
+                ligne(tr("Le pont"), pont.apercuPont, absent: pont.etat.mesh == nil ? "–" : tr("sans clés"))
             }
             .font(.callout)
             ForEach(pont.ecartsCles, id: \.texte) { e in
@@ -41,7 +42,8 @@ struct CarteCles: View {
                 Label(raison, systemImage: "xmark.octagon").foregroundStyle(.red).font(.callout)
                     .fixedSize(horizontal: false, vertical: true)
             } else if case .reussi(let d) = pont.chargement {
-                Label("Pont chargé \(d.formatted(.relative(presentation: .named))).", systemImage: "checkmark.seal")
+                Label("Pont chargé \(d.formatted(.relative(presentation: .named).locale(Localisation.partagee.locale))).",
+                      systemImage: "checkmark.seal")
                     .foregroundStyle(.green).font(.callout)
             }
             HStack {
@@ -58,7 +60,7 @@ struct CarteCles: View {
                         .disabled(pont.copie == nil)
                 }
                 .disabled(!pont.peutCommander || pont.aDistance || pont.chargement.actif)
-                .help(pont.aDistance ? "Le chargement des clés passe par l'USB : le pont le refuse par le réseau." : "")
+                .help(pont.aDistance ? tr("Le chargement des clés passe par l'USB : le pont le refuse par le réseau.") : "")
                 .fixedSize()
             }
             .controlSize(.small)
@@ -67,7 +69,7 @@ struct CarteCles: View {
                     .disabled(pont.copie == nil)
                 Button("Importer une sauvegarde…") { importer = true }
                 if let d = pont.derniereSauvegarde {
-                    Text("dernière : \(d.formatted(date: .abbreviated, time: .shortened))")
+                    Text("dernière : \(d.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened, locale: Localisation.partagee.locale)))")
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
@@ -104,7 +106,7 @@ struct CarteCles: View {
 enum ChoixFichiers {
     static func dossierAmaran(_ pont: Pont) {
         let p = NSOpenPanel()
-        p.message = "Choisir le dossier « amaran Desktop » (Bibliothèque › Containers › amaran Desktop › Data › Library › Application Support) : l'app le lira, sans jamais y écrire."
+        p.message = tr("Choisir le dossier « amaran Desktop » (Bibliothèque › Containers › amaran Desktop › Data › Library › Application Support) : l'app le lira, sans jamais y écrire.")
         p.canChooseDirectories = true
         p.canChooseFiles = false
         p.showsHiddenFiles = true
@@ -114,7 +116,7 @@ enum ChoixFichiers {
 
     static func enregistrerSauvegarde() -> URL? {
         let p = NSSavePanel()
-        p.message = "Où ranger la sauvegarde chiffrée ? iCloud Drive la garde même si ce Mac est perdu."
+        p.message = tr("Où ranger la sauvegarde chiffrée ? iCloud Drive la garde même si ce Mac est perdu.")
         p.nameFieldStringValue = "Réseau amaran.sauvegarde"
         return p.runModal() == .OK ? p.url : nil
     }
@@ -179,14 +181,15 @@ private struct FeuilleImport: View {
         VStack(alignment: .leading, spacing: 12) {
             Label("Importer une sauvegarde chiffrée", systemImage: "lock.open").font(.title3.weight(.semibold))
             HStack {
-                Text(verbatim: fichier?.lastPathComponent ?? "Aucun fichier choisi").foregroundStyle(.secondary)
+                Text(verbatim: fichier?.lastPathComponent ?? tr("Aucun fichier choisi")).foregroundStyle(.secondary)
                 Spacer()
                 Button("Choisir…") { fichier = ChoixFichiers.ouvrirSauvegarde() }
             }
             SecureField("Phrase de passe", text: $phrase)
             if let lue {
                 let a = lue.apercu
-                Text(verbatim: "Empreintes \(a.empreinteReseau) \(a.empreinteApplication), \(a.lampes.count) lampe(s) : \(a.lampes.map(\.nom).joined(separator: ", ")).")
+                let (er, ea, noms) = (a.empreinteReseau, a.empreinteApplication, a.lampes.map(\.nom).joined(separator: ", "))
+                Text(verbatim: tr("Empreintes \(er) \(ea), \(a.lampes.count) lampe(s) : \(noms)."))
                     .fixedSize(horizontal: false, vertical: true)
             }
             if let erreur { Text(verbatim: erreur).foregroundStyle(.red) }

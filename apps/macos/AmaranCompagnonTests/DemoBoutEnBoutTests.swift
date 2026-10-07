@@ -33,7 +33,7 @@ func connecte(_ p: Pont) async -> Bool {
     await attendre { p.phase == .connecte && p.etat.configLampes.count == 3 && !p.moteur.instantaneEnCours }
 }
 
-@Suite("Mode demo, bout en bout", .serialized)
+@Suite("Mode demo, bout en bout", .serialized, .langue(.francais))
 @MainActor
 struct DemoBoutEnBoutTests {
     @Test func connexionEtLampes() async throws {
@@ -267,7 +267,7 @@ struct DemoBoutEnBoutTests {
     }
 }
 
-@Suite("Trousseau du reseau")
+@Suite("Trousseau du reseau", .langue(.francais))
 struct TrousseauTests {
     static func exercer(_ t: any TrousseauReseau) throws {
         try? t.oublier()

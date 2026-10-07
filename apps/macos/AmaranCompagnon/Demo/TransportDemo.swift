@@ -9,7 +9,9 @@ import Synchronization
 /// reconnecte seule.
 final class TransportDemo: Transport {
     let genre: GenreTransport = .demo
-    let nom = "Démo (pont simulé à trois lampes)"
+    /// Nom montre a l'utilisateur, dans la langue en vigueur.
+    static var nomLisible: String { tr("Démo (pont simulé à trois lampes)") }
+    var nom: String { Self.nomLisible }
 
     private struct Etat {
         var tache: Task<Void, Never>?
@@ -57,7 +59,7 @@ final class TransportDemo: Transport {
     }
 
     func envoyer(_ donnees: Data) throws {
-        guard let entrees = etat.withLock({ $0.entrees }) else { throw ErreurTransport("démo arrêtée") }
+        guard let entrees = etat.withLock({ $0.entrees }) else { throw ErreurTransport(tr("démo arrêtée")) }
         entrees.yield(donnees)
     }
 
@@ -71,7 +73,7 @@ final class TransportDemo: Transport {
         }
         entrees?.finish()
         tache?.cancel()
-        sortie?.yield(.ferme(raison: "démo arrêtée"))
+        sortie?.yield(.ferme(raison: tr("démo arrêtée")))
         sortie?.finish()
     }
 }

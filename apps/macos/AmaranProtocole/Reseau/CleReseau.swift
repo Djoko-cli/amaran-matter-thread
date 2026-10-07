@@ -27,9 +27,9 @@ public enum CleReseau {
 
         public var description: String {
             switch self {
-            case .refusee(let msg): "Le pont refuse la nouvelle clé : \(msg)"
-            case .cleIllisible: "Réponse sans clé lisible (64 hexa majuscules attendus) : clé non rangée."
-            case .empreinteIncoherente: "Empreinte incohérente avec la clé reçue : clé non rangée."
+            case .refusee(let msg): tr("Le pont refuse la nouvelle clé : \(msg)")
+            case .cleIllisible: tr("Réponse sans clé lisible (64 hexa majuscules attendus) : clé non rangée.")
+            case .empreinteIncoherente: tr("Empreinte incohérente avec la clé reçue : clé non rangée.")
             }
         }
     }

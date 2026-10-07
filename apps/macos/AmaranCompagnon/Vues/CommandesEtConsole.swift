@@ -33,7 +33,7 @@ private struct PanneauCommandes: View {
                     ForEach(lampes) { l in Text(verbatim: "\(l.numero) · \(l.nom)").tag(l.numero) }
                 }
                 if let lampe {
-                    Carte(titre: lampe.nom, icone: "lightbulb") {
+                    Carte(titre: Text(verbatim: lampe.nom), icone: "lightbulb") {
                         LigneInfo("Logiciel", lampe.config.map { Interpretation.logiciel($0, pontPrendLesVersions: pont.etat.a(.logiciel)) })
                         LigneInfo("État lu", Interpretation.etat(lampe.etat?.lue))
                         LigneInfo("Maison", Interpretation.maison(lampe.etat?.maison))
@@ -51,7 +51,7 @@ private struct PanneauCommandes: View {
                             .onChange(of: niveau) { _, v in
                                 if glisse { pont.niveau(lampe: lampe.numero, pourCent: Int(v), fini: false) }
                             }
-                            Text(verbatim: "\(Int(niveau)) %").monospacedDigit().frame(width: 44, alignment: .trailing)
+                            Text(verbatim: tr("\(Int(niveau)) %")).monospacedDigit().frame(width: 44, alignment: .trailing)
                         }
                         if lampe.dansMaison {
                             Button("Retirer de Maison…") { confirmerRetrait = true }
@@ -67,7 +67,7 @@ private struct PanneauCommandes: View {
                 }
                 Carte(titre: "Relecture des lampes", icone: "arrow.triangle.2.circlepath") {
                     Stepper(value: $releve, in: 1...60) {
-                        Text(verbatim: "Toutes les \(releve) s")
+                        Text("Toutes les \(releve) s")
                     }
                     Button("Appliquer") { pont.reglerReleve(secondes: releve) }
                         .disabled(pont.etat.mesh?.valeur.releveMs == releve * 1000 || !pont.peutEnvoyer("mesh releve \(releve)"))
@@ -145,19 +145,19 @@ private struct LigneSuivi: View {
 extension EtatCommande {
     var libelle: String {
         switch self {
-        case .enFile: "en file"
-        case .envoyee: "envoyée"
-        case .enCours: "en cours"
-        case .terminee: "ok"
-        case .attenteOrdre: "ordre en cours"
-        case .confirmee: "confirmée"
-        case .abandonnee: "abandonnée"
-        case .tenue: "déjà tenue"
-        case .ordrePerdu: "issue perdue"
-        case .sansReponse: "sans réponse"
-        case .finPerdue: "fin perdue"
-        case .remplacee: "remplacée"
-        case .perdue: "perdue"
+        case .enFile: tr("en file")
+        case .envoyee: tr("envoyée")
+        case .enCours: tr("en cours")
+        case .terminee: tr("ok")
+        case .attenteOrdre: tr("ordre en cours")
+        case .confirmee: tr("confirmée")
+        case .abandonnee: tr("abandonnée")
+        case .tenue: tr("déjà tenue")
+        case .ordrePerdu: tr("issue perdue")
+        case .sansReponse: tr("sans réponse")
+        case .finPerdue: tr("fin perdue")
+        case .remplacee: tr("remplacée")
+        case .perdue: tr("perdue")
         }
     }
 }
@@ -224,7 +224,7 @@ private struct ConsoleBrute: View {
     private var saisieVue: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(verbatim: pont.consoleAvecId ? "id=…" : "brut").font(.caption.monospaced()).foregroundStyle(.secondary)
+                Text(verbatim: pont.consoleAvecId ? "id=…" : tr("brut")).font(.caption.monospaced()).foregroundStyle(.secondary)
                 TextField("commande de la console (ex. mesh, lampes, help)", text: $saisie)
                     .textFieldStyle(.roundedBorder)
                     .font(.body.monospaced())
@@ -243,7 +243,7 @@ private struct ConsoleBrute: View {
                     Text("Par le réseau, le pont n'accepte qu'une liste de commandes (les autres ne partent pas) ; le texte d'une commande revient rattaché à son id.")
                         .foregroundStyle(.secondary)
                 } else if !pont.consoleAvecId, pont.phase != .ferme {
-                    Text(verbatim: "Console seule (\(pont.phase.libelle)) : lignes envoyées sans id, sans corrélation.")
+                    Text(verbatim: tr("Console seule (\(pont.phase.libelle)) : lignes envoyées sans id, sans corrélation."))
                         .foregroundStyle(.orange)
                 } else {
                     Text("Chaque ligne part avec un id : le texte reçu entre réponse début et fin lui est rattaché.")
@@ -252,7 +252,7 @@ private struct ConsoleBrute: View {
                 Spacer()
                 // Prefixe "id=<n> " : 13 octets au plus (n <= 999999999).
                 let octets = saisie.utf8.count + (pont.consoleAvecId ? 13 : 0)
-                Text(verbatim: "\(octets) / \(LigneCommande.octetsMax) octets")
+                Text(verbatim: tr("\(octets) / \(LigneCommande.octetsMax) octets"))
                     .foregroundStyle(octets > LigneCommande.octetsMax ? .red : .secondary)
                     .monospacedDigit()
             }

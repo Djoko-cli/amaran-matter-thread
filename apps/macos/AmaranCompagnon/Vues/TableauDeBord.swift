@@ -17,8 +17,8 @@ struct TableauDeBord: View {
                         Label("Aucun état reçu", systemImage: "antenna.radiowaves.left.and.right.slash")
                     } description: {
                         Text(verbatim: pont.source == nil
-                             ? "Choisir le pont dans le menu de la barre latérale : un port USB (VID 303A), un pont « Réseau » joint par Thread, ou le mode démo."
-                             : "Rien n'est encore arrivé de cette source : son état est sous le menu de la barre latérale, où se choisit aussi une autre source (port USB, pont « Réseau », démo).")
+                             ? tr("Choisir le pont dans le menu de la barre latérale : un port USB (VID 303A), un pont « Réseau » joint par Thread, ou le mode démo.")
+                             : tr("Rien n'est encore arrivé de cette source : son état est sous le menu de la barre latérale, où se choisit aussi une autre source (port USB, pont « Réseau », démo)."))
                     } actions: {
                         Button("Lancer la démo") { pont.connecter(.demo) }
                     }
@@ -57,22 +57,22 @@ private struct CarteLampe: View {
     var body: some View {
         let e = lampe.etat
         let joignable = e?.joignable ?? false
-        Carte(titre: "\(lampe.numero) · \(lampe.nom)", icone: "lightbulb",
+        Carte(titre: Text(verbatim: "\(lampe.numero) · \(lampe.nom)"), icone: "lightbulb",
               accent: e?.alerte == true || (e?.entendue == true && !joignable) ? .orange : .secondary) {
             LigneInfo("Modèle", lampe.config.map { c in
-                (c.catalogue == true ? c.modele : "non catalogué (code \(c.code ?? 0))") ?? "?"
+                (c.catalogue == true ? c.modele : tr("non catalogué (code \(c.code ?? 0))")) ?? "?"
             })
             LigneInfo("Logiciel", lampe.config.map { Interpretation.logiciel($0, pontPrendLesVersions: pont.etat.a(.logiciel)) })
             LigneInfo("Maison", Interpretation.maison(e?.maison))
             LigneInfo("État lu", Interpretation.etat(e?.lue))
-            LigneInfo("Joignable", e?.entendue == true ? Format.oui(joignable) : "jamais entendue",
+            LigneInfo("Joignable", e?.entendue == true ? Format.oui(joignable) : tr("jamais entendue"),
                       couleur: e?.entendue == true && !joignable ? .orange : nil)
-            LigneInfo("Relectures sur 10 min", e?.part10Min.map { "\($0) %" } ?? "–",
+            LigneInfo("Relectures sur 10 min", e?.part10Min.map { tr("\($0) %") } ?? "–",
                       couleur: e?.alerte == true ? .orange : nil)
             if let c = e?.consigne {
-                let quoi = [c.marche.map { $0 ? "marche" : "arrêt" }, c.intensite.map(Interpretation.intensite)]
+                let quoi = [c.marche.map { $0 ? tr("marche") : tr("arrêt") }, c.intensite.map(Interpretation.intensite)]
                     .compactMap { $0 }.joined(separator: ", ")
-                LigneInfo("Consigne en cours", "\(quoi) (essai \(c.essai ?? 1))", couleur: .blue)
+                LigneInfo("Consigne en cours", tr("\(quoi) (essai \(c.essai ?? 1))"), couleur: .blue)
             }
             if let o = lampe.dernierOrdre {
                 LigneInfo("Dernier ordre", Interpretation.ordre(o), couleur: o.issue == .abandon ? .orange : nil)
@@ -95,16 +95,16 @@ private struct CarteMesh: View {
         let pret = p?.mesh?.pret == true
         Carte(titre: "Bluetooth Mesh", icone: "point.3.filled.connected.trianglepath.dotted",
               accent: p?.mesh?.diag.map { $0 != .ok } == true ? .red : .secondary) {
-            LigneInfo("Réseau des lampes", pret ? "prêt" : "pas prêt", couleur: pret ? .green : .orange)
+            LigneInfo("Réseau des lampes", pret ? tr("prêt") : tr("pas prêt"), couleur: pret ? .green : .orange)
             if let d = p?.mesh?.diag, d != .ok { LigneInfo("Diagnostic", Interpretation.diag(d), couleur: .red) }
             LigneInfo("Adresse du pont", m?.adresse.map { "0x\($0)" }, mono: true)
             LigneInfo("IV Index", pont.ivIndexMesh?.texte)
-            LigneInfo("Relecture", m?.releveMs.map { "toutes les \($0 / 1000) s" })
+            LigneInfo("Relecture", m?.releveMs.map { tr("toutes les \($0 / 1000) s") })
             LigneInfo("Ordres", p?.ordres.map { o in
-                "\(o.total ?? 0) : \(o.confirmes ?? 0) confirmé(s), \(o.abandons ?? 0) abandonné(s), \(o.tenus ?? 0) déjà tenu(s)"
+                tr("\(o.total ?? 0) : \(o.confirmes ?? 0) confirmé(s), \(o.abandons ?? 0) abandonné(s), \(o.tenus ?? 0) déjà tenu(s)")
             })
             LigneInfo("Délai moyen", p?.ordres?.delaiMoyenMs.map { "\($0) ms (max \(p?.ordres?.delaiMaxMs ?? 0) ms)" })
-            LigneInfo("Annonces", c.map { "\($0.annonces ?? 0) (\($0.nidReconnu ?? 0) de notre réseau)" })
+            LigneInfo("Annonces", c.map { tr("\($0.annonces ?? 0) (\($0.nidReconnu ?? 0) de notre réseau)") })
             LigneInfo("NetMIC faux", c?.netmicFaux.map(String.init), couleur: (c?.netmicFaux ?? 0) > 0 ? .orange : nil)
             LigneInfo("Émis, refus", c.map { "\($0.emis ?? 0), \($0.echecsEmission ?? 0)" })
             noteCompteurs
@@ -147,8 +147,11 @@ private struct CarteMatter: View {
         let m = pont.etat.matter?.valeur
         let t = pont.etat.thread?.valeur
         Carte(titre: "Thread et Matter", icone: "homekit") {
-            LigneInfo("Mise en service", m?.fabriques.map { $0 > 0 ? "faite (\($0) fabrique(s))" : "en attente" })
-            LigneInfo("Thread", t.map { "\($0.role ?? "?")\($0.attache == true ? " (attaché)" : "")" })
+            LigneInfo("Mise en service", m?.fabriques.map { $0 > 0 ? tr("faite (\($0) fabrique(s))") : tr("en attente") })
+            LigneInfo("Thread", t.map { r in
+                let role = r.role ?? "?"
+                return r.attache == true ? tr("\(role) (attaché)") : role
+            })
             LigneInfo("Abonnements actifs", m?.abonnements?.actifs.map(String.init))
             LigneInfo("Annonce BLE", Format.oui(m?.ble))
             LigneInfo("Identification", Format.oui(m?.identifie))
@@ -170,12 +173,12 @@ private struct BlocIp: View {
     var body: some View {
         LigneInfo("Nom réseau", ip.hote, mono: true)
         ForEach(Array((ip.adresses ?? []).enumerated()), id: \.offset) { _, a in
-            LigneInfo(a.type.libelle, a.adresse, mono: true)
+            LigneInfo(verbatim: a.type.libelle, a.adresse, mono: true)
         }
         if let u = ip.udp {
-            LigneInfo("Canal UDP", u.ouvert == true ? "port \(u.port ?? 0) ouvert" : "fermé",
+            LigneInfo("Canal UDP", u.ouvert == true ? tr("port \(String(u.port ?? 0)) ouvert") : tr("fermé"),
                       couleur: u.ouvert == true ? nil : .secondary)
-            LigneInfo("Clé du pont", u.cle == true ? "empreinte \(u.empreinte ?? "?")" : "aucune",
+            LigneInfo("Clé du pont", u.cle == true ? tr("empreinte \(u.empreinte ?? "?")") : tr("aucune"),
                       couleur: u.cle == true ? nil : .secondary, mono: u.cle == true)
             LigneInfo("Sessions réseau", u.sessions.map(String.init))
             LigneInfo("Reçus · émis", "\(u.recus ?? 0) · \(u.emis ?? 0)")
@@ -189,10 +192,10 @@ private extension Optional where Wrapped == TypeAdresse {
     /// Libelle de la ligne d'une adresse du pont.
     var libelle: String {
         switch self {
-        case .omr: "Adresse OMR (réseau local)"
-        case .mlEid: "Adresse ML-EID (Thread)"
-        case .autre: "Autre adresse"
-        case .inconnu, nil: "Adresse"
+        case .omr: tr("Adresse OMR (réseau local)")
+        case .mlEid: tr("Adresse ML-EID (Thread)")
+        case .autre: tr("Autre adresse")
+        case .inconnu, nil: tr("Adresse")
         }
     }
 }
@@ -210,9 +213,9 @@ private struct ResumeAccesReseau: View {
             case .sansCle:
                 Text("Accès réseau : aucune clé").foregroundStyle(.secondary)
             case .cleConnue(_, let e):
-                Text(verbatim: "Clé \(e) connue de ce Mac").foregroundStyle(.secondary)
+                Text("Clé \(e) connue de ce Mac").foregroundStyle(.secondary)
             case .cleInconnue(_, let e):
-                Text(verbatim: "Clé \(e) inconnue de ce Mac").foregroundStyle(.orange)
+                Text("Clé \(e) inconnue de ce Mac").foregroundStyle(.orange)
             case .inconnu:
                 Text("Ponts connus et clés de ce Mac").foregroundStyle(.secondary)
             }
@@ -237,11 +240,11 @@ private struct CarteVoyant: View {
             HStack(spacing: 14) {
                 VoyantLed(motif: pont.etat.motifLed, depuis: pont.etat.motifLedDepuis, taille: 34)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(verbatim: pont.etat.motifLed?.libelle ?? "inconnu")
-                    if pont.etat.ledTest { Pastille(texte: "test en cours", couleur: .blue) }
+                    Text(verbatim: pont.etat.motifLed?.libelle ?? tr("inconnu"))
+                    if pont.etat.ledTest { Pastille("test en cours", couleur: .blue) }
                 }
                 Spacer()
-                Button(pont.etat.ledTest ? "Arrêter" : "Tester") { pont.testerVoyant(!pont.etat.ledTest) }
+                Button(pont.etat.ledTest ? tr("Arrêter") : tr("Tester")) { pont.testerVoyant(!pont.etat.ledTest) }
                     .disabled(!pont.peutCommander)
             }
         }
@@ -261,12 +264,12 @@ private struct CarteSysteme: View {
             LigneInfo("ESP-IDF", h?.idf)
             LigneInfo("Démarrage", h?.reset)
             LigneInfo("En marche depuis", Format.duree(secondes: pont.etat.upS))
-            LigneInfo("Tas libre", s.map { "\(Format.octets($0.heap)) (au plus bas \(Format.octets($0.heapMin)))" })
+            LigneInfo("Tas libre", s.map { tr("\(Format.octets($0.heap)) (au plus bas \(Format.octets($0.heapMin)))") })
             if let piles = s?.piles {
                 LigneInfo("Piles (au plus bas)", piles.sorted { $0.key < $1.key }
                     .map { "\($0.key) \($0.value.map(String.init) ?? "–")" }.joined(separator: ", "))
             }
-            LigneInfo("Lignes perdues", "\(s?.jsonPerdus ?? 0) au pont, \(pont.statistiques.pertes) sur le fil",
+            LigneInfo("Lignes perdues", tr("\(s?.jsonPerdus ?? 0) au pont, \(pont.statistiques.pertes) sur le fil"),
                       couleur: (s?.jsonPerdus ?? 0) + pont.statistiques.pertes > 0 ? .orange : nil)
             LigneInfo("Lignes abîmées", String(pont.reception.lignesAbimees))
         }
@@ -302,8 +305,8 @@ private struct CarteAppairage: View {
                 // A distance, le pont ne donne jamais ses codes d'appairage (`code_manuel` et
                 // `qr` a null, 5.5) : rien de secret ne passe par Thread.
                 Text(verbatim: pont.aDistance
-                     ? "Le pont n'est pas encore mis en service. Ses codes d'appairage passent par l'USB seulement : le brancher et le connecter (menu Source) pour les afficher."
-                     : "Le pont n'est pas encore mis en service ; ses codes d'appairage arrivent avec le bloc réseau.")
+                     ? tr("Le pont n'est pas encore mis en service. Ses codes d'appairage passent par l'USB seulement : le brancher et le connecter (menu Source) pour les afficher.")
+                     : tr("Le pont n'est pas encore mis en service ; ses codes d'appairage arrivent avec le bloc réseau."))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .font(.callout)

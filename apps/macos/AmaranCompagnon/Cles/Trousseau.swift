@@ -23,9 +23,9 @@ enum ErreurTrousseau: Error, Equatable, Sendable, CustomStringConvertible {
 
     var description: String {
         switch self {
-        case .absente: "Aucune copie des clés sur ce Mac : « Copier depuis amaran Desktop »."
-        case .systeme(let s): "Trousseau : \(SecCopyErrorMessageString(s, nil) as String? ?? String(s))"
-        case .illisible: "Copie des clés illisible dans le trousseau."
+        case .absente: tr("Aucune copie des clés sur ce Mac : « Copier depuis amaran Desktop ».")
+        case .systeme(let s): tr("Trousseau : \(SecCopyErrorMessageString(s, nil) as String? ?? String(s))")
+        case .illisible: tr("Copie des clés illisible dans le trousseau.")
         }
     }
 }

@@ -52,7 +52,7 @@ public struct LampeReseau: Codable, Sendable, Equatable, Hashable {
 
     /// `1.4 (BLE 1.69)`, `1.4` si le module Bluetooth est inconnu, « inconnues » sans logiciel.
     public var versionsTexte: String {
-        ReseauMesh.versionsTexte(logiciel: logiciel, ble: ble) ?? "inconnues"
+        ReseauMesh.versionsTexte(logiciel: logiciel, ble: ble) ?? tr("inconnues")
     }
 }
 
@@ -71,19 +71,20 @@ public enum ErreurReseau: Error, Sendable, Equatable, CustomStringConvertible {
 
     public var description: String {
         switch self {
-        case .cle(let quoi): "Clé \(quoi) : 16 octets attendus."
-        case .nombreLampes(let n): "\(n) lampe(s) : le pont en gère de 1 à \(ReseauMesh.capacite)."
-        case .adresse(let l, let a): "Lampe \(l) : adresse 0x\(String(format: "%04X", a)) hors de 0x0001–0x7FFF."
+        case .cle(let quoi):
+            quoi == "réseau" ? tr("Clé réseau : 16 octets attendus.") : tr("Clé application : 16 octets attendus.")
+        case .nombreLampes(let n): tr("\(n) lampe(s) : le pont en gère de 1 à \(ReseauMesh.capacite).")
+        case .adresse(let l, let a):
+            tr("Lampe \(l) : adresse 0x\(String(format: "%04X", a)) hors de 0x0001–0x7FFF.")
         case .adresseDuPont(let l, let a):
-            "Lampe \(l) : adresse 0x\(String(format: "%04X", a)) dans la plage du pont (0x7F00–0x7F7F)."
-        case .adresseEnDouble(let a): "Adresse 0x\(String(format: "%04X", a)) en double."
-        case .mac(let l): "Lampe \(l) : MAC illisible."
-        case .macEnDouble(let m): "MAC \(m) en double."
-        case .nom(let l, let raison): "Lampe \(l) : \(raison)."
-        case .version(let l, let v): "Lampe \(l) : version « \(v) » illisible (forme 1.4 attendue)."
+            tr("Lampe \(l) : adresse 0x\(String(format: "%04X", a)) dans la plage du pont (0x7F00–0x7F7F).")
+        case .adresseEnDouble(let a): tr("Adresse 0x\(String(format: "%04X", a)) en double.")
+        case .mac(let l): tr("Lampe \(l) : MAC illisible.")
+        case .macEnDouble(let m): tr("MAC \(m) en double.")
+        case .nom(let l, let raison): tr("Lampe \(l) : \(raison).")
+        case .version(let l, let v): tr("Lampe \(l) : version « \(v) » illisible (forme 1.4 attendue).")
         case .ligneTropLongue(let l, let n):
-            "Lampe \(l) : la ligne de chargement fait \(n) octets, \(LigneCommande.octetsMax) au plus "
-                + "(guillemets ou barres obliques inverses du nom comptés doubles) : raccourcir le nom."
+            tr("Lampe \(l) : la ligne de chargement fait \(n) octets, \(LigneCommande.octetsMax) au plus (guillemets ou barres obliques inverses du nom comptés doubles) : raccourcir le nom.")
         }
     }
 }
@@ -174,10 +175,10 @@ public struct ReseauMesh: Codable, Sendable, Equatable {
     /// Ce qui empeche un nom de passer tel quel : vide, plus de 31 octets, un
     /// caractere de controle.
     static func fauteNom(_ nom: String) -> String? {
-        if nom.isEmpty { return "nom vide" }
-        if nom.utf8.count > nomMax { return "nom de \(nom.utf8.count) octets, \(nomMax) au plus" }
+        if nom.isEmpty { return tr("nom vide") }
+        if nom.utf8.count > nomMax { return tr("nom de \(nom.utf8.count) octets, \(nomMax) au plus") }
         if nom.unicodeScalars.contains(where: { $0.value < 0x20 || (0x7F...0x9F).contains($0.value) }) {
-            return "caractère de contrôle dans le nom"
+            return tr("caractère de contrôle dans le nom")
         }
         return nil
     }

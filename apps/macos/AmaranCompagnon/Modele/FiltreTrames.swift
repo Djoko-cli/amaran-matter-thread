@@ -36,7 +36,7 @@ struct FiltreTrames: Equatable, Sendable {
 
     /// « 1 · Lampe bureau », ou « Groupe » pour la demande d'etat.
     static func libelleCible(_ t: Trame, noms: [Int: String]) -> String {
-        guard let n = t.lampe else { return "Groupe" }
+        guard let n = t.lampe else { return tr("Groupe") }
         return noms[n].map { "\(n) · \($0)" } ?? "\(n)"
     }
 
@@ -47,8 +47,8 @@ struct FiltreTrames: Equatable, Sendable {
 extension SensTrame {
     var libelle: String {
         switch self {
-        case .tx: "Émise"
-        case .rx: "Reçue"
+        case .tx: tr("Émise")
+        case .rx: tr("Reçue")
         case .inconnu: "?"
         }
     }
@@ -65,10 +65,10 @@ extension SensTrame {
 extension QuoiTrame {
     var libelle: String {
         switch self {
-        case .ordre: "Ordre"
-        case .demande: "Demande d'état"
-        case .etat: "État"
-        case .inconnu: "Inconnu"
+        case .ordre: tr("Ordre")
+        case .demande: tr("Demande d'état")
+        case .etat: tr("État")
+        case .inconnu: tr("Inconnu")
         }
     }
 }

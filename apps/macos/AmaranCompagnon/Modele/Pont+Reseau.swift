@@ -17,7 +17,7 @@ extension Pont {
     /// Titre d'un pont du trousseau dans les listes : celui de sa carte si le repertoire la
     /// connait (vue au moins une fois, par l'USB ou le reseau), sinon « Pont amaran ».
     func titre(pont p: PontConnu) -> String {
-        guard let mac = repertoire.mac(pourSrp: p.nom) else { return "Pont amaran" }
+        guard let mac = repertoire.mac(pourSrp: p.nom) else { return tr("Pont amaran") }
         return repertoire.titre(mac: mac)
     }
 
@@ -50,18 +50,18 @@ extension Pont {
 
     static func texteSansAccesReseau(parUSB: Bool, udpAnnonce: Bool, ipRecu: Bool, srpConnu: Bool) -> String {
         guard parUSB else {
-            return "Brancher le pont en USB et le connecter (menu Source) pour créer ou renouveler sa clé."
+            return tr("Brancher le pont en USB et le connecter (menu Source) pour créer ou renouveler sa clé.")
         }
         guard udpAnnonce else {
-            return "Ce firmware du pont n'a pas d'accès par Thread (capacité udp absente)."
+            return tr("Ce firmware du pont n'a pas d'accès par Thread (capacité udp absente).")
         }
         guard ipRecu else {
-            return "Pont connecté par l'USB : son accès par Thread n'est pas encore connu (bloc ip attendu)."
+            return tr("Pont connecté par l'USB : son accès par Thread n'est pas encore connu (bloc ip attendu).")
         }
         guard srpConnu else {
-            return "Pont connecté par l'USB, nom SRP inconnu : le pont doit d'abord rejoindre le réseau Thread (être dans Maison) ; sa clé se range sous ce nom."
+            return tr("Pont connecté par l'USB, nom SRP inconnu : le pont doit d'abord rejoindre le réseau Thread (être dans Maison) ; sa clé se range sous ce nom.")
         }
-        return "Brancher le pont en USB et le connecter (menu Source) pour créer ou renouveler sa clé."
+        return tr("Brancher le pont en USB et le connecter (menu Source) pour créer ou renouveler sa clé.")
     }
 
     /// Une creation de cle est en file ou en vol.
@@ -82,7 +82,7 @@ extension Pont {
         // et masquee dans la console par `masquerCle`.
         guard let id = envoyer(CleReseau.commande(alea: CleReseau.alea()), secret: true) else { return }
         creationCle = (id, nom)
-        note("Nouvelle clé réseau demandée au pont : les sessions réseau en cours tombent.")
+        note(tr("Nouvelle clé réseau demandée au pont : les sessions réseau en cours tombent."))
     }
 
     /// La reponse `fin` a la creation de cle en cours, telle que recue (avec sa cle), et
@@ -105,17 +105,17 @@ extension Pont {
                 if genreTransport == .demo {
                     try trousseauPontsDemo.ranger(nom: nom, cle: c.cle, empreinte: c.empreinte)
                     // Le pont simule n'a pas de source reseau : rien a joindre par Thread.
-                    note("Clé réseau rangée dans le trousseau de la démo (empreinte \(c.empreinte)), à part du vrai : le pont simulé ne se joint pas par le réseau Thread.")
+                    note(tr("Clé réseau rangée dans le trousseau de la démo (empreinte \(c.empreinte)), à part du vrai : le pont simulé ne se joint pas par le réseau Thread."))
                 } else {
                     try trousseauPonts.ranger(nom: nom, cle: c.cle, empreinte: c.empreinte)
                     pontsConnus = trousseauPonts.lister()
-                    note("Clé réseau rangée dans le trousseau (empreinte \(c.empreinte)) : le pont est joignable par le réseau Thread.")
+                    note(tr("Clé réseau rangée dans le trousseau (empreinte \(c.empreinte)) : le pont est joignable par le réseau Thread."))
                 }
                 // Le bloc `ip` suit (json etat le renvoie) : l'acces passe a « cle connue ».
                 rafraichir()
             } catch {
                 // Le pont a deja adopte la nouvelle cle : le Mac doit recommencer.
-                note("Le pont a déjà changé de clé, mais le Mac n'a pas pu la ranger (\(String(describing: error))) : relancer « Nouvelle clé… ».",
+                note(tr("Le pont a déjà changé de clé, mais le Mac n'a pas pu la ranger (\(String(describing: error))) : relancer « Nouvelle clé… »."),
                      grave: true)
             }
         case .failure(let e):
@@ -128,7 +128,7 @@ extension Pont {
     func interrompreCreationCle() {
         guard creationCle != nil else { return }
         creationCle = nil
-        note("Création de clé interrompue : si le pont a changé de clé, l'accès réseau affichera « clé inconnue de ce Mac » ; recommencer.",
+        note(tr("Création de clé interrompue : si le pont a changé de clé, l'accès réseau affichera « clé inconnue de ce Mac » ; recommencer."),
              grave: true)
     }
 
@@ -141,11 +141,11 @@ extension Pont {
             try trousseauPonts.oublier(nom: nom)
         } catch {
             pontsConnus = trousseauPonts.lister()
-            note("Clé du pont \(nom).local non oubliée : \(String(describing: error))", grave: true)
+            note(tr("Clé du pont \(nom).local non oubliée : \(String(describing: error))"), grave: true)
             return
         }
         pontsConnus = trousseauPonts.lister()
-        note("Clé du pont \(nom).local oubliée par ce Mac (le pont garde la sienne).")
+        note(tr("Clé du pont \(nom).local oubliée par ce Mac (le pont garde la sienne)."))
         if source == .reseau(nom: nom) { deconnecter() }
     }
 

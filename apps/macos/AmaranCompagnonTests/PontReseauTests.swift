@@ -67,7 +67,7 @@ final class TransportFactice: Transport {
     }
 }
 
-@Suite("Source reseau du modele", .serialized)
+@Suite("Source reseau du modele", .serialized, .langue(.francais))
 @MainActor
 struct PontReseauTests {
     static let nom = "1A2B3C4D5E6F7081"

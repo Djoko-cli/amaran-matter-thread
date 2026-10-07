@@ -107,23 +107,21 @@ public enum EcartCles: Sendable, Equatable {
 
     public var texte: String {
         switch self {
-        case .pasDeCopie: "Aucune copie des clés sur ce Mac : « Copier depuis amaran Desktop »."
-        case .pontSansCles: "Le pont n'a pas de clés : « Charger le pont »."
-        case .pontDifferent: "Le pont n'a pas les clés ou les lampes de la copie : « Charger le pont »."
+        case .pasDeCopie: tr("Aucune copie des clés sur ce Mac : « Copier depuis amaran Desktop ».")
+        case .pontSansCles: tr("Le pont n'a pas de clés : « Charger le pont ».")
+        case .pontDifferent: tr("Le pont n'a pas les clés ou les lampes de la copie : « Charger le pont ».")
         case .reseauRecree:
-            "amaran Desktop a d'autres clés : réseau recréé ? « Copier depuis amaran Desktop », puis « Charger le pont »."
+            tr("amaran Desktop a d'autres clés : réseau recréé ? « Copier depuis amaran Desktop », puis « Charger le pont ».")
         case .lampesChangees:
-            "amaran Desktop a d'autres lampes : « Copier depuis amaran Desktop », puis « Charger le pont »."
+            tr("amaran Desktop a d'autres lampes : « Copier depuis amaran Desktop », puis « Charger le pont ».")
         case .versionsChangees:
-            "amaran Desktop a d'autres versions de lampes (mise à jour ?) : « Copier depuis amaran Desktop », "
-                + "puis « Charger le pont »."
+            tr("amaran Desktop a d'autres versions de lampes (mise à jour ?) : « Copier depuis amaran Desktop », puis « Charger le pont ».")
         case .copieSansVersions:
-            "La copie de ce Mac n'a pas encore les versions des lampes : « Copier depuis amaran Desktop », "
-                + "puis « Charger le pont »."
+            tr("La copie de ce Mac n'a pas encore les versions des lampes : « Copier depuis amaran Desktop », puis « Charger le pont ».")
         case .pontSansVersions:
-            "Ce pont ne prend pas la version des lampes : mettre à jour son firmware."
+            tr("Ce pont ne prend pas la version des lampes : mettre à jour son firmware.")
         case .pontVersionsDifferentes:
-            "Les versions des lampes du pont diffèrent de la copie (inconnues ou changées) : « Charger le pont »."
+            tr("Les versions des lampes du pont diffèrent de la copie (inconnues ou changées) : « Charger le pont ».")
         }
     }
 }
@@ -198,8 +196,8 @@ public struct ModeleACataloguer: Sendable, Equatable {
     }
 
     public var texte: String {
-        let quoi = capacite == "cct" ? "la température de couleur" : "la couleur"
-        return "Lampe \(lampe) (\(nom), code \(code)) : déclare \(quoi), que le pont ne lui connaît pas : "
-            + "marche et intensité seulement, modèle à cataloguer."
+        let quoi = capacite == "cct" ? tr("la température de couleur") : tr("la couleur")
+        let (l, c) = (String(lampe), String(code))
+        return tr("Lampe \(l) (\(nom), code \(c)) : déclare \(quoi), que le pont ne lui connaît pas : marche et intensité seulement, modèle à cataloguer.")
     }
 }

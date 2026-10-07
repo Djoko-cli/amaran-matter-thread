@@ -16,30 +16,30 @@ enum AlerteReseau: Equatable, Sendable {
         case .transport(let e): e.description
         case .trousseau(let e): e.description
         case .sansHello:
-            "Aucune réponse au json 1 par le réseau : deux autres sessions déjà actives (autre Mac, script de banc) ? Nouvel essai toutes les 30 s."
+            tr("Aucune réponse au json 1 par le réseau : deux autres sessions déjà actives (autre Mac, script de banc) ? Nouvel essai toutes les 30 s.")
         }
     }
 
     /// Cause en quelques mots (liste des ponts connus).
     var raison: String {
         switch self {
-        case .transport(.pasDeRoute): "pas de route IPv6"
-        case .transport(.reseauLocalRefuse): "accès au réseau local refusé"
-        case .transport(.portInjoignable): "le pont n'a plus de clé"
-        case .transport(.nomIntrouvable): "pont introuvable"
-        case .transport: "erreur réseau"
-        case .trousseau(.absente): "clé absente de ce Mac"
+        case .transport(.pasDeRoute): tr("pas de route IPv6")
+        case .transport(.reseauLocalRefuse): tr("accès au réseau local refusé")
+        case .transport(.portInjoignable): tr("le pont n'a plus de clé")
+        case .transport(.nomIntrouvable): tr("pont introuvable")
+        case .transport: tr("erreur réseau")
+        case .trousseau(.absente): tr("clé absente de ce Mac")
         // La cle peut y etre : le trousseau en refuse la lecture (app recompilee ad hoc,
         // « Refuser » a l'invite) ; le bandeau donne le message du systeme.
-        case .trousseau(.systeme): "trousseau inaccessible"
-        case .sansHello: "aucune réponse, sessions prises ?"
+        case .trousseau(.systeme): tr("trousseau inaccessible")
+        case .sansHello: tr("aucune réponse, sessions prises ?")
         }
     }
 
     static func textePasDeRoute(assistant: Bool) -> String {
         ErreurTransportReseau.pasDeRoute.description + " " + (assistant
-            ? "L'assistant système halo-routes est installé : la route revient d'elle-même."
-            : "Installer l'assistant système halo-routes : tools/macos/halo-routes/installer.sh du dépôt github.com/Djoko-cli/benq-screenbar-halo-matter.")
+            ? tr("L'assistant système halo-routes est installé : la route revient d'elle-même.")
+            : tr("Installer l'assistant système halo-routes : tools/macos/halo-routes/installer.sh du dépôt github.com/Djoko-cli/benq-screenbar-halo-matter."))
     }
 
     /// Le plist de l'assistant halo-routes, s'il est installe (et que la sandbox laisse le voir).

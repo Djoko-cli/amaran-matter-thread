@@ -27,7 +27,7 @@ Ils n'utilisent ni le pont ni le trousseau du Mac : le pont simulé du mode dém
 - **Graphiques** : par lampe, la part des relectures répondues et les délais des ordres ; pour le Mesh, les annonces, les NetMIC faux et les refus d'émission ; le tas libre. Fenêtre de 10 s ou 1 min, durée affichée au choix ; un redémarrage du pont ouvre un nouveau segment ; « Vider les courbes » n'efface que celles de l'app. Par le réseau, le pont n'envoie pas les compteurs du Mesh : un bouton les redemande (`json compteurs 5000`).
 - **Trames** : le trafic Bluetooth Mesh décodé (ordres, demandes d'état, états reçus), en tableau, avec des filtres (sens, lampe, nature) et « Figer ». L'interrupteur « Trames du pont » envoie `json trames 1` ou `0` ; par le réseau, le pont coupe le flux seul au bout de 60 s : l'app l'indique et propose de relancer.
 - **Commandes et console** : par le réseau, la console n'envoie que les commandes de la liste blanche du pont ; les autres ne partent pas, et la sortie texte d'une commande revient rattachée à son `id`.
-- **Réglages** (⌘,) : « Général » (dossier d'amaran Desktop, sauvegarde) et « Accès réseau Thread » (les ponts connus de ce Mac, avec leur empreinte et l'état de leur session, « Oublier… » ; pour le pont branché en USB, « Activer l'accès réseau… » ou « Nouvelle clé… »). La carte « Thread et Matter » du tableau de bord ouvre cet onglet.
+- **Réglages** (⌘,) : « Général » (langue, dossier d'amaran Desktop, sauvegarde) et « Accès réseau Thread » (les ponts connus de ce Mac, avec leur empreinte et l'état de leur session, « Oublier… » ; pour le pont branché en USB, « Activer l'accès réseau… » ou « Nouvelle clé… »). La carte « Thread et Matter » du tableau de bord ouvre cet onglet.
 
 ## Accès par Thread
 
@@ -71,8 +71,33 @@ et refaire `xcodegen generate`. Seule l'icône nommée entre dans l'app.
 
 L'app ne s'ouvre jamais seule sur un port ni sur une session réseau : choisir le pont (VID 303A, ou un pont « Réseau ») dans le menu de la barre latérale, la connexion part aussitôt. Ensuite, « Connecter » vise ce même pont, reconnu à son numéro de série USB, jamais un autre port Espressif ; tant qu'aucun pont n'a été choisi au menu, il reste grisé. Ouvrir le port ne redémarre pas le pont : DTR et RTS passent à 0 en un seul appel. « Libérer le port » rend la console texte au pont (`json 0`) et ferme le port, pour flasher.
 
+## Langues
+
+L'app parle français (langue de développement : les clés des catalogues sont les textes français) et anglais. **Réglages** (⌘,) › **Général** › **Langue** : « Langue du système » (par défaut), *English* ou *Français* ; le choix est gardé dans les préférences de l'app (`langue`).
+
+- **À chaud** : le contenu des fenêtres change aussitôt, sans relancer l'app ni perdre l'écran, les filtres ou la console. Les vues (`Text("...")`) lisent la locale de l'environnement ; les textes calculés (sens décodé, libellés, erreurs, notes, menus) passent par `Localisation` (framework `AmaranProtocole`, observable) : une vue qui en a lu un se redessine.
+- **Au prochain lancement** : ce que macOS dessine lui-même (menus de l'app, Édition, Fenêtre, boîtes du système), qui suit `AppleLanguages` de l'app ; le choix l'écrit, et les Réglages le disent. Réglages Système (Langue et région › Applications) écrit au même endroit : la valeur d'avant le premier choix *English*/*Français* est gardée (`AppleLanguagesAvantChoix`) et rendue par « Langue du système ».
+- **Gardent leur langue jusqu'au texte suivant** : les lignes déjà écrites dans la console (c'est un journal), la raison d'une reconnexion ou d'une erreur de port, la dernière ligne rejetée et l'erreur de saisie de la console.
+- **Ce qui vient du pont n'est jamais traduit** : la console du pont, ses messages `texte`, le `msg` de ses réponses (dont la raison d'un refus de la liste blanche), les noms des lampes, les commandes tapées. L'app les montre tels quels. Restent aussi en français : les traces de débogage du transport réseau (`AMARAN_DEBUG_RESEAU`), le libellé et le commentaire des éléments du trousseau, et le nom de fichier proposé pour une sauvegarde.
+- **Termes techniques inchangés** dans les deux langues : champs JSON, commandes (`mesh lampe 2 masquer`), hexa, unités, « Matter », « Thread », « Bluetooth Mesh », « amaran Desktop ». « Maison » devient « Apple Home » en anglais. Casse : phrase en français ; en anglais, *Title Case* pour les titres (écrans, cartes, sections, menus, boutons, alertes), casse de phrase pour le corps, les libellés de ligne et les pastilles.
+- **Formats** (heures, nombres, octets, dates relatives) : la langue choisie avec la région de l'utilisateur, comme macOS le fait pour une langue choisie app par app. Identifiants (`id`), ports, versions et durées en ms restent sans séparateur de milliers.
+
+Catalogues (String Catalogs) : `AmaranProtocole/Localizable.xcstrings` (framework : sens décodé, libellés, erreurs, notes de session), `AmaranCompagnon/Ressources/Localizable.xcstrings` (app), `Titres.xcstrings` (titres de section dont le français sert déjà de libellé, avec une autre casse anglaise) et `InfoPlist.xcstrings` (message de l'autorisation du réseau local). Les clés sont extraites par le compilateur (`SWIFT_EMIT_LOC_STRINGS`) : Xcode les ajoute en compilant ; en ligne de commande, après un changement de texte :
+
+```bash
+I=<DerivedData>/Build/Intermediates.noindex/AmaranCompagnon.build/Debug
+xcrun xcstringstool sync AmaranProtocole/Localizable.xcstrings \
+    --stringsdata $I/AmaranProtocole.build/Objects-normal/arm64/*.stringsdata
+xcrun xcstringstool sync AmaranCompagnon/Ressources/Localizable.xcstrings AmaranCompagnon/Ressources/Titres.xcstrings \
+    --stringsdata $I/AmaranCompagnon.build/Objects-normal/arm64/*.stringsdata
+python3 Outils/traduire.py AmaranProtocole/Localizable.xcstrings traductions.json
+```
+
+puis traduire les nouvelles clés (`Outils/traduire.py` écrit les traductions d'un fichier JSON `{"clé française": "anglais"}` au format de Xcode et retire les clés périmées). Les tests (`LocalisationTests`, `LangueTests`) vérifient que chaque clé a son anglais (pluriels complets, mêmes valeurs interpolées), qu'aucune n'est périmée, que le code et les catalogues sont d'accord, et que le réglage choisit la bonne locale. Les tests qui comparent des textes français portent `.langue(.francais)` ; pour essayer toute l'app dans l'autre langue : `xcodebuild … test -testLanguage en -testRegion US`.
+
 ## Structure
 
-- `AmaranProtocole/` : le protocole, sans interface : tramage, session et corrélation (repris de Halo Compagnon), messages du pont, clés (base d'amaran Desktop, sauvegarde chiffrée, chargement, comparaison), `Reseau/` (enveloppe H1, clé UDP et état de l'accès réseau, erreurs du réseau, répertoire des ponts), `Transport/TransportUDP` (la session par Thread, reprise de Halo) et `Courbes/` (différences des compteurs et séries des graphiques).
+- `AmaranProtocole/` : le protocole, sans interface : `Localisation/` (langue en vigueur et textes localisés, avec son catalogue), tramage, session et corrélation (repris de Halo Compagnon), messages du pont, clés (base d'amaran Desktop, sauvegarde chiffrée, chargement, comparaison), `Reseau/` (enveloppe H1, clé UDP et état de l'accès réseau, erreurs du réseau, répertoire des ponts), `Transport/TransportUDP` (la session par Thread, reprise de Halo) et `Courbes/` (différences des compteurs et séries des graphiques).
 - `AmaranCompagnon/` : l'app SwiftUI : port série, modèle `Pont`, trousseau des clés du Mesh, `Reseau/` (trousseau des ponts, alertes de la source réseau, état de session des ponts connus), écrans, mode démo.
+- `Outils/traduire.py` : les traductions des catalogues (voir « Langues »).
 - `AmaranProtocoleTests/`, `AmaranCompagnonTests/` : les tests. `ExemplesSpecTests` lit les exemples de `docs/PROTOCOLE-JSON.md`, que le firmware forme tels quels (`tests/hote/test_json.cpp`).

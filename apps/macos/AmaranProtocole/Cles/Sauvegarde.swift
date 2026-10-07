@@ -17,11 +17,12 @@ public enum ErreurSauvegarde: Error, Sendable, Equatable, CustomStringConvertibl
 
     public var description: String {
         switch self {
-        case .phraseTropCourte(let n): "Phrase de passe trop courte : \(Sauvegarde.phraseMin) caractères au moins (\(n))."
-        case .phrasesDifferentes: "Les deux phrases de passe diffèrent."
-        case .ouvertureImpossible: "Phrase de passe fausse, ou fichier altéré."
-        case .pasUneSauvegarde: "Ce fichier n'est pas une sauvegarde d'Amaran Compagnon."
-        case .versionInconnue(let v): "Sauvegarde de version \(v) : cette app lit la version \(Sauvegarde.version)."
+        case .phraseTropCourte(let n): tr("Phrase de passe trop courte : \(Sauvegarde.phraseMin) caractères au moins (\(n)).")
+        case .phrasesDifferentes: tr("Les deux phrases de passe diffèrent.")
+        case .ouvertureImpossible: tr("Phrase de passe fausse, ou fichier altéré.")
+        case .pasUneSauvegarde: tr("Ce fichier n'est pas une sauvegarde d'Amaran Compagnon.")
+        case .versionInconnue(let v):
+            tr("Sauvegarde de version \(String(v)) : cette app lit la version \(String(Sauvegarde.version)).")
         }
     }
 }

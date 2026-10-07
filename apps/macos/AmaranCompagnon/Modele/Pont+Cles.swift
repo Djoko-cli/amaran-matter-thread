@@ -76,7 +76,7 @@ extension Pont {
             dossierAmaran = url
             relireBase()
         } catch {
-            erreurBase = "Signet du dossier impossible : \(error.localizedDescription)"
+            erreurBase = tr("Signet du dossier impossible : \(error.localizedDescription)")
         }
     }
 
@@ -97,7 +97,7 @@ extension Pont {
     private func lireBaseAmaran() throws -> ReseauMesh {
         if estDemo { return ReseauDemo.reseau }
         guard let dossier = dossierAmaran else {
-            throw ErreurCles("Dossier d'amaran Desktop non autorisé : Réglages, « Changer… ».")
+            throw ErreurCles(tr("Dossier d'amaran Desktop non autorisé : Réglages, « Changer… »."))
         }
         let acces = dossier.startAccessingSecurityScopedResource()
         defer { if acces { dossier.stopAccessingSecurityScopedResource() } }
@@ -126,7 +126,8 @@ extension Pont {
             base = r.apercu
             erreurBase = nil
             rafraichirCopie()
-            note("Clés copiées depuis amaran Desktop dans le trousseau (empreintes \(r.empreinteReseau) \(r.empreinteApplication), \(r.lampes.count) lampe(s)).")
+            let (er, ea) = (r.empreinteReseau, r.empreinteApplication)
+            note(tr("Clés copiées depuis amaran Desktop dans le trousseau (empreintes \(er) \(ea), \(r.lampes.count) lampe(s))."))
         } catch {
             erreurBase = String(describing: error)
             note(String(describing: error), grave: true)
@@ -167,13 +168,13 @@ extension Pont {
             // nom : il charge sans versions (et la verification ne les attend pas).
             if !etat.a(.logiciel), r.lampes.contains(where: { $0.jetonVersion != nil }) {
                 for i in r.lampes.indices { r.lampes[i].logiciel = nil; r.lampes[i].ble = nil }
-                note("Ce pont ne prend pas la version des lampes : mettre à jour son firmware. "
-                     + "Le chargement se fait sans les versions.")
+                note(tr("Ce pont ne prend pas la version des lampes : mettre à jour son firmware. Le chargement se fait sans les versions."))
             }
             try r.verifier()
             charge = ChargementEnCours(attendu: r.apercu, restantes: r.commandes(), etapeDepuis: maintenant())
-            chargement = .enCours("clés")
-            note("Chargement du pont : \(r.lampes.count) lampe(s), empreintes \(r.empreinteReseau) \(r.empreinteApplication).")
+            chargement = .enCours(tr("clés"))
+            let (er, ea) = (r.empreinteReseau, r.empreinteApplication)
+            note(tr("Chargement du pont : \(r.lampes.count) lampe(s), empreintes \(er) \(ea)."))
             avancerChargement()
         } catch {
             chargement = .echec(String(describing: error))
@@ -195,7 +196,7 @@ extension Pont {
                     finirChargement(.echec(ErreurChargement.apresRedemarrage(e).description))
                 } else {
                     finirChargement(.reussi(Date()))
-                    note("Pont chargé et redémarré : il montre les clés et les lampes de la copie.")
+                    note(tr("Pont chargé et redémarré : il montre les clés et les lampes de la copie."))
                 }
             } else if t - depuis > Self.delaiRedemarrage {
                 finirChargement(.echec(ErreurChargement.pasRedemarre.description))
@@ -204,11 +205,11 @@ extension Pont {
         }
         if let id = c.suivi {
             guard let s = moteur.correlateur.suivi(id) else {
-                return finirChargement(.echec(ErreurChargement.commande(c.commandeSuivie, "suivi perdu").description))
+                return finirChargement(.echec(ErreurChargement.commande(c.commandeSuivie, tr("suivi perdu")).description))
             }
             if !s.etat.estFinal {
                 if t - c.etapeDepuis > Self.delaiEtape {
-                    finirChargement(.echec(ErreurChargement.commande(c.commandeSuivie, "pas de réponse").description))
+                    finirChargement(.echec(ErreurChargement.commande(c.commandeSuivie, tr("pas de réponse")).description))
                 }
                 return
             }
@@ -232,19 +233,20 @@ extension Pont {
         c.etape += 1
         c.etapeDepuis = t
         charge = c
-        chargement = .enCours(c.etape == 1 ? "clés" : c.etape == 2 ? "liste" : "lampe \(c.etape - 2) sur \(c.attendu.lampes.count)")
+        let (rang, total) = (c.etape - 2, c.attendu.lampes.count)
+        chargement = .enCours(c.etape == 1 ? tr("clés") : c.etape == 2 ? tr("liste") : tr("lampe \(rang) sur \(total)"))
     }
 
     /// Les controles d'une etape finie : reponse ok, empreintes rendues, liste enregistree.
     private func verifierEtape(_ c: ChargementEnCours, _ s: SuiviCommande) -> ErreurChargement? {
         guard s.etat == .terminee, s.fin?.ok == true else {
-            let raison = s.fin.map { Interpretation.code($0.code) } ?? "pas de réponse"
+            let raison = s.fin.map { Interpretation.code($0.code) } ?? tr("pas de réponse")
             return .commande(c.commandeSuivie, s.texte.last ?? raison)
         }
         if c.etape == 1 {
             let attendues = "\(c.attendu.empreinteReseau) \(c.attendu.empreinteApplication)"
             guard let e = VerificationChargement.empreintesRendues(s.texte) else {
-                return .commande(c.commandeSuivie, "réponse sans empreintes")
+                return .commande(c.commandeSuivie, tr("réponse sans empreintes"))
             }
             let rendues = "\(e.reseau) \(e.application)"
             if rendues != attendues { return .empreintes(rendues: rendues, attendues: attendues) }
@@ -264,7 +266,7 @@ extension Pont {
     /// La connexion ne portera plus le chargement (source changee...).
     func interrompreChargement(_ raison: String) {
         guard let c = charge, c.redemarrageDepuis == nil else { return }
-        finirChargement(.echec("Chargement interrompu (\(raison)) : relancer « Charger le pont »."))
+        finirChargement(.echec(tr("Chargement interrompu (\(raison)) : relancer « Charger le pont ».")))
     }
 
     // MARK: - Sauvegarde chiffree
@@ -281,7 +283,8 @@ extension Pont {
             derniereSauvegarde = Date()
             preferences.set(derniereSauvegarde, forKey: Self.cleSauvegarde)
         }
-        note("Sauvegarde chiffrée exportée (empreintes \(r.empreinteReseau) \(r.empreinteApplication)).")
+        let (er, ea) = (r.empreinteReseau, r.empreinteApplication)
+        note(tr("Sauvegarde chiffrée exportée (empreintes \(er) \(ea))."))
     }
 
     /// « Importer une sauvegarde » : dechiffrer et verifier, sans rien remplacer.
@@ -297,7 +300,8 @@ extension Pont {
     func remplacerCopie(par r: ReseauMesh) throws {
         try trousseauCourant.ranger(r)
         rafraichirCopie()
-        note("Copie du trousseau remplacée par la sauvegarde (empreintes \(r.empreinteReseau) \(r.empreinteApplication)).")
+        let (er, ea) = (r.empreinteReseau, r.empreinteApplication)
+        note(tr("Copie du trousseau remplacée par la sauvegarde (empreintes \(er) \(ea))."))
     }
 
     /// Efface les cles d'un reseau lu, au mieux.

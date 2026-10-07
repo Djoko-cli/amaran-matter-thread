@@ -1,0 +1,22 @@
+{
+  "sourceLanguage" : "fr",
+  "strings" : {
+    "Tas libre" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Free Heap"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tas libre"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

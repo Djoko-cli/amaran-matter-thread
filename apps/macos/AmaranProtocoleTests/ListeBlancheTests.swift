@@ -35,7 +35,7 @@ struct DecoupageArgvTests {
     }
 }
 
-@Suite("Liste blanche a distance (10.5)")
+@Suite("Liste blanche a distance (10.5)", .langue(.francais))
 struct ListeBlancheTests {
     /// `kPermises` de testDistant.
     static let permises = [

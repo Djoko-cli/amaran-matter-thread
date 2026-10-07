@@ -20,11 +20,11 @@ public enum ErreurLigne: Error, Sendable, Equatable, CustomStringConvertible {
 
     public var description: String {
         switch self {
-        case .vide: "Ligne vide."
-        case .tropLongue(let o, let m): "Ligne trop longue : \(o) octets, \(m) au plus avec le préfixe id=."
-        case .caractereInterdit: "Aucun caractère de contrôle n'est permis."
-        case .prefixeId: "L'app ajoute elle-même le préfixe id=<n>."
-        case .json: "Jamais de JSON ni d'octet RS vers le pont."
+        case .vide: tr("Ligne vide.")
+        case .tropLongue(let o, let m): tr("Ligne trop longue : \(o) octets, \(m) au plus avec le préfixe id=.")
+        case .caractereInterdit: tr("Aucun caractère de contrôle n'est permis.")
+        case .prefixeId: tr("L'app ajoute elle-même le préfixe id=<n>.")
+        case .json: tr("Jamais de JSON ni d'octet RS vers le pont.")
         }
     }
 }
@@ -161,47 +161,47 @@ public enum PolitiqueCommandes {
             return .interdite(e.description)
         }
         if transport == .udp, let raison = autoriseeADistance(commande) {
-            return .interdite("Commande non envoyée : \(refusDistant(raison)).")
+            return .interdite(tr("Commande non envoyée : \(refusDistant(raison))."))
         }
         let a = LigneCommande.argv(commande.trimmingCharacters(in: .whitespaces))
         func est(_ i: Int, _ mot: String) -> Bool { i < a.count && a[i] == mot }
         if a.count == 2, est(0, "json"), est(1, "0") {
-            return .interdite("Utiliser « Libérer le port » : l'app enverra json 0 et fermera le port.")
+            return .interdite(tr("Utiliser « Libérer le port » : l'app enverra json 0 et fermera le port."))
         }
         // Le pont changerait de cle, mais la cle rendue ne serait rangee nulle part :
         // seul le geste de l'app la range dans le trousseau (10.2).
         if est(0, "json"), est(1, "cle"), est(2, "nouvelle") {
-            return .interdite("Utiliser « Nouvelle clé… » : la clé rendue doit être rangée dans le trousseau.")
+            return .interdite(tr("Utiliser « Nouvelle clé… » : la clé rendue doit être rangée dans le trousseau."))
         }
         if est(0, "json"), est(1, "cle"), est(2, "efface") {
-            return .confirmation("Efface la clé du réseau Thread : les sessions par le réseau tombent et le port 5480 se ferme.")
+            return .confirmation(tr("Efface la clé du réseau Thread : les sessions par le réseau tombent et le port 5480 se ferme."))
         }
         if est(0, "redemarre") {
-            return .confirmation("Redémarre le pont (le port USB va se ré-énumérer).")
+            return .confirmation(tr("Redémarre le pont (le port USB va se ré-énumérer)."))
         }
         if est(0, "decommission") {
-            return .confirmation("Retire le pont de Maison et de tout autre contrôleur Matter (clés du Mesh et lampes gardées ; la clé de l'accès par Thread est effacée).")
+            return .confirmation(tr("Retire le pont de Maison et de tout autre contrôleur Matter (clés du Mesh et lampes gardées ; la clé de l'accès par Thread est effacée)."))
         }
         if est(0, "mesh") {
             if est(1, "cles") {
-                return .confirmation("Remplace les clés du réseau des lampes dans le pont (effet au redémarrage). « Charger le pont » vérifie en plus les empreintes.")
+                return .confirmation(tr("Remplace les clés du réseau des lampes dans le pont (effet au redémarrage). « Charger le pont » vérifie en plus les empreintes."))
             }
             if est(1, "oublie") {
-                return .confirmation("Efface les clés du réseau des lampes dans le pont.")
+                return .confirmation(tr("Efface les clés du réseau des lampes dans le pont."))
             }
             if est(1, "adresse") {
-                return .confirmation("Change l'adresse Bluetooth Mesh du pont.")
+                return .confirmation(tr("Change l'adresse Bluetooth Mesh du pont."))
             }
             if est(1, "iv") {
                 return .confirmation(est(2, "cherche")
-                    ? "Cherche l'IV Index : la console du pont reste occupée pendant la recherche."
-                    : "Change l'IV Index du réseau des lampes.")
+                    ? tr("Cherche l'IV Index : la console du pont reste occupée pendant la recherche.")
+                    : tr("Change l'IV Index du réseau des lampes."))
             }
             if est(1, "lampes") {
-                return .confirmation("Ouvre une nouvelle liste de lampes (effet au redémarrage, une fois complète).")
+                return .confirmation(tr("Ouvre une nouvelle liste de lampes (effet au redémarrage, une fois complète)."))
             }
             if a.count == 4, est(1, "lampe"), est(3, "masquer") {
-                return .confirmation("Retire la lampe de Maison : remise, elle y reviendra comme un nouvel accessoire, sans son nom, ses scènes ni ses automatisations.")
+                return .confirmation(tr("Retire la lampe de Maison : remise, elle y reviendra comme un nouvel accessoire, sans son nom, ses scènes ni ses automatisations."))
             }
         }
         return .autorisee
@@ -211,7 +211,7 @@ public enum PolitiqueCommandes {
     /// `autoriseeADistance`, mot pour mot le `msg` de sa reponse `interdite`) n'est citee
     /// qu'une fois, entre guillemets, telle quelle. « la » : la commande refusee.
     public static func refusDistant(_ raison: String) -> String {
-        "la liste blanche du pont la refuse (« \(raison) »)"
+        tr("la liste blanche du pont la refuse (« \(raison) »)")
     }
 
     /// `json 1`, `json etat`, `json hello` : la `fin` part apres la derniere ligne de

@@ -119,23 +119,23 @@ public struct MoteurSession: Sendable {
         public var texte: String {
             switch self {
             case .ancienFirmware:
-                "Firmware sans mode JSON : flasher un firmware du pont avec le mode JSON. L'app reste en console seule."
+                tr("Firmware sans mode JSON : flasher un firmware du pont avec le mode JSON. L'app reste en console seule.")
             case .texteDemarrage:
-                "Texte de démarrage reçu : le pont a peut-être redémarré."
+                tr("Texte de démarrage reçu : le pont a peut-être redémarré.")
             case .versionInconnue(let v):
-                "Protocole v\(v) non géré par cette app (v1) : console seule."
+                tr("Protocole v\(String(v)) non géré par cette app (v1) : console seule.")
             case .aucuneReponse:
-                "Aucune réponse : mauvais port, pont en mode téléchargement, ou commande longue en cours ? Nouvel essai toutes les 30 s."
+                tr("Aucune réponse : mauvais port, pont en mode téléchargement, ou commande longue en cours ? Nouvel essai toutes les 30 s.")
             case .reponseJson1Perdue:
-                "Réponse au json 1 perdue : les commandes reprennent."
+                tr("Réponse au json 1 perdue : les commandes reprennent.")
             case .silence(let s):
-                "Silence du pont depuis \(s) s : json 1 renvoyé."
+                tr("Silence du pont depuis \(s) s : json 1 renvoyé.")
             case .resynchroSansReponse:
-                "Pas de réponse à json 1 sous 5 s : fermeture et réouverture du port."
+                tr("Pas de réponse à json 1 sous 5 s : fermeture et réouverture du port.")
             case .bailEchu:
-                "Le pont a quitté le mode machine (bail échu) : json 1 renvoyé."
+                tr("Le pont a quitté le mode machine (bail échu) : json 1 renvoyé.")
             case .reseauSansHello:
-                "Aucune réponse au json 1 par le réseau : nouvelle poignée de main."
+                tr("Aucune réponse au json 1 par le réseau : nouvelle poignée de main.")
             }
         }
     }

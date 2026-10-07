@@ -20,7 +20,7 @@ struct ReglagesAccesReseau: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(verbatim: pont.titre(pont: p))
-                            Text(verbatim: "\(p.hote) · clé \(p.empreinte)")
+                            Text(verbatim: tr("\(p.hote) · clé \(p.empreinte)"))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             LigneSession(etat: pont.etatSession(pour: p.nom))
@@ -115,11 +115,11 @@ struct AccesReseau: View {
                 Spacer()
                 Button("Activer l'accès réseau…") { confirmation = true }
             case .cleConnue(_, let e):
-                Text(verbatim: "Clé \(e) connue de ce Mac").foregroundStyle(.secondary)
+                Text("Clé \(e) connue de ce Mac").foregroundStyle(.secondary)
                 Spacer()
                 Button("Nouvelle clé…") { confirmation = true }
             case .cleInconnue(_, let e):
-                Text(verbatim: "Clé \(e) inconnue de ce Mac").foregroundStyle(.orange)
+                Text("Clé \(e) inconnue de ce Mac").foregroundStyle(.orange)
                 Spacer()
                 Button("Nouvelle clé…") { confirmation = true }
             case .inconnu:
@@ -130,7 +130,7 @@ struct AccesReseau: View {
         .controlSize(.small)
         .disabled(!pont.peutCommander || pont.aDistance || pont.creationCleEnCours)
         .confirmationDialog(titreConfirmation, isPresented: $confirmation) {
-            Button(sansCle ? "Activer l'accès réseau" : "Créer la nouvelle clé") { pont.creerCle() }
+            Button(sansCle ? tr("Activer l'accès réseau") : tr("Créer la nouvelle clé")) { pont.creerCle() }
         } message: {
             Text(verbatim: Self.texteConfirmation(sansCle: sansCle))
         }
@@ -140,8 +140,8 @@ struct AccesReseau: View {
     /// remplace, et toute session en cours tombe (10.2).
     static func texteConfirmation(sansCle: Bool) -> String {
         sansCle
-            ? "Le pont crée sa clé et ouvre le port 5480 ; la clé est rangée dans le trousseau de ce Mac."
-            : "Le pont remplace sa clé : les sessions réseau en cours tombent, y compris celles d'autres Mac ou de scripts, qui devront obtenir la nouvelle clé par l'USB. La nouvelle clé est rangée dans le trousseau de ce Mac."
+            ? tr("Le pont crée sa clé et ouvre le port 5480 ; la clé est rangée dans le trousseau de ce Mac.")
+            : tr("Le pont remplace sa clé : les sessions réseau en cours tombent, y compris celles d'autres Mac ou de scripts, qui devront obtenir la nouvelle clé par l'USB. La nouvelle clé est rangée dans le trousseau de ce Mac.")
     }
 
     private var sansCle: Bool {
@@ -149,6 +149,6 @@ struct AccesReseau: View {
     }
 
     private var titreConfirmation: String {
-        sansCle ? "Activer l'accès réseau ?" : "Créer une nouvelle clé réseau ?"
+        sansCle ? tr("Activer l'accès réseau ?") : tr("Créer une nouvelle clé réseau ?")
     }
 }
