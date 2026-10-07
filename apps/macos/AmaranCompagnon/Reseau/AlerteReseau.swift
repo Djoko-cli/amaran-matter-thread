@@ -1,5 +1,5 @@
-// Repris de Halo Compagnon (commit e114cd5, Reseau/AlerteReseau.swift) : la route IPv6
-// vers le reseau Thread est celle que tient l'assistant systeme halo-routes de Halo.
+// Repris de Halo Compagnon (commit e114cd5, Reseau/AlerteReseau.swift ; Thread Route : deploiement
+// du 06/10) : la route IPv6 vers le reseau Thread est celle que tient le demon Thread Route.
 import AmaranProtocole
 import Foundation
 
@@ -10,9 +10,13 @@ enum AlerteReseau: Equatable, Sendable {
     /// DEFI recu, puis aucun `hello` (places de session prises, 10.3).
     case sansHello
 
-    var texte: String {
+    /// Le texte du bandeau, avec l'etat reel de Thread Route (lu seulement pour "pas de route").
+    var texte: String { texte(etatThreadRoute: { EtatThreadRoute.lire() }) }
+
+    /// Le meme texte, l'etat de Thread Route venant de `etatThreadRoute` : les tests le fixent.
+    func texte(etatThreadRoute: () -> EtatThreadRoute) -> String {
         switch self {
-        case .transport(.pasDeRoute): Self.textePasDeRoute(assistant: Self.assistantInstalle)
+        case .transport(.pasDeRoute): Self.textePasDeRoute(etatThreadRoute())
         case .transport(let e): e.description
         case .trousseau(let e): e.description
         case .sansHello:
@@ -36,14 +40,9 @@ enum AlerteReseau: Equatable, Sendable {
         }
     }
 
-    static func textePasDeRoute(assistant: Bool) -> String {
-        ErreurTransportReseau.pasDeRoute.description + " " + (assistant
-            ? tr("L'assistant système halo-routes est installé : la route revient d'elle-même.")
-            : tr("Installer l'assistant système halo-routes : tools/macos/halo-routes/installer.sh du dépôt github.com/Djoko-cli/benq-screenbar-halo-matter."))
-    }
-
-    /// Le plist de l'assistant halo-routes, s'il est installe (et que la sandbox laisse le voir).
-    static var assistantInstalle: Bool {
-        FileManager.default.fileExists(atPath: "/Library/LaunchDaemons/fr.djoko.halo.routes.plist")
+    /// Sans route : la route revient d'elle-meme si Thread Route est actif ; sinon, ce qu'il reste a faire.
+    static func textePasDeRoute(_ etat: EtatThreadRoute) -> String {
+        ErreurTransportReseau.pasDeRoute.description + " "
+            + (etat.consigne ?? tr("Thread Route est actif : la route revient d'elle-même."))
     }
 }

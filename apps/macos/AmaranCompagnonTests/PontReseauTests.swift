@@ -75,13 +75,15 @@ struct PontReseauTests {
     /// Nom SRP du pont simule du mode demo : jamais 16 hexa.
     static let nomDemo = SimulateurDemo.srpDemo
 
+    /// Thread Route y est dans l'etat `route` (actif par defaut) : jamais l'etat reel du Mac.
     static func pont(cle: Data? = PontReseauTests.cle, trousseauPontsDemo: TrousseauPontsMemoire = TrousseauPontsMemoire(),
-                     preferences: UserDefaults? = nil) throws -> (Pont, TrousseauPontsMemoire) {
+                     preferences: UserDefaults? = nil, route: EtatThreadRoute = .actif) throws -> (Pont, TrousseauPontsMemoire) {
         let t = TrousseauPontsMemoire()
         if let cle { try t.ranger(nom: nom, cle: cle, empreinte: H1.kid(cle: cle)) }
         let p = Pont(trousseau: TrousseauMemoire(), trousseauDemo: TrousseauMemoire(ReseauDemo.reseau),
                      trousseauPonts: t, trousseauPontsDemo: trousseauPontsDemo,
-                     preferences: preferences ?? UserDefaults(suiteName: "amaran.tests.\(UUID().uuidString)")!)
+                     preferences: preferences ?? UserDefaults(suiteName: "amaran.tests.\(UUID().uuidString)")!,
+                     etatThreadRoute: { route })
         p.vitesseDemo = 20
         return (p, t)
     }
@@ -261,13 +263,14 @@ struct PontReseauTests {
     }
 
     @Test func echecAvecRepriseAutomatiqueEffaceLAlerteEtReprogramme() throws {
-        let (pont, _) = try Self.pont(cle: nil)
+        let (pont, _) = try Self.pont(cle: nil, route: .absent)
         pont.connecter(.reseau(nom: Self.nom))
         // L'echec d'un essai reseau ulterieur : « pas de route » reprend seul.
         pont.echecOuverture(ErreurTransportReseau.pasDeRoute)
         #expect(pont.alerteReseau == nil, "reprise automatique : pas de bandeau d'arret")
         if case .attente = pont.etatTransport {} else { Issue.record("reprise programmee attendue : \(pont.etatTransport)") }
-        #expect(pont.console.elements.contains { $0.texte.contains("halo-routes") }, "la note pointe l'assistant des routes")
+        #expect(pont.console.elements.contains { $0.texte.contains("tools/macos/thread-route/installer.sh") },
+                "Thread Route absent : la note dit comment l'installer")
         pont.deconnecter()
     }
 
@@ -338,10 +341,35 @@ struct PontReseauTests {
         #expect(pont.etatTransport == .ferme, "la source oubliee est deconnectee")
     }
 
+    /// Un echec "pas de route" : le texte de la console et de l'attente suit l'etat de Thread Route du pont,
+    /// jamais celui du Mac.
+    @Test func echecPasDeRouteUtiliseLEtatDuPont() throws {
+        for (etat, fin) in [
+            (EtatThreadRoute.absent, "sh tools/macos/thread-route/installer.sh"),
+            (.aApprouver, "L'autoriser dans Réglages Système, Général, Ouverture et extensions."),
+            (.actif, "Thread Route est actif : la route revient d'elle-même."),
+            (.ancien, "Pour le remplacer, dans le dépôt du pont Halo"),
+        ] {
+            let (pont, _) = try Self.pont(cle: nil, route: etat)
+            pont.connecter(.reseau(nom: Self.nom))
+            pont.echecOuverture(ErreurTransportReseau.pasDeRoute)
+            #expect(pont.console.elements.contains { $0.texte.contains(fin) }, "console, \(etat)")
+            if case .attente(_, let raison) = pont.etatTransport {
+                #expect(raison.contains(fin), "etat d'attente, \(etat)")
+            } else {
+                Issue.record("reprise programmee attendue : \(pont.etatTransport)")
+            }
+            pont.deconnecter()
+        }
+    }
+
     @Test func textes() {
-        #expect(AlerteReseau.textePasDeRoute(assistant: false).contains("tools/macos/halo-routes/installer.sh"))
-        #expect(AlerteReseau.textePasDeRoute(assistant: false).contains("github.com/Djoko-cli/benq-screenbar-halo-matter"))
-        #expect(!AlerteReseau.textePasDeRoute(assistant: true).contains("installer.sh"))
+        #expect(AlerteReseau.textePasDeRoute(.absent).contains("tools/macos/thread-route/installer.sh"))
+        #expect(AlerteReseau.textePasDeRoute(.absent).contains("github.com/Djoko-cli/benq-screenbar-halo-matter"))
+        #expect(AlerteReseau.textePasDeRoute(.ancien).contains("tools/macos/thread-route/installer.sh"))
+        #expect(!AlerteReseau.textePasDeRoute(.actif).contains("installer.sh"))
+        #expect(AlerteReseau.textePasDeRoute(.actif).hasSuffix("Thread Route est actif : la route revient d'elle-même."))
+        #expect(!AlerteReseau.textePasDeRoute(.aApprouver).contains("installer.sh"))
         #expect(AlerteReseau.sansHello.texte.contains("30 s"))
         #expect(Pont.texteSansReponse(.reseau) == "sans réponse sous 6 s (2 renvois du même id)")
         #expect(Pont.texteSansReponse(.reseau, commande: "json etat") == "sans réponse sous 12 s (2 renvois du même id)",
@@ -654,4 +682,5 @@ final class TrousseauPontsRefus: TrousseauPonts {
     func lire(nom: String) throws -> Data { try memoire.lire(nom: nom) }
     func ranger(nom: String, cle: Data, empreinte: String) throws { try memoire.ranger(nom: nom, cle: cle, empreinte: empreinte) }
     func oublier(nom: String) throws { throw ErreurTrousseauPonts.systeme(-25293) }
+
 }

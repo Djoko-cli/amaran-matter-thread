@@ -16,3 +16,6 @@ xcuserdata/
 Local.xcconfig
 # Icone M2 (le A d'Aputure, marque deposee) : sur le Mac de Djoko seulement (spec 3b, decision 9)
 AmaranCompagnon/Ressources/AppIconM2.icon/
+
+# Genere par xcodegen depuis project.yml (info:)
+AmaranCompagnon/Info.plist

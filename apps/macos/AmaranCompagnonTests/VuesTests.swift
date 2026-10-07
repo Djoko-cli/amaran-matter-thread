@@ -317,7 +317,10 @@ struct TramesDeLaDemoTests {
 struct FumeeVuesTests {
     /// Monter la vue ne plante pas : fenetre hors ecran, mise en page forcee.
     private func monter<V: View>(_ vue: V, _ pont: Pont) {
-        let h = NSHostingView(rootView: vue.environment(pont).frame(width: 900, height: 700))
+        // Les mises a jour : celles de l'app hote, jamais demarrees sous les tests (aucune recherche, aucun
+        // reseau) ; une autre instance remplacerait `MisesAJour.deLApp`, que verifie MisesAJourTests.
+        let h = NSHostingView(rootView: vue.environment(pont).environment(MisesAJour.deLApp ?? MisesAJour(demarrer: false))
+            .frame(width: 900, height: 700))
         let fenetre = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 700), styleMask: [.titled], backing: .buffered, defer: true)
         fenetre.contentView = h
         h.layoutSubtreeIfNeeded()

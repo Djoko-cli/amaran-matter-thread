@@ -1,0 +1,64 @@
+// Repris de Halo Compagnon (depot du pont Halo, deploiement du 06/10) : Thread Route, son
+// installateur et son code vivent dans ce depot-la seulement.
+import AmaranProtocole
+import Foundation
+import ServiceManagement
+
+/// Etat de Thread Route, le demon systeme qui garde la route du Mac vers le reseau Thread
+/// (`tools/macos/thread-route` du depot du pont Halo). Il s'installe par son installateur, avec le mot
+/// de passe administrateur : une app dans le bac a sable ne peut pas l'inscrire elle-meme (essai du
+/// 06/10 : SMAppService y refuse un demon qui n'est pas dans le bac a sable). L'app lit son etat aupres
+/// du systeme, ce que permet le bac a sable (`SMAppService.statusForLegacyPlist`) ; installe par une
+/// autre app ou a la main, il est vu de meme, et l'app n'y touche pas.
+enum EtatThreadRoute: Equatable, Sendable {
+    /// Ni Thread Route, ni halo-routes.
+    case absent
+    /// Installe, mais desactive dans Reglages Systeme (Ouverture et extensions).
+    case aApprouver
+    /// Installe et autorise : launchd le garde en marche.
+    case actif
+    /// halo-routes, son ancien nom, est encore installe : l'installateur le remplace.
+    case ancien
+
+    static let plist = URL(fileURLWithPath: "/Library/LaunchDaemons/fr.djoko.thread.route.plist")
+    static let plistAncien = URL(fileURLWithPath: "/Library/LaunchDaemons/fr.djoko.halo.routes.plist")
+
+    /// L'etat, a partir de ce que le systeme dit du plist de Thread Route et de celui de halo-routes.
+    static func depuis(nouveau: SMAppService.Status, ancien: SMAppService.Status) -> EtatThreadRoute {
+        switch nouveau {
+        case .enabled: .actif
+        case .requiresApproval: .aApprouver
+        default: ancien == .enabled || ancien == .requiresApproval ? .ancien : .absent
+        }
+    }
+
+    /// L'etat du moment, lu aupres du systeme. `statut` repond pour un plist : les tests y mettent une
+    /// source simulee, pour ne jamais lire l'etat reel du Mac.
+    static func lire(
+        statut: (URL) -> SMAppService.Status = { SMAppService.statusForLegacyPlist(at: $0) }
+    ) -> EtatThreadRoute {
+        depuis(nouveau: statut(plist), ancien: statut(plistAncien))
+    }
+
+    /// Libelle de l'etat, dans les Reglages.
+    var libelle: String {
+        switch self {
+        case .absent: tr("Absent")
+        case .aApprouver: tr("Désactivé dans Réglages Système")
+        case .actif: tr("Actif")
+        case .ancien: tr("halo-routes, son ancien nom, est encore installé")
+        }
+    }
+
+    /// Ce qu'il reste a faire ; rien quand il est actif. L'installateur est dans le depot du pont Halo.
+    var consigne: String? {
+        switch self {
+        case .absent:
+            tr("Pour l'installer, dans le dépôt du pont Halo (github.com/Djoko-cli/benq-screenbar-halo-matter) : sh tools/macos/thread-route/installer.sh (mot de passe administrateur).")
+        case .aApprouver: tr("L'autoriser dans Réglages Système, Général, Ouverture et extensions.")
+        case .actif: nil
+        case .ancien:
+            tr("Pour le remplacer, dans le dépôt du pont Halo (github.com/Djoko-cli/benq-screenbar-halo-matter) : sh tools/macos/thread-route/installer.sh (mot de passe administrateur).")
+        }
+    }
+}

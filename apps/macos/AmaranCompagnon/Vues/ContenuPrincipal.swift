@@ -214,8 +214,8 @@ struct PanneauConnexion: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .lineLimit(3)
-                // Trois lignes au plus : le texte entier (sans route IPv6, l'assistant
-                // halo-routes) reste lisible au survol.
+                // Trois lignes au plus : le texte entier (sans route IPv6, ce qu'il reste a faire pour
+                // Thread Route) reste lisible au survol.
                 .help(Text(verbatim: libelleTransport))
 
             HStack {

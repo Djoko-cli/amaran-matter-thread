@@ -72,8 +72,8 @@ final class Pont {
     /// Alerte de la source reseau qui demande l'utilisateur (cle absente ou trousseau en
     /// erreur, reseau local refuse, pont sans cle, sessions pleines), montree en bandeau.
     /// Une cause qui se reprend seule (pas de route, pont introuvable...) n'en a pas :
-    /// la console et le panneau de connexion la disent (sans route, ils pointent vers
-    /// halo-routes), comme Halo.
+    /// la console et le panneau de connexion la disent (sans route, l'etat de Thread Route
+    /// et ce qu'il reste a faire), comme Halo.
     private(set) var alerteReseau: AlerteReseau?
     private(set) var derniereReception: Date?
     /// Commande de la console du pont de plus de 20 min : proposer de fermer le port.
@@ -153,11 +153,15 @@ final class Pont {
 
     /// Delais de reouverture apres une fermeture : 300 ms, puis 1 s, 2 s, 5 s (3.1).
     static let delaisReconnexion: [Double] = [0.3, 1, 2, 5]
+    /// L'etat de Thread Route, lu au moment d'un echec "pas de route" : les tests y mettent le leur.
+    @ObservationIgnored private let etatThreadRoute: () -> EtatThreadRoute
 
     init(trousseau: any TrousseauReseau = TrousseauSysteme(), trousseauDemo: any TrousseauReseau = TrousseauMemoire(ReseauDemo.reseau),
          trousseauPonts: any TrousseauPonts = TrousseauPontsSysteme(),
          trousseauPontsDemo: any TrousseauPonts = TrousseauPontsMemoire(),
-         preferences: UserDefaults = .standard) {
+         preferences: UserDefaults = .standard,
+         etatThreadRoute: @escaping () -> EtatThreadRoute = { EtatThreadRoute.lire() }) {
+        self.etatThreadRoute = etatThreadRoute
         self.trousseau = trousseau
         self.trousseauDemo = trousseauDemo
         self.trousseauPonts = trousseauPonts
@@ -518,7 +522,7 @@ final class Pont {
     func echecOuverture(_ erreur: any Error) {
         transport = nil
         if let e = erreur as? ErreurTransportReseau {
-            let texte = AlerteReseau.transport(e).texte
+            let texte = AlerteReseau.transport(e).texte(etatThreadRoute: etatThreadRoute)
             // Bandeau tant que l'utilisateur doit agir (reseau local refuse, pont sans
             // cle), essais en cours ou non ; une autre cause efface un bandeau perime.
             alerteReseau = e.bandeau ? .transport(e) : nil

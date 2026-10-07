@@ -337,6 +337,22 @@
         }
       }
     },
+    "Absent" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Absent"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Absent"
+          }
+        }
+      }
+    },
     "Accès réseau : aucune clé" : {
       "localizations" : {
         "en" : {
@@ -365,6 +381,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Accès réseau Thread"
+          }
+        }
+      }
+    },
+    "Actif" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Active"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actif"
           }
         }
       }
@@ -2145,6 +2177,22 @@
         }
       }
     },
+    "Désactivé dans Réglages Système" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Turned off in System Settings"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Désactivé dans Réglages Système"
+          }
+        }
+      }
+    },
     "ESP-IDF" : {
       "localizations" : {
         "en" : {
@@ -2625,18 +2673,18 @@
         }
       }
     },
-    "Installer l'assistant système halo-routes : tools/macos/halo-routes/installer.sh du dépôt github.com/Djoko-cli/benq-screenbar-halo-matter." : {
+    "Installer automatiquement" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Install the halo-routes system helper: tools/macos/halo-routes/installer.sh in the github.com/Djoko-cli/benq-screenbar-halo-matter repository."
+            "value" : "Install updates automatically"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Installer l'assistant système halo-routes : tools/macos/halo-routes/installer.sh du dépôt github.com/Djoko-cli/benq-screenbar-halo-matter."
+            "value" : "Installer automatiquement"
           }
         }
       }
@@ -2785,18 +2833,18 @@
         }
       }
     },
-    "L'assistant système halo-routes est installé : la route revient d'elle-même." : {
+    "L'autoriser dans Réglages Système, Général, Ouverture et extensions." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The halo-routes system helper is installed: the route comes back on its own."
+            "value" : "Allow it in System Settings, General, Login Items & Extensions."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "L'assistant système halo-routes est installé : la route revient d'elle-même."
+            "value" : "L'autoriser dans Réglages Système, Général, Ouverture et extensions."
           }
         }
       }
@@ -3393,6 +3441,22 @@
         }
       }
     },
+    "Mises à jour" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Updates"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mises à jour"
+          }
+        }
+      }
+    },
     "Mode démo" : {
       "localizations" : {
         "en" : {
@@ -3757,6 +3821,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Ouvrir"
+          }
+        }
+      }
+    },
+    "Ouvrir Réglages Système…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open System Settings…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvrir Réglages Système…"
           }
         }
       }
@@ -4177,6 +4257,38 @@
         }
       }
     },
+    "Pour l'installer, dans le dépôt du pont Halo (github.com/Djoko-cli/benq-screenbar-halo-matter) : sh tools/macos/thread-route/installer.sh (mot de passe administrateur)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "To install it, from the Halo bridge repository (github.com/Djoko-cli/benq-screenbar-halo-matter): sh tools/macos/thread-route/installer.sh (administrator password)."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pour l'installer, dans le dépôt du pont Halo (github.com/Djoko-cli/benq-screenbar-halo-matter) : sh tools/macos/thread-route/installer.sh (mot de passe administrateur)."
+          }
+        }
+      }
+    },
+    "Pour le remplacer, dans le dépôt du pont Halo (github.com/Djoko-cli/benq-screenbar-halo-matter) : sh tools/macos/thread-route/installer.sh (mot de passe administrateur)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "To replace it, from the Halo bridge repository (github.com/Djoko-cli/benq-screenbar-halo-matter): sh tools/macos/thread-route/installer.sh (administrator password)."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pour le remplacer, dans le dépôt du pont Halo (github.com/Djoko-cli/benq-screenbar-halo-matter) : sh tools/macos/thread-route/installer.sh (mot de passe administrateur)."
+          }
+        }
+      }
+    },
     "Prolonger" : {
       "localizations" : {
         "en" : {
@@ -4237,6 +4349,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Rafraîchir l'état (json etat)"
+          }
+        }
+      }
+    },
+    "Rechercher automatiquement" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check for updates automatically"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rechercher automatiquement"
+          }
+        }
+      }
+    },
+    "Rechercher les mises à jour…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check for Updates…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rechercher les mises à jour…"
           }
         }
       }
@@ -4941,6 +5085,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Thread"
+          }
+        }
+      }
+    },
+    "Thread Route" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thread Route"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thread Route"
+          }
+        }
+      }
+    },
+    "Thread Route est actif : la route revient d'elle-même." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thread Route is active: the route will come back by itself."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thread Route est actif : la route revient d'elle-même."
           }
         }
       }
@@ -6013,6 +6189,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "flux terminé"
+          }
+        }
+      }
+    },
+    "halo-routes, son ancien nom, est encore installé" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "halo-routes, its former name, is still installed"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "halo-routes, son ancien nom, est encore installé"
           }
         }
       }

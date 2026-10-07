@@ -1,6 +1,8 @@
 // Fenetre Reglages (spec 3b, section 8) : General (langue, dossier d'amaran Desktop,
-// sauvegarde), et « Acces reseau Thread » (comme Halo Compagnon, commit e114cd5).
+// sauvegarde, mises a jour, Thread Route), et « Acces reseau Thread » (comme Halo Compagnon,
+// commit e114cd5 ; mises a jour et Thread Route : deploiement du 06/10).
 import AmaranProtocole
+import ServiceManagement
 import SwiftUI
 
 /// Onglets de la fenetre Reglages ; le choix est garde, et la carte « Thread et Matter »
@@ -26,9 +28,11 @@ struct FenetreReglages: View {
     }
 }
 
-/// Onglet General : la langue de l'app, le dossier d'amaran Desktop autorise, la derniere sauvegarde.
+/// Onglet General : la langue de l'app, le dossier d'amaran Desktop autorise, la derniere sauvegarde,
+/// les mises a jour, Thread Route.
 struct ReglagesGeneral: View {
     @Environment(Pont.self) private var pont
+    @Environment(MisesAJour.self) private var misesAJour
     @AppStorage(ReglageLangue.cle) private var choix: ChoixLangue = .systeme
 
     var body: some View {
@@ -85,9 +89,47 @@ struct ReglagesGeneral: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            // Les mises a jour (Sparkle) : recherche et installation automatiques, cochees par defaut.
+            Section("Mises à jour") {
+                Toggle("Rechercher automatiquement",
+                       isOn: Binding(get: { misesAJour.rechercheAuto }, set: { misesAJour.rechercheAuto = $0 }))
+                Toggle("Installer automatiquement",
+                       isOn: Binding(get: { misesAJour.installationAuto }, set: { misesAJour.installationAuto = $0 }))
+                    .disabled(!misesAJour.rechercheAuto)
+                Button("Rechercher les mises à jour…") { misesAJour.rechercher() }
+                    .disabled(!misesAJour.peutRechercher)
+            }
+            SectionThreadRoute()
         }
         .formStyle(.grouped)
         .frame(width: 520)
         .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// Onglet General : Thread Route, le demon qui garde la route du Mac vers le reseau Thread. Son etat est
+/// relu a chaque apparition de l'onglet et a chaque retour de l'app au premier plan : une installation ou une
+/// approbation (Reglages Systeme) faites entre-temps s'y voient.
+struct SectionThreadRoute: View {
+    @State private var etat = EtatThreadRoute.lire()
+
+    var body: some View {
+        Section("Thread Route") {
+            LabeledContent("État", value: etat.libelle)
+            if let c = etat.consigne {
+                Text(verbatim: c)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if etat == .aApprouver {
+                Button("Ouvrir Réglages Système…") { SMAppService.openSystemSettingsLoginItems() }
+            }
+        }
+        .onAppear { etat = EtatThreadRoute.lire() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            etat = EtatThreadRoute.lire()
+        }
     }
 }

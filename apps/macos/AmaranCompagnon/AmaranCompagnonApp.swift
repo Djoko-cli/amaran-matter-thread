@@ -1,10 +1,13 @@
-// Repris de Halo Compagnon (commit e114cd5) : fenetre, menus, reglages ; francais et anglais.
+// Repris de Halo Compagnon (commit e114cd5 ; mises a jour : deploiement du 06/10) : fenetre, menus,
+// reglages ; francais et anglais.
 import AmaranProtocole
 import SwiftUI
 
 @main
 struct AmaranCompagnonApp: App {
     @State private var pont = Self.creerPont()
+    /// Les mises a jour : jamais sous les tests (aucune recherche, aucun reseau), ni dans une compilation de travail.
+    @State private var misesAJour = MisesAJour(demarrer: MisesAJour.demarrerAuLancement)
     /// Lu dans `body` : un changement de langue reconstruit aussi les menus.
     @AppStorage(ReglageLangue.cle) private var choixLangue: ChoixLangue = .systeme
 
@@ -52,6 +55,10 @@ struct AmaranCompagnonApp: App {
         .commands {
             // Titres calcules (tr) et non `LocalizedStringKey` : les menus ne
             // recoivent pas la locale de l'environnement des fenetres.
+            CommandGroup(after: .appInfo) {
+                Button(tr("Rechercher les mises à jour…")) { misesAJour.rechercher() }
+                    .disabled(!misesAJour.peutRechercher)
+            }
             CommandGroup(after: .newItem) {
                 Button(tr("Mode démo")) { pont.connecter(.demo) }
                     .keyboardShortcut("d", modifiers: [.command, .shift])
@@ -68,6 +75,7 @@ struct AmaranCompagnonApp: App {
         Settings {
             FenetreReglages()
                 .environment(pont)
+                .environment(misesAJour)
                 .langueDeLInterface()
         }
     }
