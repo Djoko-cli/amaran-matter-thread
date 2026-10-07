@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>Amaran Compagnon</title>
+    <item>
+      <title>1.0.0</title>
+      <pubDate>Wed, 07 Oct 2026 22:27:45 +0000</pubDate>
+      <sparkle:version>157</sparkle:version>
+      <sparkle:shortVersionString>1.0.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[
+<p><strong>English</strong></p>
+<ul><li>First published version: the app that supervises and drives the amaran bridge, over USB or over the Thread network (dashboard, controls and console, charts, decoded Bluetooth Mesh frames), loads the Bluetooth Mesh keys and lamps of amaran Desktop into the bridge, and keeps a copy of them in this Mac's keychain, with an encrypted backup; in French and English, with its demo mode.</li><li>Automatic updates (Sparkle 2): a check at launch and then every 24 hours, download, and installation when the app quits, or right away with "Install and Relaunch". "Check for Updates…" is in the Amaran Compagnon menu; Settings, General, "Updates", can turn them off.</li><li>Thread Route, the system helper that keeps the Mac's route to the Thread network (formerly halo-routes): its status is in Settings, General; it installs from the Halo bridge repository with <code>sh tools/macos/thread-route/installer.sh</code>.</li></ul>
+<p><strong>Français</strong></p>
+<ul><li>Première version publiée : l'app qui supervise et pilote le pont amaran, par l'USB ou par le réseau Thread (tableau de bord, commandes et console, graphiques, trames du Bluetooth Mesh décodées), charge dans le pont les clés et les lampes du Bluetooth Mesh d'amaran Desktop, et en garde une copie dans le trousseau de ce Mac, avec une sauvegarde chiffrée ; en français et en anglais, avec son mode démo.</li><li>Mises à jour automatiques (Sparkle 2) : recherche au démarrage puis toutes les 24 heures, téléchargement et installation à la fermeture de l'app, ou tout de suite par « Installer et relancer ». « Rechercher les mises à jour… » est dans le menu Amaran Compagnon ; Réglages, Général, « Mises à jour », permet de les arrêter.</li><li>Thread Route, l'assistant système qui garde la route du Mac vers le réseau Thread (anciennement halo-routes) : son état est dans Réglages, Général ; il s'installe depuis le dépôt du pont Halo par <code>sh tools/macos/thread-route/installer.sh</code>.</li></ul>
+]]></description>
+      <enclosure url="https://github.com/Djoko-cli/amaran-matter-thread/releases/download/compagnon-v1.0.0/Amaran-Compagnon-1.0.0.dmg" length="4419872" type="application/octet-stream" sparkle:edSignature="QTNtYauGyewkUb/Q47N4MZwnHGY+8Gow5kaEEO8Zr3lg3cQGOPAHocXDNfPEtShnSubT1PUrY7Wy09DskOpbCA=="/>
+    </item>
+  </channel>
+</rss>
