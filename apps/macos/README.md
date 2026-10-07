@@ -113,19 +113,15 @@ Au premier codesign, macOS demande l'accès à la clé du certificat : « Toujou
 
 ## Icône
 
-Le dépôt porte une icône libre (A2 : une constellation qui trace un A, sur fond rouge), au format Icon Composer : `AmaranCompagnon/Ressources/AppIcon.icon`. Son calque se refait depuis `Outils/constellation-a.svg` :
+L'icône (M2) : le A d'amaran, redessiné en vecteur (blanc, lame rouge), sur un fond bleu-noir constellé, au format Icon Composer : `AmaranCompagnon/Ressources/AppIcon.icon`. C'est celle des versions publiées.
+
+Une icône libre reste en repli (A2 : une constellation qui trace un A, sur fond rouge) : `AmaranCompagnon/Ressources/AppIconA2.icon`. Son calque se refait depuis `Outils/constellation-a.svg` :
 
 ```bash
-rsvg-convert -w 1024 -h 1024 Outils/constellation-a.svg -o AmaranCompagnon/Ressources/AppIcon.icon/Assets/constellation-a.png
+rsvg-convert -w 1024 -h 1024 Outils/constellation-a.svg -o AmaranCompagnon/Ressources/AppIconA2.icon/Assets/constellation-a.png
 ```
 
-Une icône locale peut la remplacer sans être versionnée : la poser dans `AmaranCompagnon/Ressources/AppIconM2.icon` (ignoré par git), puis ajouter à `Local.xcconfig` :
-
-```
-ASSETCATALOG_COMPILER_APPICON_NAME = AppIconM2
-```
-
-et refaire `xcodegen generate`. Seule l'icône nommée entre dans l'app.
+Pour la prendre : `ASSETCATALOG_COMPILER_APPICON_NAME = AppIconA2` dans `Signature.xcconfig` (pour tous) ou dans `Local.xcconfig` (pour ce Mac seulement), puis refaire `xcodegen generate`. Seule l'icône nommée entre dans l'app.
 
 ## Lancer
 

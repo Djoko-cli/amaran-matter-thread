@@ -57,11 +57,13 @@ Le 05/10/2026, au brainstorming du plan 3b :
    enveloppe H1), avec une fine couche pour ESP-IDF : même protocole v1.
 9. **Icône : « M2 »**, le A d'Aputure (blanc `#F2F3F4`, lame rouge `#CD3A3B`)
    sur le bleu-noir du logo (`#01101E`), entouré d'un maillage. Format Icon
-   Composer, comme l'icône validée de Halo Compagnon (constellation). C'est la
-   marque déposée d'Aputure : M2 n'est pas versionnée et reste sur le Mac de
-   Djoko (`AppIconM2.icon`, ignorée par git, choisie par `Local.xcconfig`) ; le
-   dépôt public porte une icône libre (« A2 » : une constellation qui trace un
-   A, sur fond rouge, `AppIcon.icon`), que la compilation prend par défaut.
+   Composer, comme l'icône validée de Halo Compagnon (constellation).
+   **Amendement (08/10/2026, décision de Djoko)** : M2 est un vecteur redessiné
+   par nous, sur un fond constellé ; elle est versionnée (`AppIcon.icon`) et
+   c'est celle des versions publiées. D'abord gardée hors du dépôt parce qu'elle évoque
+   la marque d'Aputure, avec une icône libre en public (« A2 » : une
+   constellation qui trace un A, sur fond rouge) ; A2 reste en repli
+   (`AppIconA2.icon`), à reprendre si Aputure le demandait.
 10. **Français seulement** (règle du projet) : on ne reprend pas la traduction
     anglaise de Halo.
 
@@ -461,7 +463,7 @@ données n'utilisent que des MAC inventées.
 | les lignes distantes débordent l'anneau d'émission (perte de l'instantané au-delà de 2 lampes) | débit réglé vers chaque session, comme Halo | trouvé à la relecture du prototype 3b-2, corrigé avant le plan |
 | la console du pont sans hôte USB | lecture de la console en échec immédiat : attendre au lieu de reboucler | trouvé au banc du prototype 3b-2 (pont bleu sur un chargeur), corrigé sur `main` (`692bff9`) |
 | la tâche `json` ou H1 manque de tas ou de pile | budget relevé au banc ; cadences abaissées | bancs 3b-1 et 3b-2 |
-| l'icône M2 reprend une marque déposée | non versionnée ; A2 en repli dans le dépôt | décision 9 |
+| l'icône M2 évoque une marque déposée | redessinée par nous ; A2 en repli dans le dépôt (`AppIconA2.icon`), à reprendre sur demande d'Aputure | décision 9, amendée le 08/10 |
 
 ## 13. Suite
 

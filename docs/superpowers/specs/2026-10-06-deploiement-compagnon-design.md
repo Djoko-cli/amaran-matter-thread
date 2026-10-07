@@ -33,8 +33,11 @@ son framework avec lui).
 
 **Ce qui ne change pas :** le bac à sable et ses droits (`network.client` y est
 déjà) ; aucune donnée réelle dans ce qui est publié (le contrôle
-d'anonymisation passe avant chaque publication) ; l'icône publiée est la A2,
-versionnée : la M2 (le A d'Aputure) n'est jamais publiée.
+d'anonymisation passe avant chaque publication). Icône : la M2, versionnée
+(décision de Djoko du 08/10 : un vecteur redessiné par nous ; spec de l'app,
+décision 9 amendée). Une première 1.0.0, publiée le 08/10 avec la A2, a été
+retirée le jour même (version GitHub, étiquette et entrée du flux supprimées),
+puis la 1.0.0 republiée avec la M2.
 
 ## 1. Le moteur de mise à jour
 
@@ -87,7 +90,7 @@ ni son adresse, ni son équipe Apple dans le binaire publié.
   trousseau ; rien de commité ne nomme l'équipe Apple de Djoko.
 - **Les compilations de travail de Djoko** passent au même certificat
   (`Local.xcconfig`, ignoré par git : `CODE_SIGN_IDENTITY = Djoko-cli Code
-  Signing`, sans équipe, runtime renforcé coupé, icône M2 gardée) : son app de
+  Signing`, sans équipe, runtime renforcé coupé) : son app de
   travail et l'app installée ont alors la même identité, et passer de l'une à
   l'autre ne redemande rien. C'est un écart voulu au brief, où les compilations
   de travail restent ad hoc : chez Amaran, le trousseau porte les clés du Mesh.

@@ -7,8 +7,8 @@
 //   CODE_SIGN_IDENTITY = Djoko-cli Code Signing
 //   DEVELOPMENT_TEAM =
 // (au premier codesign, macOS demande l'acces a la cle du certificat : « Toujours autoriser »).
-// Icone : AppIcon (A2, versionnee) ; Local.xcconfig peut la remplacer par une icone
-// locale, non versionnee (ASSETCATALOG_COMPILER_APPICON_NAME = AppIconM2).
+// Icone : AppIcon (M2, le A d'amaran redessine, celle des versions publiees) ; AppIconA2 (la constellation)
+// reste en repli, choisie par ASSETCATALOG_COMPILER_APPICON_NAME = AppIconA2.
 CODE_SIGN_IDENTITY = -
 CODE_SIGN_STYLE = Manual
 DEVELOPMENT_TEAM =

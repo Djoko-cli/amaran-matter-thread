@@ -1,16 +1,16 @@
 {
   "fill": {
     "linear-gradient": [
-      "srgb:0.05490,0.16863,0.27059,1.00000",
-      "srgb:0.00000,0.02745,0.05882,1.00000"
+      "srgb:0.88627,0.25098,0.30980,1.00000",
+      "srgb:0.05098,0.01176,0.02353,1.00000"
     ]
   },
   "groups": [
     {
       "layers": [
         {
-          "image-name": "amaran-a.png",
-          "name": "amaran-a",
+          "image-name": "constellation-a.png",
+          "name": "constellation-a",
           "glass": false
         }
       ],
