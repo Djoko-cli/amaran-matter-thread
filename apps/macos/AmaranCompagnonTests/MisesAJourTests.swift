@@ -11,7 +11,8 @@ struct MisesAJourTests {
     /// L'Info.plist : la version, le flux des versions publiees, la cle publique et les reglages de Sparkle.
     @Test func infoPlist() throws {
         let info = try #require(Bundle.main.infoDictionary)
-        #expect(info["CFBundleShortVersionString"] as? String == "1.0.0")
+        let version = try #require(info["CFBundleShortVersionString"] as? String)
+        #expect(version.wholeMatch(of: /[0-9]+\.[0-9]+\.[0-9]+/) != nil, "une version X.Y.Z : \(version)")
         #expect(Int(info["CFBundleVersion"] as? String ?? "") != nil, "un nombre, que compare Sparkle")
         #expect(info["SUFeedURL"] as? String
                 == "https://raw.githubusercontent.com/Djoko-cli/amaran-matter-thread/main/apps/macos/appcast.xml")

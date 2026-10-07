@@ -1569,6 +1569,22 @@
         }
       }
     },
+    "Compilation de travail : pas de mise à jour." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Development build: no updates."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Compilation de travail : pas de mise à jour."
+          }
+        }
+      }
+    },
     "Compteurs du Mesh demandés, en attente du premier relevé" : {
       "localizations" : {
         "en" : {

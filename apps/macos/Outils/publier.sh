@@ -23,6 +23,12 @@ cd "$(dirname "$0")/.."
 # son nom dans le trousseau.
 IDENTITE_SIGNATURE=${IDENTITE_SIGNATURE:-Djoko-cli Code Signing}
 DD=${DD:-$HOME/Library/Developer/Xcode/DerivedData/amaran-compagnon-publication}
+# Le numero de compilation compte les commits : un clone superficiel donnerait 1, que l'app prend pour une
+# compilation de travail (jamais de mise a jour). Il faut un clone complet.
+if [ "$(git rev-parse --is-shallow-repository)" != false ]; then
+  echo "publier.sh : clone superficiel (ou hors git) ; publier depuis un clone complet" >&2
+  exit 1
+fi
 export DD
 exec /usr/bin/python3 Outils/publication.py publier "$@" --identite "$IDENTITE_SIGNATURE" \
   --auteur Djoko-cli --etiquette compagnon-v --flux appcast.xml --licence Outils/Sparkle-LICENSE.txt \

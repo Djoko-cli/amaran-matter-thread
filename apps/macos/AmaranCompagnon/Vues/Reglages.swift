@@ -89,15 +89,25 @@ struct ReglagesGeneral: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            // Les mises a jour (Sparkle) : recherche et installation automatiques, cochees par defaut.
-            Section("Mises à jour") {
+            // Les mises a jour (Sparkle) : recherche et installation automatiques, cochees par defaut. Sans
+            // moteur (compilation de travail, tests), les cases n'auraient aucun effet : grisees.
+            Section {
                 Toggle("Rechercher automatiquement",
                        isOn: Binding(get: { misesAJour.rechercheAuto }, set: { misesAJour.rechercheAuto = $0 }))
+                    .disabled(!misesAJour.demarre)
                 Toggle("Installer automatiquement",
                        isOn: Binding(get: { misesAJour.installationAuto }, set: { misesAJour.installationAuto = $0 }))
-                    .disabled(!misesAJour.rechercheAuto)
+                    .disabled(!misesAJour.demarre || !misesAJour.rechercheAuto)
                 Button("Rechercher les mises à jour…") { misesAJour.rechercher() }
                     .disabled(!misesAJour.peutRechercher)
+            } header: {
+                Text("Mises à jour")
+            } footer: {
+                if !misesAJour.demarre {
+                    Text("Compilation de travail : pas de mise à jour.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
             }
             SectionThreadRoute()
         }

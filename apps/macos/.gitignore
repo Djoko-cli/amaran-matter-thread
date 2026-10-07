@@ -12,7 +12,7 @@ xcuserdata/
 .swiftpm/
 .DS_Store
 
-# Signature propre au poste (equipe Apple Development) : voir Signature.xcconfig
+# Signature propre au poste (certificat Djoko-cli Code Signing) : voir Signature.xcconfig
 Local.xcconfig
 # Icone M2 (le A d'Aputure, marque deposee) : sur le Mac de Djoko seulement (spec 3b, decision 9)
 AmaranCompagnon/Ressources/AppIconM2.icon/

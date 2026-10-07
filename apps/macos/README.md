@@ -91,26 +91,25 @@ Ils n'utilisent ni le pont ni le trousseau du Mac : le pont simulé du mode dém
 - **Graphiques** : par lampe, la part des relectures répondues et les délais des ordres ; pour le Mesh, les annonces, les NetMIC faux et les refus d'émission ; le tas libre. Fenêtre de 10 s ou 1 min, durée affichée au choix ; un redémarrage du pont ouvre un nouveau segment ; « Vider les courbes » n'efface que celles de l'app. Par le réseau, le pont n'envoie pas les compteurs du Mesh : un bouton les redemande (`json compteurs 5000`).
 - **Trames** : le trafic Bluetooth Mesh décodé (ordres, demandes d'état, états reçus), en tableau, avec des filtres (sens, lampe, nature) et « Figer ». L'interrupteur « Trames du pont » envoie `json trames 1` ou `0` ; par le réseau, le pont coupe le flux seul au bout de 60 s : l'app l'indique et propose de relancer.
 - **Commandes et console** : par le réseau, la console n'envoie que les commandes de la liste blanche du pont ; les autres ne partent pas, et la sortie texte d'une commande revient rattachée à son `id`.
-- **Réglages** (⌘,) : « Général » (langue, dossier d'amaran Desktop, sauvegarde) et « Accès réseau Thread » (les ponts connus de ce Mac, avec leur empreinte et l'état de leur session, « Oublier… » ; pour le pont branché en USB, « Activer l'accès réseau… » ou « Nouvelle clé… »). La carte « Thread et Matter » du tableau de bord ouvre cet onglet.
+- **Réglages** (⌘,) : « Général » (langue, dossier d'amaran Desktop, sauvegarde, mises à jour, état de Thread Route) et « Accès réseau Thread » (les ponts connus de ce Mac, avec leur empreinte et l'état de leur session, « Oublier… » ; pour le pont branché en USB, « Activer l'accès réseau… » ou « Nouvelle clé… »). La carte « Thread et Matter » du tableau de bord ouvre cet onglet.
 
 ## Accès par Thread
 
 Le menu Source de la barre latérale propose, en plus des ports série, les ponts « Réseau » dont ce Mac a la clé. La clé UDP d'un pont se crée par l'USB (« Activer l'accès réseau… ») et se range dans le trousseau de ce Mac (service `fr.djoko.amaran.pont`, un compte par nom SRP) : elle n'est jamais affichée, seule son empreinte l'est. Chaque session s'ouvre par `json 1 bail 60`, sans Ctrl-U.
 
 - **Droit réseau** : l'app est sandboxée, avec `com.apple.security.network.client` (`AmaranCompagnon.entitlements`), et `NSLocalNetworkUsageDescription` dans `project.yml`. À la première session, macOS demande l'accès au « Réseau local » ; s'il est refusé, un bandeau le dit (Réglages Système › Confidentialité et sécurité › Réseau local).
-- **Route IPv6** : si macOS n'a pas de route vers le réseau Thread, la console et le panneau de connexion pointent vers l'assistant `halo-routes` du dépôt de Halo ; l'app réessaie seule, sans bandeau, comme Halo.
+- **Route IPv6** : si macOS n'a pas de route vers le réseau Thread, la console et le panneau de connexion donnent l'état de Thread Route et ce qu'il reste à faire (Réglages, Général) ; l'app réessaie seule, sans bandeau, comme Halo.
 
 ## Signature
 
-Par défaut, l'app est signée ad hoc : le dépôt compile partout, sans compte Apple. Mais une app ad hoc perd l'accès au trousseau, et au dossier d'amaran Desktop autorisé, à chaque compilation. Pour qu'ils tiennent, signer avec son équipe : créer `Local.xcconfig` (ignoré par git) à côté de `Signature.xcconfig` :
+Par défaut, l'app est signée ad hoc : le dépôt compile partout, sans compte Apple. Mais une app ad hoc perd l'accès au trousseau, et au dossier d'amaran Desktop autorisé, à chaque compilation. Les versions publiées sont signées par le certificat auto-signé `Djoko-cli Code Signing` (`Outils/publier.sh`). Pour que le trousseau et le dossier tiennent d'une compilation à l'autre, et soient partagés avec la version installée, signer les compilations de travail avec le même certificat : créer `Local.xcconfig` (ignoré par git) à côté de `Signature.xcconfig` :
 
 ```
-DEVELOPMENT_TEAM = <équipe, 10 caractères>
-CODE_SIGN_IDENTITY = Apple Development
-ENABLE_HARDENED_RUNTIME = YES
+CODE_SIGN_IDENTITY = Djoko-cli Code Signing
+DEVELOPMENT_TEAM =
 ```
 
-L'équipe : `security find-certificate -c "Apple Development" -p | openssl x509 -noout -subject` (champ OU). Un compte développeur gratuit suffit : l'app n'a aucun droit restreint.
+Au premier codesign, macOS demande l'accès à la clé du certificat : « Toujours autoriser ». Le runtime renforcé reste coupé pour les compilations de travail (sans équipe, la validation des bibliothèques refuserait `AmaranProtocole.framework` et Sparkle) ; les versions publiées l'ont, avec la levée de cette validation pour l'app seule.
 
 ## Icône
 

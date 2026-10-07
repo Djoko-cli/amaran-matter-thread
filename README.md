@@ -85,7 +85,7 @@ Amaran Compagnon (`apps/macos`) supervise et pilote le pont par l'USB, ou à dis
 
 **À distance, par Thread.** Le pont écoute en UDP (port 5480) sur le réseau Thread, une fois qu'une clé UDP existe. Cette clé se crée par l'USB seulement (Réglages › Accès réseau Thread › « Activer l'accès réseau… ») : le pont la garde, l'app la range dans le trousseau de ce Mac. Ensuite, le pont apparaît dans le menu Source, sous « Réseau ». Chaque message est signé avec cette clé, mais rien n'est chiffré : aucun secret ne passe par Thread. À distance, les lectures, les ordres aux lampes, `mesh lampe <n> masquer|afficher` et `led` sont permis ; les clés, la liste des lampes, la configuration du réseau Mesh, la mise en service Matter et le redémarrage restent réservés à l'USB (l'état de Matter et du Mesh se lit aussi à distance). `json cle efface`, `decommission` et BOOT tenu 8 s effacent la clé UDP.
 
-macOS perd parfois la route IPv6 vers le réseau Thread : l'assistant `halo-routes` du pont Halo ([tools/macos/halo-routes](https://github.com/Djoko-cli/benq-screenbar-halo-matter/tree/main/tools/macos/halo-routes)) la rétablit, et sert tel quel ici (même réseau Thread).
+macOS perd parfois la route IPv6 vers le réseau Thread : Thread Route, l'assistant système du pont Halo ([tools/macos/thread-route](https://github.com/Djoko-cli/benq-screenbar-halo-matter/tree/main/tools/macos/thread-route)), la rétablit et sert tel quel ici (même réseau Thread). Il s'installe une fois, depuis le dépôt du pont Halo, par `sh tools/macos/thread-route/installer.sh` ; l'app montre son état (Réglages, Général).
 
 Le mode démo (menu de la barre latérale, ou Fichier › Mode démo, ⇧⌘D) simule un pont à trois lampes, sans matériel. Compiler : voir [apps/macos/README.md](apps/macos/README.md).
 
