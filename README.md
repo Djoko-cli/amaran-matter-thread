@@ -1,190 +1,194 @@
+**English** · [Français](README.fr.md)
+
 # amaran COB 60d -> Matter
 
-Piloter des lampes **amaran** (Aputure), aujourd'hui deux **COB 60d** (1re
-génération), depuis Apple Maison, Siri et les automatisations, par **Matter sur
-Thread**, avec un ESP32-C6, tout en gardant l'app **amaran Desktop** utilisable.
-Jusqu'à 16 lampes par pont.
+Control **amaran** (Aputure) lights, currently two **COB 60d** (1st
+generation), from Apple Home, Siri and automations, over **Matter over
+Thread**, with an ESP32-C6, while keeping the **amaran Desktop** app usable.
+Up to 16 lights per bridge.
 
-Projets frères :
-- [benq-screenbar-halo-matter](https://github.com/Djoko-cli/benq-screenbar-halo-matter) :
-  le socle (voyant, bouton BOOT, console) et les leçons côté Apple ;
+The other documents in this repository (specs, bench results, protocol notes, the companion app README) are in French.
+
+Sister projects:
+- [benq-screenbar-halo-matter](https://github.com/Djoko-cli/benq-screenbar-halo-matter):
+  the foundation (LED, BOOT button, console) and the lessons learned on the Apple side;
 - [maillage-thread](https://github.com/Djoko-cli/maillage-thread).
 
-## État
+## Status
 
-**Le pont marche : les deux lampes sont dans Maison, sur une seule C6.** Le design complet est dans
+**The bridge works: both lights are in Apple Home, on a single C6.** The full design is in
 [docs/superpowers/specs/2026-09-28-pont-amaran-design.md](docs/superpowers/specs/2026-09-28-pont-amaran-design.md).
 
-| Phase | Contenu | État |
+| Phase | Contents | Status |
 |---|---|---|
-| P0 | Reconnaissance. Un firmware d'écoute rejoint le réseau des lampes et vérifie : IV Index, réponses captées, ordres, molette, groupe, cohabitation avec amaran Desktop | faite (30/09/2026) : 62 ordres sur 62 confirmés par relecture, toutes les demandes d'état ont reçu leur réponse ; aucun état spontané (ni molette, ni bouton, ni coupure) |
-| P1 | Matter sur la même carte, et banc de la radio partagée entre Thread et Bluetooth : une ou deux C6 | faite (30/09/2026) : une seule C6 suffit, avec l'écoute du Mesh à 50 %, l'arrondi au pour cent et la demande d'état doublée ; 96,9 % et 98,3 % des relectures répondues, 47 salves d'ordres de Maison sans échec |
-| P2 | Produit : voyant, bouton, console, fiche produit ; bancs, puis endurance 24 h | faite (02/10/2026) : T1 à T10 (T5 partiel, T7 non fait) ; 24 h sans redémarrage, 97,9 % et 98,3 % des relectures répondues, 41 salves d'ordres sans échec ; lampe noire (molette à 0 %) corrigée et vérifiée |
-| P3a | N lampes : liste, catalogue de modèles, numéros d'endpoint stables, exposition à la première réponse | faite (05/10/2026) : bancs 1 à 4 ; migration sans perte dans Maison ; 16 lampes tenues (tas au plus bas 103 Ko) ; une lampe masquée puis remise est oubliée par Maison, donc pas de masquage automatique |
-| P3b-1 | App compagnon par l'USB : mode JSON du pont ; clés d'amaran Desktop (trousseau, sauvegarde chiffrée, chargement du pont) ; tableau de bord, commandes et console, démo | faite (05/10/2026) : bancs A et B ; mode JSON sans écho, ordres suivis par leur `id` jusqu'à leur issue ; l'app lit la base d'amaran Desktop par un signet, garde une copie dans le trousseau, charge le pont et le compare, exporte une sauvegarde chiffrée ; reconnexion seule après un débranchement USB ; tas au plus bas 144 Ko |
-| P3b-2 | App compagnon par Thread : canal UDP signé (H1) et liste blanche du pont, clé UDP créée par l'USB et rangée dans le trousseau du Mac ; source Réseau, graphiques, trames décodées, réglages « Accès réseau Thread » | faite (05/10/2026) : bancs A et B ; clé créée et effacée par l'USB sans jamais s'afficher ; console, ordres et trames à distance, commandes hors liste blanche refusées ; une heure à distance, le pont sur secteur, sans reprise de session ; tas au plus bas 106 Ko |
-| P3b-3 | Fiche des lampes dans Maison : fabricant, modèle, n° de série ; version du logiciel des lampes, de la base d'amaran Desktop au pont et à l'app ; `ConfigurationVersion` | faite (06/10/2026) : banc du prototype ; Maison relit la fiche sans réappairer, mais n'affiche pas la version d'un accessoire Matter ponté ; versions sous une clé NVS à part (retour en arrière sans perte) ; tas au plus bas 102 Ko |
+| P0 | Reconnaissance. A listening firmware joins the lights' network and checks: IV Index, captured replies, commands, dial, group, coexistence with amaran Desktop | done (2026-09-30): 62 commands out of 62 confirmed by status read, every state request got its reply; no spontaneous state (no dial, no button, no power cut) |
+| P1 | Matter on the same board, and bench test of the radio shared between Thread and Bluetooth: one or two C6 | done (2026-09-30): a single C6 is enough, with Mesh listening at 50%, rounding to the percent and the state request doubled; 96.9% and 98.3% of status reads answered, 47 bursts of commands from Apple Home without failure |
+| P2 | Product: LED, button, console, product sheet; bench tests, then 24 h endurance | done (2026-10-02): T1 to T10 (T5 partial, T7 not done); 24 h without a reboot, 97.9% and 98.3% of status reads answered, 41 bursts of commands without failure; dark light (dial at 0%) fixed and verified |
+| P3a | N lights: list, model catalog, stable endpoint numbers, exposure at first reply | done (2026-10-05): bench tests 1 to 4; migration without loss in Apple Home; 16 lights held (heap at its lowest 103 KB); a light hidden then restored is forgotten by Apple Home, so no automatic hiding |
+| P3b-1 | Companion app over USB: JSON mode of the bridge; amaran Desktop keys (keychain, encrypted backup, loading the bridge); dashboard, commands and console, demo | done (2026-10-05): bench tests A and B; JSON mode without echo, commands tracked by their `id` until their outcome; the app reads the amaran Desktop database through a bookmark, keeps a copy in the keychain, loads the bridge and compares it, exports an encrypted backup; reconnects on its own after a USB unplug; heap at its lowest 144 KB |
+| P3b-2 | Companion app over Thread: signed UDP channel (H1) and the bridge's allowlist, UDP key created over USB and stored in the Mac's keychain; Network source, graphs, decoded frames, "Thread Network Access" settings | done (2026-10-05): bench tests A and B; key created and erased over USB without ever being displayed; console, commands and frames remotely, commands outside the allowlist refused; one hour remotely, the bridge on mains power, without a session resumption; heap at its lowest 106 KB |
+| P3b-3 | Lights' sheet in Apple Home: manufacturer, model, serial number; lights' software version, from the amaran Desktop database to the bridge and the app; `ConfigurationVersion` | done (2026-10-06): prototype bench test; Apple Home re-reads the sheet without re-pairing, but does not display the version of a bridged Matter accessory; versions under a separate NVS key (rollback without loss); heap at its lowest 102 KB |
 
-Résultats des bancs : [docs/BANC.md](docs/BANC.md). Protocole relevé : [docs/PROTOCOLE.md](docs/PROTOCOLE.md). Protocole machine du pont, pour l'app : [docs/PROTOCOLE-JSON.md](docs/PROTOCOLE-JSON.md).
+Bench results: [docs/BANC.md](docs/BANC.md). Captured protocol: [docs/PROTOCOLE.md](docs/PROTOCOLE.md). Machine protocol of the bridge, for the app: [docs/PROTOCOLE-JSON.md](docs/PROTOCOLE-JSON.md).
 
-## Ce que fait le pont
+## What the bridge does
 
-- Il montre chaque lampe dans Maison comme une lampe à intensité variable, avec
-  marche/arrêt et luminosité.
-- Il suit l'état réel des lampes, qu'on les règle dans Maison, dans amaran
-  Desktop ou à la molette.
-- Il laisse amaran Desktop fonctionner en même temps.
+- It shows each light in Apple Home as a dimmable light, with
+  on/off and brightness.
+- It follows the actual state of the lights, whether they are set in Apple Home,
+  in amaran Desktop or with the dial.
+- It lets amaran Desktop keep working at the same time.
 
-## Comment
+## How
 
-**Côté lampes.** Les lampes forment un réseau **Bluetooth Mesh**, créé par amaran
+**Lights side.** The lights form a **Bluetooth Mesh** network, created by amaran
 Desktop.
-- L'ESP32 en devient membre avec **sa propre adresse**, grâce aux clés du
-  réseau qu'un script lit dans la base locale de l'app.
-- Rien n'est modifié, ni dans les lampes ni dans l'app.
-- L'ESP32 parle aux lampes leur vrai langage : un opcode Telink propriétaire,
+- The ESP32 becomes a member of it with **its own address**, using the
+  network keys that a script reads from the app's local database.
+- Nothing is modified, neither in the lights nor in the app.
+- The ESP32 speaks the lights' real language: a proprietary Telink opcode,
   `0x26`.
-- Il lit leur état au passage : les lampes adressent leurs réponses à amaran
-  Desktop, et il les capte.
+- It reads their state in passing: the lights address their replies to amaran
+  Desktop, and it captures them.
 
-**Côté Maison.** C'est un pont Matter sur Thread (ESP-IDF + esp-matter) : un
-agrégateur, et une lampe « pontée » par lampe.
+**Apple Home side.** It is a Matter over Thread bridge (ESP-IDF + esp-matter): an
+aggregator, and one "bridged" light per light.
 
-## Installer
+## Install
 
-Il faut ESP-IDF v5.5.4 et esp-matter (commit `c5b9ea8`) dans `~/esp`, une ESP32-C6 SuperMini, et un routeur de bordure Thread (HomePod mini, Apple TV).
+You need ESP-IDF v5.5.4 and esp-matter (commit `c5b9ea8`) in `~/esp`, an ESP32-C6 SuperMini, and a Thread border router (HomePod mini, Apple TV).
 
-1. Compiler et flasher. Le port est toujours donné explicitement :
+1. Build and flash. The port is always given explicitly:
 
    ```bash
    source ~/esp/esp-idf/export.sh && source ~/esp/esp-matter/export.sh
    cd firmware && idf.py build && idf.py -p /dev/cu.usbmodemXXXX erase-flash flash
    ```
 
-   Pour mettre à jour un pont déjà appairé : `flash` sans `erase-flash` (sinon Maison perd tout), et supprimer d'abord `firmware/sdkconfig` pour que les réglages de `sdkconfig.defaults` s'appliquent. La première mise à jour vers les N lampes convertit la liste des lampes et efface l'ancien format : sauvegarder avant la flash entière (`esptool.py read_flash 0 0x400000 <fichier>`, gardé hors du dépôt : il contient les clés).
+   To update a bridge that is already paired: `flash` without `erase-flash` (otherwise Apple Home loses everything), and delete `firmware/sdkconfig` first so that the settings in `sdkconfig.defaults` apply. The first update to N lights converts the list of lights and erases the old format: back up before the full flash (`esptool.py read_flash 0 0x400000 <fichier>`, kept out of the repository: it contains the keys).
 
-2. Charger les clés du réseau des lampes, lues dans la base d'amaran Desktop : avec l'app compagnon (carte « Clés », « Charger le pont »), ou en ligne de commande :
+2. Load the lights' network keys, read from the amaran Desktop database: with the companion app ("Keys" card, "Load Bridge"), or on the command line:
 
    ```bash
    python3 outils/cles_amaran.py --port /dev/cu.usbmodemXXXX
    ```
 
-3. Appairer. `python3 outils/console.py --port /dev/cu.usbmodemXXXX matter` imprime le code manuel. Dans Maison : « + », « Ajouter un accessoire », « Plus d'options… », puis ce code. Le pont utilise les codes de test du SDK Matter : Maison prévient qu'il n'est pas certifié, « Ajouter quand même ».
+3. Pair. `python3 outils/console.py --port /dev/cu.usbmodemXXXX matter` prints the manual code. In Apple Home: "+", "Add Accessory", "More options…", then this code. The bridge uses the Matter SDK's test codes: Apple Home warns that it is not certified, "Add Anyway".
 
-Une fois appairé, le pont entre dans le réseau des lampes. Chaque lampe apparaît dans Maison, sous son nom d'amaran Desktop, à sa première réponse : une lampe déclarée dans amaran Desktop mais absente d'ici n'y apparaît pas.
+Once paired, the bridge joins the lights' network. Each light appears in Apple Home, under its amaran Desktop name, at its first reply: a light declared in amaran Desktop but absent from here does not appear there.
 
-Carte déjà servie : `erase-flash` fait tirer au pont une nouvelle adresse Mesh au hasard (`0x7F00` à `0x7F7F`). Dans environ 1 cas sur 128 par adresse déjà employée, elle retombe sur une adresse que les lampes connaissent, et elles ignorent alors le pont, sans message d'erreur. Si toutes les lampes restent muettes (`lampes` : « lue jamais ») sans autre alerte de la console, taper `mesh adresse suivante` : le pont prend l'adresse voisine, repart de zéro et redémarre.
+Board already used: `erase-flash` makes the bridge draw a new random Mesh address (`0x7F00` to `0x7F7F`). In about 1 case in 128 per address already in use, it lands on an address the lights know, and they then ignore the bridge, without any error message. If all the lights stay silent (`lampes`: "lue jamais") with no other alert in the console, type `mesh adresse suivante`: the bridge takes the neighboring address, starts again from zero and reboots.
 
-## L'app compagnon
+## The companion app
 
-Amaran Compagnon (`apps/macos`) supervise et pilote le pont par l'USB, ou à distance par le réseau Thread de la maison : une carte par lampe, le Bluetooth Mesh, Matter, le voyant, la console du pont, des graphiques et les trames du Bluetooth Mesh décodées. Elle gère aussi les clés du réseau des lampes, à la place de `outils/cles_amaran.py` :
-- elle lit la base d'amaran Desktop, sans jamais y écrire (Réglages, « Changer… » : désigner une fois le dossier `amaran Desktop` de `~/Library/Containers/com.sidus.amaran-desktop/Data/Library/Application Support`) ;
-- elle en garde une copie dans le trousseau de ce Mac, et l'exporte sur demande en sauvegarde chiffrée par une phrase de passe (iCloud Drive conseillé) ;
-- elle charge le pont par l'USB, vérifie ses empreintes et sa liste, puis le redémarre ;
-- elle compare les empreintes de la base, de la copie et du pont, sans jamais montrer une clé.
+Amaran Compagnon (`apps/macos`) monitors and controls the bridge over USB, or remotely over the home's Thread network: one card per light, the Bluetooth Mesh, Matter, the LED, the bridge's console, graphs and the decoded Bluetooth Mesh frames. It also manages the lights' network keys, in place of `outils/cles_amaran.py`:
+- it reads the amaran Desktop database, never writing to it (Settings, "Change…": point once to the `amaran Desktop` folder in `~/Library/Containers/com.sidus.amaran-desktop/Data/Library/Application Support`);
+- it keeps a copy in this Mac's keychain, and exports it on request as a backup encrypted with a passphrase (iCloud Drive recommended);
+- it loads the bridge over USB, checks its fingerprints and its list, then reboots it;
+- it compares the fingerprints of the database, the copy and the bridge, without ever showing a key.
 
-**À distance, par Thread.** Le pont écoute en UDP (port 5480) sur le réseau Thread, une fois qu'une clé UDP existe. Cette clé se crée par l'USB seulement (Réglages › Accès réseau Thread › « Activer l'accès réseau… ») : le pont la garde, l'app la range dans le trousseau de ce Mac. Ensuite, le pont apparaît dans le menu Source, sous « Réseau ». Chaque message est signé avec cette clé, mais rien n'est chiffré : aucun secret ne passe par Thread. À distance, les lectures, les ordres aux lampes, `mesh lampe <n> masquer|afficher` et `led` sont permis ; les clés, la liste des lampes, la configuration du réseau Mesh, la mise en service Matter et le redémarrage restent réservés à l'USB (l'état de Matter et du Mesh se lit aussi à distance). `json cle efface`, `decommission` et BOOT tenu 8 s effacent la clé UDP.
+**Remotely, over Thread.** The bridge listens on UDP (port 5480) on the Thread network, once a UDP key exists. This key is created over USB only (Settings › Thread Network Access › "Enable Network Access…"): the bridge keeps it, the app stores it in this Mac's keychain. After that, the bridge appears in the Source menu, under "Network". Each message is signed with this key, but nothing is encrypted: no secret goes over Thread. Remotely, reads, commands to the lights, `mesh lampe <n> masquer|afficher` and `led` are allowed; the keys, the list of lights, the Mesh network configuration, Matter commissioning and rebooting remain reserved to USB (the state of Matter and of the Mesh can also be read remotely). `json cle efface`, `decommission` and BOOT held for 8 s erase the UDP key.
 
-macOS perd parfois la route IPv6 vers le réseau Thread : Thread Route, l'assistant système du pont Halo ([tools/macos/thread-route](https://github.com/Djoko-cli/benq-screenbar-halo-matter/tree/main/tools/macos/thread-route)), la rétablit et sert tel quel ici (même réseau Thread). Il s'installe une fois, depuis le dépôt du pont Halo, par `sh tools/macos/thread-route/installer.sh` ; l'app montre son état (Réglages, Général).
+macOS sometimes loses the IPv6 route to the Thread network: Thread Route, the system helper of the Halo bridge ([tools/macos/thread-route](https://github.com/Djoko-cli/benq-screenbar-halo-matter/tree/main/tools/macos/thread-route)), restores it and is used here as is (same Thread network). It is installed once, from the Halo bridge repository, with `sh tools/macos/thread-route/installer.sh`; the app shows its state (Settings, General).
 
-Le mode démo (menu de la barre latérale, ou Fichier › Mode démo, ⇧⌘D) simule un pont à trois lampes, sans matériel. Compiler : voir [apps/macos/README.md](apps/macos/README.md).
+Demo mode (sidebar menu, or File › Demo Mode, ⇧⌘D) simulates a bridge with three lights, without hardware. To build: see [apps/macos/README.md](apps/macos/README.md).
 
-## Voyant et bouton
+## LED and button
 
-| voyant | sens |
+| LED | Meaning |
 |---|---|
-| bleu clignotant | pas appairé à Maison |
-| orange lent | réseau Thread absent |
-| éteint, brève lueur blanche toutes les 10 s | tout va bien |
-| rouge fixe | Bluetooth Mesh inopérant : la console dit pourquoi |
-| éclat vert | ordre confirmé par la lampe |
-| rouge ×3 | ordre abandonné après 3 essais |
-| arc-en-ciel | un contrôleur demande l'identification |
-| rouge, noir, violet, noir, vite | BOOT tenu 8 s : relâcher pour désappairer |
-| éclat blanc | BOOT court : redémarrage |
+| blinking blue | not paired with Apple Home |
+| slow orange | Thread network absent |
+| off, brief white glow every 10 s | all is well |
+| solid red | Bluetooth Mesh not working: the console says why |
+| green flash | command confirmed by the light |
+| red ×3 | command abandoned after 3 tries |
+| rainbow | a controller is asking for identification |
+| red, black, purple, black, fast | BOOT held for 8 s: release to unpair |
+| white flash | short BOOT press: reboot |
 
-Bouton BOOT : appui court, redémarrage ; de 2 à 8 s, rien ; 8 s ou plus, désappairage de Maison. Les clés du réseau des lampes restent ; la clé UDP de l'accès par Thread est effacée.
+BOOT button: short press, reboot; from 2 to 8 s, nothing; 8 s or more, unpairing from Apple Home. The lights' network keys stay; the UDP key for access over Thread is erased.
 
 ## Console
 
-Sur l'USB, en français (`python3 outils/console.py --port <port> "<commande>"`, ou tout terminal série) :
-- `lampes` : une ligne par lampe (sa place dans Maison : `EP<n>`, « jamais vue », « masquee » ou « hors de Maison » ; état lu, joignabilité, relectures répondues), puis les ordres ;
-- `lampe <n>` : le détail d'une lampe (adresse, MAC, modèle et capacités, version de son logiciel, consigne, relectures sur 10 min) ;
-- `lampe <n> on|off|niveau <0-1000>|releve` : le niveau est arrondi au pour cent (la lampe ne garde pas mieux) ;
-- `mesh lampe <n> masquer|afficher` : retirer la lampe de Maison, qui l'oublie alors (voir « À savoir »), ou l'y remettre, avec le même numéro (`afficher` y fait aussi entrer une lampe jamais vue) ;
-- `mesh` : réseau, empreintes des clés, compteurs ; `mesh releve <s>`, `mesh balayage`, `mesh ecoute on|off`, `mesh autotest`, etc. ;
-- `mesh lampes <N>`, puis `mesh lampe <n> <adresse> <mac> <code> [v<logiciel>[/<ble>]] "<nom>"` : la liste des lampes, tout ou rien, avec la version du logiciel de chaque lampe si elle est connue (c'est ce qu'envoie `outils/cles_amaran.py`) ; la version n'est lue que suivie du nom, et un nom entre guillemets reste un nom ; une copie de `outils/cles_amaran.py` d'avant le plan 3b-3 ne lit plus la réponse de ce firmware à `mesh lampe` : prendre celle du dépôt ;
-- `matter` : mise en service, Thread, abonnements, codes, identité, `ConfigurationVersion` (incrémentée quand ce que Maison voit des lampes change, pour qu'elle relise leur fiche) ;
-- `led [test|stop]`, `cause`, `taches`, `redemarre` ;
-- `decommission` : retire le pont de Maison (toutes les fabriques Matter) et efface la clé UDP, puis redémarre ;
-- `json …` : le mode machine de l'app compagnon ([docs/PROTOCOLE-JSON.md](docs/PROTOCOLE-JSON.md)). Le pont démarre toujours en console texte ; `json 1` passe en mode machine, `json 0` (ou 30 s sans rien de l'app) revient au texte. `json cle nouvelle <64 hexa>` crée la clé UDP de l'accès par Thread (la réponse ne la montre qu'en mode machine, une seule fois ; la console texte n'en montre que l'empreinte), `json cle efface` l'efface ; `json trames 1|0` envoie ou coupe les trames du Bluetooth Mesh décodées.
+Over USB, in French (`python3 outils/console.py --port <port> "<commande>"`, or any serial terminal):
+- `lampes`: one line per light (its place in Apple Home: `EP<n>`, "jamais vue", "masquee" or "hors de Maison"; state read, reachability, status reads answered), then the commands;
+- `lampe <n>`: the details of one light (address, MAC, model and capabilities, its software version, setpoint, status reads over 10 min);
+- `lampe <n> on|off|niveau <0-1000>|releve`: the level is rounded to the percent (the light does not keep anything finer);
+- `mesh lampe <n> masquer|afficher`: remove the light from Apple Home, which then forgets it (see "Good to know"), or put it back, with the same number (`afficher` also brings in a light never seen);
+- `mesh`: network, key fingerprints, counters; `mesh releve <s>`, `mesh balayage`, `mesh ecoute on|off`, `mesh autotest`, etc.;
+- `mesh lampes <N>`, then `mesh lampe <n> <adresse> <mac> <code> [v<logiciel>[/<ble>]] "<nom>"`: the list of lights, all or nothing, with each light's software version if known (this is what `outils/cles_amaran.py` sends); the version is only read when followed by the name, and a quoted name stays a name; a copy of `outils/cles_amaran.py` from before plan 3b-3 no longer reads this firmware's reply to `mesh lampe`: take the one from the repository;
+- `matter`: commissioning, Thread, subscriptions, codes, identity, `ConfigurationVersion` (incremented when what Apple Home sees of the lights changes, so that it re-reads their sheet);
+- `led [test|stop]`, `cause`, `taches`, `redemarre`;
+- `decommission`: removes the bridge from Apple Home (all Matter fabrics) and erases the UDP key, then reboots;
+- `json …`: the companion app's machine mode ([docs/PROTOCOLE-JSON.md](docs/PROTOCOLE-JSON.md)). The bridge always starts in text console; `json 1` switches to machine mode, `json 0` (or 30 s without anything from the app) returns to text. `json cle nouvelle <64 hexa>` creates the UDP key for access over Thread (the reply shows it only in machine mode, only once; the text console shows only its fingerprint), `json cle efface` erases it; `json trames 1|0` turns the decoded Bluetooth Mesh frames on or off.
 
-Une commande inconnue répond `Commande inconnue : "<nom>" (help)`.
+An unknown command replies `Commande inconnue : "<nom>" (help)`.
 
-## À savoir
+## Good to know
 
-- Dans Maison, la fiche de chaque lampe montre son fabricant (`Aputure`), son modèle et son numéro de série (`AMARAN-<MAC de la lampe>`). La version de son logiciel est aussi exposée en Matter, mais Maison ne l'affiche pas pour un accessoire Matter ponté (constaté au banc du 06/10/2026) : l'app compagnon la montre.
-- Une lampe éteinte depuis Maison, ou depuis amaran Desktop, ignore sa molette et le bouton de sa molette. Pour la rallumer à la main : couper puis remettre son alimentation. Son état au retour varie : allumée vers 40 %, allumée à son niveau retenu, ou éteinte.
-- Une lampe dont la molette est à 0 % reste en marche, mais n'éclaire pas : Maison la montre éteinte, à son dernier niveau. La toucher dans Maison la rallume à ce niveau (à 40 % seulement sur une installation neuve, quand Maison n'a encore aucun niveau pour elle). Le pont ne l'éteint jamais de lui-même : sa molette reste vive. Mais juste après avoir tourné la molette à 0, Maison la montre encore allumée quelques secondes : l'éteindre à ce moment-là l'éteint « par l'app », et sa molette ne répond plus.
-- Maison suit la molette et amaran Desktop en 2 s environ : les lampes ne signalent rien d'elles-mêmes, et le pont les relit toutes les 2 s (`mesh releve <s>` pour changer).
-- amaran Desktop, lui, ne suit pas les ordres venus de Maison.
-- Maison ne montre une lampe « Pas de réponse », puis son retour, qu'après avoir touché sa tuile. Le pont publie pourtant chaque changement.
-- Pour la luminosité, taper sur la jauge de Maison est plus fluide que la faire glisser : un glissé envoie une valeur toutes les 150 à 300 ms.
-- Une lampe n'entre dans Maison qu'à sa première réponse, puis y reste : absente, elle y est « Pas de réponse », et garde sa tuile, sa pièce et ses scènes. Pour la retirer de Maison : `mesh lampe <n> masquer`. Maison oublie alors la lampe : remise (`afficher`, avec le même numéro), elle revient comme un nouvel accessoire, sous son nom d'amaran Desktop, sans le nom donné dans Maison, ni groupe, ni scènes, ni automatisations (banc du 05/10/2026). Il est arrivé que Maison refuse ensuite de changer l'icône de la lampe revenue (« Impossible de modifier ce réglage ») : retirer le pont de Maison puis le réappairer l'a réglé (06/10/2026).
-- Retirer une lampe dans amaran Desktop, puis recharger la liste (`outils/cles_amaran.py`), lui fait perdre son numéro : remise plus tard, elle revient comme une lampe nouvelle.
-- `mesh oublie` efface les clés, mais garde la liste des lampes : leurs tuiles restent, en « Pas de réponse », jusqu'au rechargement des clés. `mesh lampes 0` vide la liste.
-- Un modèle que le pont ne connaît pas encore est piloté en marche et intensité seulement. `outils/cles_amaran.py` signale une lampe qui déclare la température de couleur ou la couleur : modèle à cataloguer.
-- Si une lampe joignable manque plus de 5 % de ses relectures sur 10 minutes, la console le dit (`!! lampe <n> : relectures manquees, <p> % repondues sur 10 min`) : allonger la période (`mesh releve`). Le premier verdict vient au plus tôt 10 minutes après le démarrage ; après un démarrage tardif du Mesh, ou une lampe absente depuis 10 minutes ou plus, il attend 5 minutes de relectures.
-- Bouton BOOT : juste après un appui annulé (tenu de 2 à 8 s, donc sans effet), relâcher net ; un effleurement redémarre le pont, sans conséquence (les clés et l'appairage restent).
-- Un nom de lampe accentué : la console texte (et donc `outils/cles_amaran.py`) en retire les caractères non ASCII. L'app compagnon, qui charge le pont en mode machine, les garde.
+- In Apple Home, each light's sheet shows its manufacturer (`Aputure`), its model and its serial number (`AMARAN-<MAC of the light>`). The software version is also exposed over Matter, but Apple Home does not display it for a bridged Matter accessory (observed in the bench test of 2026-10-06): the companion app shows it.
+- A light turned off from Apple Home, or from amaran Desktop, ignores its dial and its dial button. To turn it back on by hand: cut then restore its power. Its state on return varies: on at about 40%, on at its remembered level, or off.
+- A light whose dial is at 0% stays on, but gives no light: Apple Home shows it off, at its last level. Touching it in Apple Home turns it back on at that level (at 40% only on a fresh installation, when Apple Home has no level yet for it). The bridge never turns it off by itself: its dial stays live. But right after the dial is turned to 0, Apple Home still shows it on for a few seconds: turning it off at that moment turns it off "by the app", and its dial no longer responds.
+- Apple Home follows the dial and amaran Desktop within about 2 s: the lights report nothing on their own, and the bridge reads them all every 2 s (`mesh releve <s>` to change).
+- amaran Desktop, for its part, does not follow the commands coming from Apple Home.
+- Apple Home shows a light as "No Response", and then its return, only after its tile has been touched. The bridge nevertheless publishes every change.
+- For brightness, tapping the Apple Home slider is smoother than dragging it: a drag sends a value every 150 to 300 ms.
+- A light enters Apple Home only at its first reply, then stays there: when absent, it shows as "No Response" there, and keeps its tile, its room and its scenes. To remove it from Apple Home: `mesh lampe <n> masquer`. Apple Home then forgets the light: put back (`afficher`, with the same number), it returns as a new accessory, under its amaran Desktop name, without the name given in Apple Home, nor group, nor scenes, nor automations (bench test of 2026-10-05). Apple Home has been seen afterwards refusing to change the icon of the returned light ("This setting can't be changed"): removing the bridge from Apple Home and then re-pairing it fixed it (2026-10-06).
+- Removing a light in amaran Desktop, then reloading the list (`outils/cles_amaran.py`), makes it lose its number: put back later, it returns as a new light.
+- `mesh oublie` erases the keys, but keeps the list of lights: their tiles stay, as "No Response", until the keys are reloaded. `mesh lampes 0` empties the list.
+- A model the bridge does not know yet is controlled for on/off and intensity only. `outils/cles_amaran.py` flags a light that declares color temperature or color: model to be cataloged.
+- If a reachable light misses more than 5% of its status reads over 10 minutes, the console says so (`!! lampe <n> : relectures manquees, <p> % repondues sur 10 min`): lengthen the period (`mesh releve`). The first verdict comes at the earliest 10 minutes after startup; after a late Mesh startup, or a light absent for 10 minutes or more, it waits for 5 minutes of status reads.
+- BOOT button: right after a canceled press (held from 2 to 8 s, so with no effect), release cleanly; a brush reboots the bridge, with no consequence (the keys and the pairing stay).
+- An accented light name: the text console (and therefore `outils/cles_amaran.py`) strips the non-ASCII characters from it. The companion app, which loads the bridge in machine mode, keeps them.
 
-## Clés du réseau
+## Network keys
 
-Qui détient les clés du réseau Bluetooth Mesh contrôle les lampes.
-- Elles ne vont **jamais** dans ce dépôt.
-- L'app compagnon, ou un script, les lit dans la base d'amaran Desktop et les
-  charge dans l'ESP32 par l'USB, jamais par le réseau.
+Whoever holds the Bluetooth Mesh network keys controls the lights.
+- They **never** go in this repository.
+- The companion app, or a script, reads them from the amaran Desktop database and
+  loads them into the ESP32 over USB, never over the network.
 
-## amaran Desktop sur macOS 27
+## amaran Desktop on macOS 27
 
-amaran Desktop 1.1.03 plante au démarrage sur macOS 27 : matplotlib, qu'il
-embarque, ne sait plus lire la liste des polices du système. Le script
-[outils/polices_amaran_desktop.py](outils/polices_amaran_desktop.py) lui pose
-le cache de polices qu'il cherche, sans toucher à l'application :
+amaran Desktop 1.1.03 crashes at startup on macOS 27: matplotlib, which it
+bundles, can no longer read the system's font list. The script
+[outils/polices_amaran_desktop.py](outils/polices_amaran_desktop.py) places for it
+the font cache it looks for, without touching the application:
 
 ```bash
 python3 outils/polices_amaran_desktop.py
 ```
 
-Pour annuler, supprimer le fichier que le script indique.
+To undo, delete the file the script indicates.
 
-## Crédits
+## Credits
 
-Le protocole des lampes a été décodé par deux projets libres, sous licence
-MIT :
-- [amaran-bridge](https://github.com/kevinschaich/amaran-bridge), de Kevin
-  Schaich. Ce pont en reprend du code : l'encodage des trames Telink
-  (`components/telink/telink.c`) et la séquence d'adhésion au réseau
-  (`components/mesh/mesh_amaran.c`). Chacun de ces fichiers garde, en tête, la
-  mention de licence MIT de l'auteur ;
-- [amaran-BLE-control](https://github.com/wesbos/amaran-BLE-control), de Wes
-  Bos. Ce pont lui doit la connaissance du protocole (l'opcode `0x26`), mais
-  n'en reprend aucun code.
+The lights' protocol was decoded by two free projects, under the MIT
+license:
+- [amaran-bridge](https://github.com/kevinschaich/amaran-bridge), by Kevin
+  Schaich. This bridge reuses code from it: the encoding of Telink frames
+  (`components/telink/telink.c`) and the sequence for joining the network
+  (`components/mesh/mesh_amaran.c`). Each of these files keeps, at the top, the
+  author's MIT license notice;
+- [amaran-BLE-control](https://github.com/wesbos/amaran-BLE-control), by Wes
+  Bos. This bridge owes him its knowledge of the protocol (the `0x26` opcode), but
+  reuses none of his code.
 
-Le script de réparation d'amaran Desktop
-([outils/polices_amaran_desktop.py](outils/polices_amaran_desktop.py)) reprend
-de [matplotlib](https://matplotlib.org) 3.10.8 (`font_manager.py`) la fonction
-`ttfFontProperty` et la table `_weight_regexes`, sous la
-[licence de matplotlib](https://matplotlib.org/stable/project/license.html)
-(Copyright (c) 2012- Matplotlib Development Team). Sa mention est en tête du
-script, et le texte de la licence dans
+The amaran Desktop repair script
+([outils/polices_amaran_desktop.py](outils/polices_amaran_desktop.py)) reuses
+from [matplotlib](https://matplotlib.org) 3.10.8 (`font_manager.py`) the function
+`ttfFontProperty` and the `_weight_regexes` table, under the
+[matplotlib license](https://matplotlib.org/stable/project/license.html)
+(Copyright (c) 2012- Matplotlib Development Team). Its notice is at the top of the
+script, and the license text is in
 [outils/LICENCE-matplotlib.txt](outils/LICENCE-matplotlib.txt).
 
-Le voyant et le bouton BOOT reprennent la logique du pont Halo
+The LED and the BOOT button reuse the logic of the Halo bridge
 ([benq-screenbar-halo-matter](https://github.com/Djoko-cli/benq-screenbar-halo-matter),
-du même auteur) : `components/socle`, avec ses tests. Le mode JSON
-(`components/protocole`), l'enveloppe H1 de l'accès par Thread
-(`components/h1`, avec ses tests) et l'app compagnon (`apps/macos`) sont une
-copie adaptée de son protocole et de Halo Compagnon.
+by the same author): `components/socle`, with its tests. The JSON mode
+(`components/protocole`), the H1 envelope for access over Thread
+(`components/h1`, with its tests) and the companion app (`apps/macos`) are an
+adapted copy of its protocol and of Halo Compagnon.
 
-Projet personnel, sans lien avec Aputure. Il n'ouvre ni ne modifie les lampes.
+Personal project, with no connection to Aputure. It neither opens nor modifies the lights.
