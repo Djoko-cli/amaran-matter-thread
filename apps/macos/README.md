@@ -2,9 +2,73 @@
 
 L'app macOS du pont amaran : supervision, commandes et console, par l'USB ou par le réseau Thread, et gestion des clés du réseau Bluetooth Mesh des lampes. Copie adaptée de Halo Compagnon (le pont BenQ Halo du même auteur). La spec : [docs/superpowers/specs/2026-10-05-pont-amaran-app-compagnon-design.md](../../docs/superpowers/specs/2026-10-05-pont-amaran-app-compagnon-design.md) ; le protocole du pont : [docs/PROTOCOLE-JSON.md](../../docs/PROTOCOLE-JSON.md).
 
+## Install · Installer
+
+**English.** Download `Amaran-Compagnon-X.Y.Z.dmg` from the latest Amaran Compagnon
+[release](https://github.com/Djoko-cli/amaran-matter-thread/releases) (`compagnon-vX.Y.Z`), open it, and drag
+**Amaran Compagnon** onto **Applications**. macOS 15 or later.
+
+- **First launch (Gatekeeper).** The app is signed with a self-signed certificate, `Djoko-cli Code Signing`, not
+  with an Apple Developer ID, and isn't notarized. macOS refuses to open it the first time: in System Settings,
+  Privacy & Security, click "Open Anyway" next to Amaran Compagnon, then confirm with your password (since macOS
+  15, a right-click no longer does it). Only once.
+- **Automatic updates** (Sparkle 2). The app checks for a new version at launch and then every 24 hours,
+  downloads it, checks its Ed25519 signature, and installs it when the app quits, or right away with "Install and
+  Relaunch". An update installed this way doesn't go back through Gatekeeper: the signature takes its place.
+  "Check for Updates…" is in the Amaran Compagnon menu; Settings, General, "Updates", has "Check for updates
+  automatically" and "Install updates automatically", both on by default.
+- **Keychain and amaran Desktop folder.** Every published version is signed by the same certificate: an update
+  keeps access to the copy of the Bluetooth Mesh keys and to the bridges' network keys in the keychain, and to
+  the amaran Desktop folder chosen once. macOS asks again only when switching from a build signed differently
+  (an ad hoc build, or one signed with an Apple team) to a published version: "Always Allow".
+- **Thread Route.** The network source needs the Mac's route to the Thread network, which Thread Route keeps. It
+  lives in the Halo bridge repository and installs from a copy of it:
+  `sh tools/macos/thread-route/installer.sh` (administrator password). Settings, General, shows its status;
+  if another app already installed it, nothing else is needed.
+
+**Français.** Télécharger `Amaran-Compagnon-X.Y.Z.dmg` depuis la dernière
+[version publiée](https://github.com/Djoko-cli/amaran-matter-thread/releases) d'Amaran Compagnon (`compagnon-vX.Y.Z`),
+l'ouvrir, et glisser **Amaran Compagnon** sur **Applications**. macOS 15 ou plus.
+
+- **Première ouverture (Gatekeeper).** L'app est signée par un certificat auto-signé, `Djoko-cli Code Signing`,
+  sans Developer ID d'Apple ni notarisation. macOS refuse de l'ouvrir la première fois : dans Réglages Système,
+  Confidentialité et sécurité, cliquer « Ouvrir quand même » en face d'Amaran Compagnon, puis confirmer avec son
+  mot de passe (depuis macOS 15, le clic droit ne suffit plus). Une seule fois.
+- **Mises à jour automatiques** (Sparkle 2). L'app recherche une nouvelle version au démarrage puis toutes les
+  24 heures, la télécharge, vérifie sa signature Ed25519, et l'installe quand l'app se ferme, ou tout de suite par
+  « Installer et relancer ». Une mise à jour installée ainsi ne repasse pas par Gatekeeper : la signature en tient
+  lieu. « Rechercher les mises à jour… » est dans le menu Amaran Compagnon ; Réglages, Général, « Mises à jour »,
+  porte « Rechercher automatiquement » et « Installer automatiquement », cochés par défaut.
+- **Trousseau et dossier d'amaran Desktop.** Toutes les versions publiées sont signées par le même certificat :
+  une mise à jour garde l'accès à la copie des clés du Bluetooth Mesh et aux clés réseau des ponts, dans le
+  trousseau, et au dossier d'amaran Desktop choisi une fois. macOS ne redemande qu'au passage d'une compilation
+  signée autrement (ad hoc, ou par une équipe Apple) à une version publiée : « Toujours autoriser ».
+- **Thread Route.** La source réseau demande la route du Mac vers le réseau Thread, que garde Thread Route. Il vit
+  dans le dépôt du pont Halo et s'installe depuis une copie de ce dépôt :
+  `sh tools/macos/thread-route/installer.sh` (mot de passe administrateur). Réglages, Général, montre son état ;
+  si une autre app l'a déjà installé, il n'y a rien d'autre à faire.
+
+## Credits · Crédits
+
+The app embeds [Sparkle](https://sparkle-project.org) 2.10.0 (automatic updates), under the MIT license; the text
+of the license is shipped in the `.dmg`, next to the app (`Sparkle-LICENSE.txt`). · L'app embarque Sparkle 2.10.0
+(les mises à jour automatiques), sous licence MIT ; le texte de la licence est livré dans le `.dmg`, à côté de
+l'app.
+
+## Publier
+
+`Outils/publier.sh X.Y.Z` (spec du déploiement, section 5), depuis un clone neuf de GitHub :
+`SPARKLE_BIN=<archive de Sparkle 2.10.0>/bin DD=<DerivedData à part> apps/macos/Outils/publier.sh X.Y.Z`. Il
+vérifie `main`, lance les tests (l'app en français et en anglais, l'outil de publication, les tests natifs du pont,
+l'outil des clés), compile en Release, signe l'app avec le certificat `Djoko-cli Code Signing`, crée le `.dmg`, le
+signe pour Sparkle, passe le contrôle d'anonymisation, publie la version (`compagnon-vX.Y.Z`), commite le flux
+(`appcast.xml`) sur `main` et copie le `.dmg` sur le Bureau. En cas d'arrêt à mi-chemin : reprendre depuis
+`build/publication/X.Y.Z/gestes.txt`, jamais en relançant le script. Les notes viennent de `NOTES-VERSIONS.md`.
+`publication.py` et ses tests sont ceux de Maillage Thread et de Halo Compagnon, à l'octet près.
+
 ## Compiler
 
-Il faut Xcode 26 ou plus et XcodeGen (`brew install xcodegen`). Le projet Xcode est généré : `project.yml` fait foi.
+Il faut Xcode 26 ou plus et XcodeGen (`brew install xcodegen`). Le projet Xcode est généré : `project.yml` fait foi. Une dépendance, Sparkle 2.10.0 (les mises à jour), par le gestionnaire de paquets Swift. Une compilation de travail (numéro de compilation 1) ne recherche jamais de mise à jour.
 
 ```bash
 cd apps/macos

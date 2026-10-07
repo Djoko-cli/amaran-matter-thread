@@ -19,3 +19,5 @@ AmaranCompagnon/Ressources/AppIconM2.icon/
 
 # Genere par xcodegen depuis project.yml (info:)
 AmaranCompagnon/Info.plist
+
+__pycache__/

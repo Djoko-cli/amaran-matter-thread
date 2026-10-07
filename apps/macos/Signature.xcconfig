@@ -1,19 +1,21 @@
 // Signature de l'app et des tests (repris de Halo Compagnon).
-// Par defaut : ad hoc (le depot compile partout, sans compte Apple). Pour que le
-// trousseau et le dossier d'amaran Desktop autorise tiennent d'une compilation a
-// l'autre, signer avec son equipe : creer Local.xcconfig (ignore par git) avec
-//   DEVELOPMENT_TEAM = <equipe, 10 caracteres>
-//   CODE_SIGN_IDENTITY = Apple Development
-//   ENABLE_HARDENED_RUNTIME = YES
-// L'equipe : security find-certificate -c "Apple Development" -p | openssl x509 -noout -subject (champ OU).
+// Par defaut : ad hoc (le depot compile partout, sans compte Apple). Les versions publiees
+// sont signees par le certificat auto-signe de Djoko, `Djoko-cli Code Signing` (Outils/publier.sh,
+// spec du deploiement, section 2). Pour que le trousseau et le dossier d'amaran Desktop autorise
+// tiennent d'une compilation a l'autre, et soient partages avec la version installee, signer les
+// compilations de travail avec le meme certificat : creer Local.xcconfig (ignore par git) avec
+//   CODE_SIGN_IDENTITY = Djoko-cli Code Signing
+//   DEVELOPMENT_TEAM =
+// (au premier codesign, macOS demande l'acces a la cle du certificat : « Toujours autoriser »).
 // Icone : AppIcon (A2, versionnee) ; Local.xcconfig peut la remplacer par une icone
 // locale, non versionnee (ASSETCATALOG_COMPILER_APPICON_NAME = AppIconM2).
 CODE_SIGN_IDENTITY = -
 CODE_SIGN_STYLE = Manual
 DEVELOPMENT_TEAM =
 ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon
-// Runtime durci : seulement avec une equipe. Signee ad hoc, l'app ne pourrait pas
-// charger AmaranProtocole.framework (validation des bibliotheques : pas d'equipe
-// commune). Local.xcconfig l'active avec l'equipe : ENABLE_HARDENED_RUNTIME = YES.
+// Runtime durci : coupe pour les compilations de travail. Sans equipe (ad hoc, ou le certificat
+// auto-signe), la validation des bibliotheques refuserait de charger AmaranProtocole.framework et
+// Sparkle. Les versions publiees l'ont, avec la levee de cette validation pour l'app seule
+// (Outils/publication.py).
 ENABLE_HARDENED_RUNTIME = NO
 #include? "Local.xcconfig"
